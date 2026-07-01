@@ -49,7 +49,7 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.refreshCount, 1)
         XCTAssertEqual(windowSystem.operations, [
             .refresh,
-            .setFrame(200, targetFrame),
+            .setPosition(200, targetFrame.origin),
             .focus(200),
             .setPosition(101, hidePoint),
             .setPosition(100, hidePoint),

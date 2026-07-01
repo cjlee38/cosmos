@@ -51,13 +51,6 @@ public final class WindowRegistry: WindowSystem {
         try axClient.setPosition(point, for: handle.axWindow)
     }
 
-    public func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
-        guard let handle = handle(for: id) else {
-            throw WorkspaceError.windowNotFound(id)
-        }
-        try axClient.setFrame(frame, for: handle.axWindow)
-    }
-
     public func focus(_ id: WindowID) {
         guard let handle = handle(for: id) else {
             return

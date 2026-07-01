@@ -81,7 +81,6 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             ("Open Minimized Window", #selector(openMinimizedWindow)),
             ("Open Sheet", #selector(openSheet)),
             ("Open Modal Dialog", #selector(openModalDialog)),
-            ("Open Common Set", #selector(openCommonSet)),
             ("Close Fixture Windows", #selector(closeFixtureWindows)),
         ]
     }
@@ -188,14 +187,6 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         self.activeModalWindow = nil
     }
 
-    @objc private func openCommonSet() {
-        openNormalWindow()
-        openSecondNormalWindow()
-        openFixedSizeWindow()
-        openUtilityPanel()
-        openUntitledWindow()
-    }
-
     @objc private func closeFixtureWindows() {
         for window in fixtureWindows {
             if let sheet = window.attachedSheet {
@@ -220,7 +211,8 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private func makeFixtureWindow(
         title: String,
         size: NSSize,
-        styleMask: NSWindow.StyleMask = [.titled, .closable, .resizable, .miniaturizable]
+        styleMask: NSWindow.StyleMask = [.titled, .closable, .resizable, .miniaturizable],
+        activate: Bool = true
     ) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(origin: nextOrigin(), size: size),
@@ -234,7 +226,7 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             title: title.isEmpty ? "(untitled)" : title,
             subtitle: "pid \(getpid())"
         )
-        showFixtureWindow(window)
+        showFixtureWindow(window, activate: activate)
         return window
     }
 
@@ -251,10 +243,12 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         return panel
     }
 
-    private func showFixtureWindow(_ window: NSWindow) {
+    private func showFixtureWindow(_ window: NSWindow, activate: Bool = true) {
         fixtureWindows.append(window)
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        if activate {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     private func makeContentView(title: String, subtitle: String) -> NSView {

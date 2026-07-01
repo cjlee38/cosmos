@@ -107,7 +107,7 @@ public final class AXClient {
         guard let focused = copyAttribute(kAXFocusedWindowAttribute, from: axApp) else {
             return nil
         }
-        return (focused as! AXUIElement).containingWindowID()
+        return manageableWindowID(startingAt: focused as! AXUIElement)
     }
 
     public func snapshot(for handle: WindowHandle) -> WindowSnapshot {
@@ -127,12 +127,6 @@ public final class AXClient {
             return nil
         }
         return WindowFrame(origin: origin, size: size)
-    }
-
-    public func setFrame(_ frame: WindowFrame, for window: AXUIElement) throws {
-        try setSize(frame.size, for: window)
-        try setPosition(frame.origin, for: window)
-        try setSize(frame.size, for: window)
     }
 
     public func setPosition(_ point: CGPoint, for window: AXUIElement) throws {
@@ -167,23 +161,35 @@ public final class AXClient {
 
         return rawWindows.compactMap { rawWindow in
             let axWindow = rawWindow as! AXUIElement
-            guard let id = axWindow.containingWindowID() else {
+            guard isManageableWindow(axWindow),
+                  let id = axWindow.containingWindowID()
+            else {
                 return nil
             }
             return WindowHandle(id: id, app: appInfo, runningApp: app, axWindow: axWindow)
         }
     }
 
-    private func setSize(_ size: CGSize, for window: AXUIElement) throws {
-        var mutableSize = size
-        guard let value = AXValueCreate(.cgSize, &mutableSize) else {
-            throw AXClientError.attributeUnavailable(kAXSizeAttribute)
-        }
+    private func manageableWindowID(startingAt element: AXUIElement) -> WindowID? {
+        var current = element
+        for _ in 0 ..< 8 {
+            if isManageableWindow(current),
+               let id = current.containingWindowID()
+            {
+                return id
+            }
 
-        let error = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value)
-        guard error == .success else {
-            throw AXClientError.setAttributeFailed(kAXSizeAttribute, error)
+            guard let parent = copyAttribute(kAXParentAttribute, from: current) else {
+                return nil
+            }
+            current = parent as! AXUIElement
         }
+        return nil
+    }
+
+    private func isManageableWindow(_ window: AXUIElement) -> Bool {
+        stringAttribute(kAXRoleAttribute, from: window) == kAXWindowRole as String
+            && frame(for: window) != nil
     }
 
     private func copyAttribute(_ name: String, from element: AXUIElement) -> AnyObject? {

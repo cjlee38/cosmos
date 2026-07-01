@@ -9,6 +9,5 @@ public protocol WindowSystem {
     func snapshot(for id: WindowID) -> WindowSnapshot?
     func frame(for id: WindowID) -> WindowFrame?
     func setPosition(_ point: CGPoint, for id: WindowID) throws
-    func setFrame(_ frame: WindowFrame, for id: WindowID) throws
     func focus(_ id: WindowID)
 }

@@ -48,19 +48,19 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(snapshotStore.snapshots.isEmpty)
     }
 
-    func testHideVerificationFailureDoesNotMarkWindowHiddenOrKeepSnapshot() throws {
+    func testHideSetPositionFailureDoesNotKeepNewHiddenSnapshot() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
         ])
         let snapshotStore = InMemoryHiddenWindowSnapshotStore()
         let controller = makeController(windowSystem, snapshotStore: snapshotStore)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
-        windowSystem.ignoredPositionWindowIDs.insert(100)
+        windowSystem.setPositionFailures.insert(100)
 
         _ = controller.listWindows()
 
         XCTAssertThrowsError(try controller.assignWindow(100, to: "2")) { error in
-            XCTAssertTrue(error is WorkspaceError)
+            XCTAssertEqual(error as? FakeWindowSystemError, .setPosition(100))
         }
         XCTAssertNil(controller.membership(for: 100))
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
@@ -68,7 +68,7 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(snapshotStore.snapshots.isEmpty)
     }
 
-    func testRestoreVerificationFailureKeepsHiddenStateAndSnapshot() throws {
+    func testRestoreSetPositionFailureKeepsHiddenStateAndSnapshot() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
         ])
@@ -80,8 +80,10 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(snapshotStore.snapshots.map(\.windowID), [100])
 
-        windowSystem.ignoredFrameWindowIDs.insert(100)
-        XCTAssertThrowsError(try controller.restoreWindow(100))
+        windowSystem.setPositionFailures.insert(100)
+        XCTAssertThrowsError(try controller.restoreWindow(100)) { error in
+            XCTAssertEqual(error as? FakeWindowSystemError, .setPosition(100))
+        }
 
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(windowSystem.positions[100], hidePoint)
@@ -227,7 +229,7 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(result.ignored.isEmpty)
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertTrue(snapshotStore.snapshots.isEmpty)
-        XCTAssertFalse(windowSystem.operations.contains(.setFrame(100, originalFrame)))
+        XCTAssertFalse(windowSystem.operations.contains(.setPosition(100, originalFrame.origin)))
     }
 
     func testStartupSnapshotsIgnorePidMismatch() throws {

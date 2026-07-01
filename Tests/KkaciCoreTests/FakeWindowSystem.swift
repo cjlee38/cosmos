@@ -2,11 +2,14 @@ import CoreGraphics
 import Foundation
 @testable import KkaciCore
 
+enum FakeWindowSystemError: Error, Equatable {
+    case setPosition(WindowID)
+}
+
 final class FakeWindowSystem: WindowSystem {
     enum Operation: Equatable {
         case refresh
         case setPosition(WindowID, CGPoint)
-        case setFrame(WindowID, WindowFrame)
         case focus(WindowID)
     }
 
@@ -16,10 +19,7 @@ final class FakeWindowSystem: WindowSystem {
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
     var operations: [Operation] = []
-    var ignoredPositionWindowIDs: Set<WindowID> = []
-    var ignoredFrameWindowIDs: Set<WindowID> = []
-    var positionResultOverrides: [WindowID: CGPoint] = [:]
-    var frameResultOverrides: [WindowID: WindowFrame] = [:]
+    var setPositionFailures: Set<WindowID> = []
     var refreshCount = 0
 
     init(windows: [WindowSnapshot]) {
@@ -69,27 +69,15 @@ final class FakeWindowSystem: WindowSystem {
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
         operations.append(.setPosition(id, point))
-        guard !ignoredPositionWindowIDs.contains(id) else {
-            return
+        if setPositionFailures.contains(id) {
+            throw FakeWindowSystemError.setPosition(id)
         }
 
-        let appliedPoint = positionResultOverrides[id] ?? point
-        positions[id] = appliedPoint
+        positions[id] = point
         if var frame = frames[id] {
-            frame.origin = appliedPoint
+            frame.origin = point
             frames[id] = frame
         }
-    }
-
-    func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
-        operations.append(.setFrame(id, frame))
-        guard !ignoredFrameWindowIDs.contains(id) else {
-            return
-        }
-
-        let appliedFrame = frameResultOverrides[id] ?? frame
-        frames[id] = appliedFrame
-        positions[id] = appliedFrame.origin
     }
 
     func focus(_ id: WindowID) {
