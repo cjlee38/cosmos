@@ -104,6 +104,12 @@ final class StatusMenuController: NSObject {
         }
     }
 
+    func syncWindowState() {
+        _ = controller.syncWindowState()
+        refreshMenu()
+        debugStatusWindowController.refresh()
+    }
+
     private func buildMenu() {
         menu.removeAllItems()
         workspaceItems.removeAll()

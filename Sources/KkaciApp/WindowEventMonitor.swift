@@ -2,18 +2,29 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-final class FocusedWindowMonitor {
+final class WindowEventMonitor {
     private struct ObservedApp {
         let appElement: AXUIElement
         let observer: AXObserver
     }
 
+    private enum Callback {
+        case focusedWindowChanged
+        case windowSetChanged
+    }
+
     private let onFocusedWindowChanged: () -> Void
+    private let onWindowSetChanged: () -> Void
     private var observedApps: [pid_t: ObservedApp] = [:]
     private var workspaceObserverTokens: [NSObjectProtocol] = []
+    private var pendingCallbacks: Set<Callback> = []
 
-    init(onFocusedWindowChanged: @escaping () -> Void) {
+    init(
+        onFocusedWindowChanged: @escaping () -> Void,
+        onWindowSetChanged: @escaping () -> Void
+    ) {
         self.onFocusedWindowChanged = onFocusedWindowChanged
+        self.onWindowSetChanged = onWindowSetChanged
     }
 
     deinit {
@@ -72,6 +83,7 @@ final class FocusedWindowMonitor {
         ) { [weak self] notification in
             if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
                 self?.observe(app)
+                self?.schedule(.windowSetChanged)
             }
         })
 
@@ -84,6 +96,7 @@ final class FocusedWindowMonitor {
                 return
             }
             self?.removeObserver(for: app.processIdentifier)
+            self?.schedule(.windowSetChanged)
         })
     }
 
@@ -100,15 +113,15 @@ final class FocusedWindowMonitor {
         var observer: AXObserver?
         let createError = AXObserverCreate(
             pid,
-            { _, _, _, context in
+            { _, _, notification, context in
                 guard let context else {
                     return
                 }
 
-                let monitor = Unmanaged<FocusedWindowMonitor>
+                let monitor = Unmanaged<WindowEventMonitor>
                     .fromOpaque(context)
                     .takeUnretainedValue()
-                monitor.onFocusedWindowChanged()
+                monitor.handleAXNotification(notification)
             },
             &observer
         )
@@ -118,14 +131,22 @@ final class FocusedWindowMonitor {
         }
 
         let context = Unmanaged.passUnretained(self).toOpaque()
-        let addError = AXObserverAddNotification(
-            observer,
-            appElement,
-            kAXFocusedWindowChangedNotification as CFString,
-            context
-        )
+        var didRegisterAnyNotification = false
+        for notification in [
+            kAXFocusedWindowChangedNotification,
+            kAXWindowCreatedNotification,
+            kAXUIElementDestroyedNotification,
+        ] {
+            let error = AXObserverAddNotification(
+                observer,
+                appElement,
+                notification as CFString,
+                context
+            )
+            didRegisterAnyNotification = didRegisterAnyNotification || error == .success
+        }
 
-        guard addError == .success else {
+        guard didRegisterAnyNotification else {
             return
         }
 
@@ -143,5 +164,34 @@ final class FocusedWindowMonitor {
             AXObserverGetRunLoopSource(observedApp.observer),
             .defaultMode
         )
+    }
+
+    private func handleAXNotification(_ notification: CFString) {
+        let name = notification as String
+        if name == kAXFocusedWindowChangedNotification {
+            schedule(.focusedWindowChanged)
+        } else {
+            schedule(.windowSetChanged)
+        }
+    }
+
+    private func schedule(_ callback: Callback) {
+        guard pendingCallbacks.insert(callback).inserted else {
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            pendingCallbacks.remove(callback)
+            switch callback {
+            case .focusedWindowChanged:
+                onFocusedWindowChanged()
+            case .windowSetChanged:
+                onWindowSetChanged()
+            }
+        }
     }
 }

@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let configLoadError: Error?
     private var statusMenuController: StatusMenuController?
     private var hotKeyController: HotKeyController?
-    private var focusedWindowMonitor: FocusedWindowMonitor?
+    private var windowEventMonitor: WindowEventMonitor?
 
     init(
         axClient: AXClient,
@@ -35,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.reloadConfig()
             },
             accessibilityGrantedHandler: { [weak self] in
-                self?.startFocusedWindowMonitor()
+                self?.startWindowEventMonitor()
             }
         )
         self.statusMenuController = statusMenuController
@@ -63,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var captureFailed = false
         do {
             try statusMenuController.captureVisibleWindowsToDefaultWorkspace()
-            startFocusedWindowMonitor()
+            startWindowEventMonitor()
         } catch {
             captureFailed = true
             statusMenuController.showMessage("Initial capture failed: \(error)")
@@ -90,15 +90,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func startFocusedWindowMonitor() {
-        guard focusedWindowMonitor == nil else {
+    private func startWindowEventMonitor() {
+        guard windowEventMonitor == nil else {
             return
         }
 
-        let monitor = FocusedWindowMonitor { [weak self] in
-            self?.statusMenuController?.syncWorkspaceToFocusedWindow()
-        }
+        let monitor = WindowEventMonitor(
+            onFocusedWindowChanged: { [weak self] in
+                self?.statusMenuController?.syncWorkspaceToFocusedWindow()
+            },
+            onWindowSetChanged: { [weak self] in
+                self?.statusMenuController?.syncWindowState()
+            }
+        )
         monitor.start()
-        focusedWindowMonitor = monitor
+        windowEventMonitor = monitor
     }
 }

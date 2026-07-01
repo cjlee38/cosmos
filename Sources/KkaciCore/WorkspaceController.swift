@@ -93,6 +93,7 @@ public final class WorkspaceController {
     private var state: WorkspaceState
     private var config: KkaciConfig
     private var isConfigPersistenceEnabled: Bool
+    private var cachedWindows: [WindowSnapshot] = []
 
     public var activeWorkspace: String {
         state.activeWorkspace
@@ -121,6 +122,15 @@ public final class WorkspaceController {
         syncWindows()
     }
 
+    public func currentWindows() -> WindowListResult {
+        WindowListResult(windows: cachedWindows, sync: .empty)
+    }
+
+    @discardableResult
+    public func syncWindowState() -> WorkspaceSyncSummary {
+        syncWindows().sync
+    }
+
     public func membership(for id: WindowID) -> String? {
         state.membership(for: id)
     }
@@ -130,8 +140,7 @@ public final class WorkspaceController {
     }
 
     public func focusedWindowID() -> WindowID? {
-        _ = syncWindows()
-        return windowSystem.focusedWindowID()
+        windowSystem.focusedWindowID()
     }
 
     public func assignFocused(to workspace: String) throws -> WindowID {
@@ -301,6 +310,7 @@ public final class WorkspaceController {
 
     private func syncWindows() -> WindowListResult {
         let windows = windowSystem.refresh()
+        cachedWindows = windows
         let aliveIDs = Set(windows.map(\.id))
         return WindowListResult(windows: windows, sync: state.sync(aliveWindowIDs: aliveIDs))
     }

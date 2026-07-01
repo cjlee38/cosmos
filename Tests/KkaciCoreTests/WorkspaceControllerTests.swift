@@ -72,6 +72,40 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.membership(for: 200), "3")
     }
 
+    func testCurrentWindowsDoesNotDiscoverOrAssignNewWindows() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Baseline"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        _ = try controller.switchWorkspace(to: "3")
+        windowSystem.windows.append(.window(id: 200, title: "New"))
+
+        let result = controller.currentWindows()
+
+        XCTAssertEqual(result.windows.map(\.id), [100])
+        XCTAssertTrue(result.sync.isEmpty)
+        XCTAssertNil(controller.membership(for: 200))
+    }
+
+    func testExplicitWindowStateSyncDiscoversAndAssignsNewWindows() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Baseline"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        _ = try controller.switchWorkspace(to: "3")
+        windowSystem.windows.append(.window(id: 200, title: "New"))
+
+        let sync = controller.syncWindowState()
+
+        XCTAssertEqual(sync.autoAssigned.map(\.0), [200])
+        XCTAssertEqual(controller.currentWindows().windows.map(\.id), [100, 200])
+        XCTAssertEqual(controller.membership(for: 200), "3")
+    }
+
     func testClosedWindowsAreRemovedFromMembershipAndHiddenState() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),

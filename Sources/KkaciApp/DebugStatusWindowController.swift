@@ -109,7 +109,7 @@ final class DebugStatusWindowController: NSWindowController {
     }
 
     private func renderStatus() -> String {
-        let result = controller.listWindows()
+        let result = controller.currentWindows()
         let focused = controller.focusedWindowID()
 
         var lines: [String] = [
