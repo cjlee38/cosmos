@@ -1,0 +1,60 @@
+import CoreGraphics
+import Foundation
+@testable import KkaciCore
+
+final class FakeWindowSystem: WindowSystem {
+    var windows: [WindowSnapshot]
+    var focusedWindow: WindowID?
+    var focusedIDs: [WindowID] = []
+    var positions: [WindowID: CGPoint] = [:]
+    var frames: [WindowID: WindowFrame] = [:]
+
+    init(windows: [WindowSnapshot]) {
+        self.windows = windows
+        self.frames = Dictionary(uniqueKeysWithValues: windows.compactMap { window in
+            window.frame.map { (window.id, $0) }
+        })
+    }
+
+    func refresh() -> [WindowSnapshot] {
+        windows.map { snapshot in
+            WindowSnapshot(
+                id: snapshot.id,
+                app: snapshot.app,
+                title: snapshot.title,
+                frame: frames[snapshot.id] ?? snapshot.frame,
+                isMinimized: snapshot.isMinimized
+            )
+        }
+    }
+
+    func contains(_ id: WindowID) -> Bool {
+        windows.contains { $0.id == id }
+    }
+
+    func focusedWindowID() -> WindowID? {
+        focusedWindow
+    }
+
+    func frame(for id: WindowID) -> WindowFrame? {
+        frames[id]
+    }
+
+    func setPosition(_ point: CGPoint, for id: WindowID) throws {
+        positions[id] = point
+        if var frame = frames[id] {
+            frame.origin = point
+            frames[id] = frame
+        }
+    }
+
+    func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
+        frames[id] = frame
+        positions[id] = frame.origin
+    }
+
+    func focus(_ id: WindowID) {
+        focusedWindow = id
+        focusedIDs.append(id)
+    }
+}
