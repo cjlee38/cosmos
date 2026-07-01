@@ -47,6 +47,50 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(snapshotStore.snapshots.isEmpty)
     }
 
+    func testEmergencyUnhideRestoresAllHiddenWindowsAndRemovesSnapshots() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+            .window(id: 200, title: "Two", pid: 7),
+            .window(id: 300, title: "Three", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+        let frame100 = try XCTUnwrap(windowSystem.frames[100])
+        let frame200 = try XCTUnwrap(windowSystem.frames[200])
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "2")
+        try controller.assignWindow(300, to: "3")
+
+        let result = controller.restoreAllHiddenWindows()
+
+        XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [200, 300], skipped: []))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertFalse(controller.isHiddenByWorkspace(300))
+        XCTAssertEqual(windowSystem.frames[200], frame200)
+        XCTAssertEqual(windowSystem.frames[100], frame100)
+        XCTAssertTrue(snapshotStore.snapshots.isEmpty)
+    }
+
+    func testEmergencyUnhideSkipsClosedHiddenWindows() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+            .window(id: 200, title: "Two", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(200, to: "2")
+        windowSystem.windows.removeAll { $0.id == 200 }
+
+        let result = controller.restoreAllHiddenWindows()
+
+        XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [], skipped: [200]))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+    }
+
     func testShutdownRestoreDoesNotRemoveHiddenWindowSnapshot() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),

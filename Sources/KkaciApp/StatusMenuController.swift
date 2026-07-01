@@ -152,6 +152,8 @@ final class StatusMenuController: NSObject {
         menu.addItem(.separator())
         menu.addItem(commandItem(title: "Show Debug Status", action: #selector(showDebugStatus)))
         menu.addItem(.separator())
+        menu.addItem(commandItem(title: "Emergency Unhide All", action: #selector(emergencyUnhideAll)))
+        menu.addItem(.separator())
 
         messageItem.isEnabled = false
         messageItem.title = currentMessage
@@ -236,6 +238,23 @@ final class StatusMenuController: NSObject {
 
     @objc private func showDebugStatus() {
         showDebugStatusWindow()
+    }
+
+    @objc private func emergencyUnhideAll() {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Emergency Unhide All"
+        alert.informativeText = "Restore all windows currently hidden by kkaci. Windows from other workspaces may become visible until the next workspace switch."
+        alert.addButton(withTitle: "Unhide All")
+        alert.addButton(withTitle: "Cancel")
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
+
+        let result = controller.restoreAllHiddenWindows()
+        showMessage("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
     }
 
     @objc private func reloadConfig() {

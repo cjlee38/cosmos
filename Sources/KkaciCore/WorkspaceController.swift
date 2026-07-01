@@ -85,6 +85,16 @@ public struct WindowListResult {
     }
 }
 
+public struct RestoreAllHiddenWindowsResult: Equatable {
+    public let restored: [WindowID]
+    public let skipped: [WindowID]
+
+    public init(restored: [WindowID], skipped: [WindowID]) {
+        self.restored = restored
+        self.skipped = skipped
+    }
+}
+
 public final class WorkspaceController {
     private let windowSystem: any WindowSystem
     private let displayProvider: any HidePointProviding
@@ -341,6 +351,29 @@ public final class WorkspaceController {
             windowSystem.focus(id)
         }
         return result
+    }
+
+    public func restoreAllHiddenWindows() -> RestoreAllHiddenWindowsResult {
+        let requestedIDs = state.hiddenWindowIDs
+        _ = syncWindows()
+        var restored: [WindowID] = []
+        var skipped: [WindowID] = []
+
+        for id in requestedIDs {
+            guard state.hiddenFrame(for: id) != nil else {
+                skipped.append(id)
+                continue
+            }
+            do {
+                if try restoreWindowWithoutSync(id) == .restored {
+                    restored.append(id)
+                }
+            } catch {
+                skipped.append(id)
+            }
+        }
+
+        return RestoreAllHiddenWindowsResult(restored: restored, skipped: skipped)
     }
 
     private func hideWindowWithoutSync(_ id: WindowID) throws {
