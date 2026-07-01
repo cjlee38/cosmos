@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let configLoadError: Error?
     private var statusMenuController: StatusMenuController?
     private var hotKeyController: HotKeyController?
+    private var focusedWindowMonitor: FocusedWindowMonitor?
 
     init(
         axClient: AXClient,
@@ -32,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             controller: controller,
             reloadConfigHandler: { [weak self] in
                 self?.reloadConfig()
+            },
+            accessibilityGrantedHandler: { [weak self] in
+                self?.startFocusedWindowMonitor()
             }
         )
         self.statusMenuController = statusMenuController
@@ -59,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var captureFailed = false
         do {
             try statusMenuController.captureVisibleWindowsToDefaultWorkspace()
+            startFocusedWindowMonitor()
         } catch {
             captureFailed = true
             statusMenuController.showMessage("Initial capture failed: \(error)")
@@ -83,5 +88,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             statusMenuController.showMessage("Config reload failed; keeping previous config: \(error)")
         }
+    }
+
+    private func startFocusedWindowMonitor() {
+        guard focusedWindowMonitor == nil else {
+            return
+        }
+
+        let monitor = FocusedWindowMonitor { [weak self] in
+            self?.statusMenuController?.syncWorkspaceToFocusedWindow()
+        }
+        monitor.start()
+        focusedWindowMonitor = monitor
     }
 }

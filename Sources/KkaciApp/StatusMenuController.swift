@@ -5,6 +5,7 @@ final class StatusMenuController: NSObject {
     private let axClient: AXClient
     private let controller: WorkspaceController
     private let reloadConfigHandler: () -> Void
+    private let accessibilityGrantedHandler: () -> Void
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
     private let permissionItem = NSMenuItem()
@@ -17,10 +18,16 @@ final class StatusMenuController: NSObject {
     private var renderedWorkspaces: [String] = []
     private var currentMessage = "Ready"
 
-    init(axClient: AXClient, controller: WorkspaceController, reloadConfigHandler: @escaping () -> Void) {
+    init(
+        axClient: AXClient,
+        controller: WorkspaceController,
+        reloadConfigHandler: @escaping () -> Void,
+        accessibilityGrantedHandler: @escaping () -> Void
+    ) {
         self.axClient = axClient
         self.controller = controller
         self.reloadConfigHandler = reloadConfigHandler
+        self.accessibilityGrantedHandler = accessibilityGrantedHandler
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         buildMenu()
@@ -80,6 +87,20 @@ final class StatusMenuController: NSObject {
             showMessage("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
             showMessage("Error: \(error)")
+        }
+    }
+
+    func syncWorkspaceToFocusedWindow() {
+        do {
+            switch try controller.syncWorkspaceToFocusedWindow() {
+            case .switched(let windowID, let workspace):
+                showMessage("Switched to workspace \(workspace) for \(windowID)")
+            case .alreadyActive(_, _), .noFocusedWindow, .unmanagedWindow(_):
+                refreshMenu()
+                debugStatusWindowController.refresh()
+            }
+        } catch {
+            showMessage("Focus sync failed: \(error)")
         }
     }
 
@@ -187,6 +208,7 @@ final class StatusMenuController: NSObject {
 
         do {
             try captureVisibleWindowsToDefaultWorkspace()
+            accessibilityGrantedHandler()
         } catch {
             showMessage("Initial capture failed: \(error)")
         }

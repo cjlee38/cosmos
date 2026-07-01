@@ -40,6 +40,13 @@ public enum WindowFocusResult: Equatable {
     case noWindowsInWorkspace(String)
 }
 
+public enum FocusedWindowWorkspaceSyncResult: Equatable {
+    case noFocusedWindow
+    case unmanagedWindow(WindowID)
+    case alreadyActive(windowID: WindowID, workspace: String)
+    case switched(windowID: WindowID, workspace: String)
+}
+
 public struct WindowMoveResult: Equatable {
     public let windowID: WindowID
     public let workspace: String
@@ -166,26 +173,31 @@ public final class WorkspaceController {
 
     public func switchWorkspace(to workspace: String) throws -> WorkspaceSyncSummary {
         let sync = syncWindows().sync
-        let workspace = try ensureWorkspace(workspace)
-        let oldFocusedWindow = focusedWindowInActiveWorkspace()
-        state.activate(workspace)
-
-        var firstRestored: WindowID?
-        for id in state.windowIDs(in: workspace) {
-            _ = try restoreWindowWithoutSync(id)
-            firstRestored = firstRestored ?? id
-        }
-
-        let focusTarget = state.focusTarget(for: workspace, fallback: firstRestored)
-        if let focusTarget {
-            windowSystem.focus(focusTarget)
-            state.recordFocus(focusTarget, in: workspace)
-        }
-
-        for id in hideOrder(targetWorkspace: workspace, oldFocusedWindow: oldFocusedWindow) {
-            try hideWindowWithoutSync(id)
-        }
+        try switchWorkspaceWithoutSync(to: workspace)
         return sync
+    }
+
+    public func syncWorkspaceToFocusedWindow() throws -> FocusedWindowWorkspaceSyncResult {
+        _ = syncWindows()
+
+        guard let id = windowSystem.focusedWindowID() else {
+            return .noFocusedWindow
+        }
+
+        guard windowSystem.contains(id),
+              let workspace = state.membership(for: id)
+        else {
+            return .unmanagedWindow(id)
+        }
+
+        guard workspace != activeWorkspace else {
+            state.recordFocus(id, in: workspace)
+            return .alreadyActive(windowID: id, workspace: workspace)
+        }
+
+        state.recordFocus(id, in: workspace)
+        try switchWorkspaceWithoutSync(to: workspace)
+        return .switched(windowID: id, workspace: workspace)
     }
 
     public func switchToNextWorkspace() throws -> WorkspaceSwitchResult {
@@ -328,6 +340,29 @@ public final class WorkspaceController {
         windowSystem.focus(target)
         state.recordFocus(target, in: activeWorkspace)
         return .focused(target)
+    }
+
+    private func switchWorkspaceWithoutSync(to workspace: String) throws {
+        let workspace = try ensureWorkspace(workspace)
+        let oldFocusedWindow = focusedWindowInActiveWorkspace()
+            ?? state.focusTarget(for: activeWorkspace, fallback: nil)
+        state.activate(workspace)
+
+        var firstRestored: WindowID?
+        for id in state.windowIDs(in: workspace) {
+            _ = try restoreWindowWithoutSync(id)
+            firstRestored = firstRestored ?? id
+        }
+
+        let focusTarget = state.focusTarget(for: workspace, fallback: firstRestored)
+        if let focusTarget {
+            windowSystem.focus(focusTarget)
+            state.recordFocus(focusTarget, in: workspace)
+        }
+
+        for id in hideOrder(targetWorkspace: workspace, oldFocusedWindow: oldFocusedWindow) {
+            try hideWindowWithoutSync(id)
+        }
     }
 
     private func focusedWindowInActiveWorkspace() -> WindowID? {

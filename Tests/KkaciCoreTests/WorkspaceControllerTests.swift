@@ -374,6 +374,78 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.focusedIDs.count, focusCount)
     }
 
+    func testFocusedWindowInOtherWorkspaceSwitchesActiveWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "2")
+        windowSystem.focusedWindow = 200
+
+        let result = try controller.syncWorkspaceToFocusedWindow()
+
+        XCTAssertEqual(result, .switched(windowID: 200, workspace: "2"))
+        XCTAssertEqual(controller.activeWorkspace, "2")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertEqual(windowSystem.focusedIDs.last, 200)
+    }
+
+    func testFocusedWindowSyncPrefersExternallyFocusedWindowInTargetWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two"),
+            .window(id: 201, title: "Three"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(201, to: "2")
+        try controller.assignWindow(200, to: "2")
+        windowSystem.focusedWindow = 201
+
+        let result = try controller.syncWorkspaceToFocusedWindow()
+
+        XCTAssertEqual(result, .switched(windowID: 201, workspace: "2"))
+        XCTAssertEqual(windowSystem.focusedIDs.last, 201)
+    }
+
+    func testFocusedWindowInActiveWorkspaceDoesNotSwitch() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.syncWorkspaceToFocusedWindow()
+
+        XCTAssertEqual(result, .alreadyActive(windowID: 100, workspace: "1"))
+        XCTAssertEqual(controller.activeWorkspace, "1")
+    }
+
+    func testUnassignedFocusedWindowDoesNotSwitchWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.syncWorkspaceToFocusedWindow()
+
+        XCTAssertEqual(result, .unmanagedWindow(100))
+        XCTAssertEqual(controller.activeWorkspace, "1")
+    }
+
     private func makeController(
         _ windowSystem: FakeWindowSystem,
         configStore: (any KkaciConfigStore)? = nil,
