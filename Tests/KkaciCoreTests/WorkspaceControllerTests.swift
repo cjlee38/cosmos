@@ -200,6 +200,53 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
     }
 
+    func testDisabledConfigPersistenceDoesNotSaveCreatedWorkspaces() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        let controller = makeController(
+            windowSystem,
+            configStore: store,
+            isConfigPersistenceEnabled: false
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "scratch")
+
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch"])
+        XCTAssertTrue(store.savedConfigs.isEmpty)
+    }
+
+    func testApplyConfigEnablesPersistenceAndKeepsReferencedRuntimeWorkspaces() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        let controller = makeController(
+            windowSystem,
+            configStore: store,
+            isConfigPersistenceEnabled: false
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "scratch")
+        controller.applyConfig(
+            KkaciConfig(
+                workspaces: WorkspaceConfig(names: ["1", "2", "3"]),
+                bindings: [HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")]
+            ),
+            enablePersistence: true
+        )
+        try controller.createWorkspace(named: "dev")
+
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch", "dev"])
+        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "scratch", "dev"])
+        XCTAssertEqual(store.savedConfigs.last?.bindings, [
+            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev"),
+        ])
+    }
+
     func testCaptureVisibleWindowsAssignsOnlyVisibleWindows() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -265,14 +312,78 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(result, .noWindowsInWorkspace("2"))
     }
 
+    func testMoveFocusedWindowToInactiveWorkspaceHidesItAndFocusesReplacement() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 101, title: "Two"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(101, to: "1")
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.moveFocusedWindow(to: "2")
+
+        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "2", replacementFocus: .focused(101)))
+        XCTAssertEqual(controller.membership(for: 100), "2")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+        XCTAssertEqual(windowSystem.focusedIDs.last, 101)
+    }
+
+    func testMoveFocusedWindowToCurrentWorkspaceKeepsItVisible() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.moveFocusedWindow(to: "1")
+
+        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "1", replacementFocus: nil))
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.focusedIDs.last, 100)
+    }
+
+    func testMoveFocusedWindowToMissingWorkspaceCreatesAndPersistsIt() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        let controller = makeController(windowSystem, configStore: store)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.moveFocusedWindow(to: "dev")
+
+        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "dev", replacementFocus: .noWindowsInWorkspace("1")))
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
+        XCTAssertEqual(controller.membership(for: 100), "dev")
+        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
+
+        let focusCount = windowSystem.focusedIDs.count
+        _ = try controller.switchWorkspace(to: "1")
+        XCTAssertEqual(windowSystem.focusedIDs.count, focusCount)
+    }
+
     private func makeController(
         _ windowSystem: FakeWindowSystem,
-        configStore: (any KkaciConfigStore)? = nil
+        configStore: (any KkaciConfigStore)? = nil,
+        isConfigPersistenceEnabled: Bool = true
     ) -> WorkspaceController {
         WorkspaceController(
             windowSystem: windowSystem,
             displayProvider: FakeDisplayProvider(point: hidePoint),
-            configStore: configStore
+            configStore: configStore,
+            isConfigPersistenceEnabled: isConfigPersistenceEnabled
         )
     }
 }

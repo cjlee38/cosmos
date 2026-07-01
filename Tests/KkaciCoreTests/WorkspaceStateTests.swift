@@ -70,6 +70,26 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertTrue(state.containsWorkspace("4"))
     }
 
+    func testApplyingWorkspacesKeepsReferencedRuntimeWorkspaces() {
+        var state = WorkspaceState(workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]))
+        state.assign(100, to: "scratch")
+        state.activate("scratch")
+
+        state.applyWorkspaces(WorkspaceConfig(names: ["1", "2", "3"]))
+
+        XCTAssertEqual(state.workspaces, ["1", "2", "3", "scratch"])
+        XCTAssertEqual(state.activeWorkspace, "scratch")
+    }
+
+    func testApplyingWorkspacesRemovesUnreferencedRuntimeWorkspaces() {
+        var state = WorkspaceState(workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]))
+
+        state.applyWorkspaces(WorkspaceConfig(names: ["1", "2", "3"]))
+
+        XCTAssertEqual(state.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(state.activeWorkspace, "1")
+    }
+
     func testWorkspaceCycleWrapsInBothDirections() {
         var state = WorkspaceState()
         state.assign(100, to: "2")

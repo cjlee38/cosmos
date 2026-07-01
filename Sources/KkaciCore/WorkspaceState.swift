@@ -70,6 +70,26 @@ struct WorkspaceState {
         }
     }
 
+    mutating func applyWorkspaces(_ workspaces: WorkspaceConfig) {
+        var nextOrder = workspaces.names
+        let referencedWorkspaces = Set(
+            Array(memberships.values) +
+                Array(lastFocusedByWorkspace.keys) +
+                [activeWorkspace]
+        )
+
+        for workspace in workspaceOrder where referencedWorkspaces.contains(workspace) {
+            if !nextOrder.contains(workspace) {
+                nextOrder.append(workspace)
+            }
+        }
+
+        workspaceOrder = nextOrder
+        if !workspaceOrder.contains(activeWorkspace) {
+            activeWorkspace = workspaceOrder[0]
+        }
+    }
+
     mutating func activate(_ workspace: String) {
         activeWorkspace = workspace
     }
@@ -98,6 +118,12 @@ struct WorkspaceState {
 
     mutating func recordFocus(_ id: WindowID, in workspace: String) {
         lastFocusedByWorkspace[workspace] = id
+    }
+
+    mutating func clearFocus(_ id: WindowID, in workspace: String) {
+        if lastFocusedByWorkspace[workspace] == id {
+            lastFocusedByWorkspace[workspace] = nil
+        }
     }
 
     func focusTarget(for workspace: String, fallback: WindowID?) -> WindowID? {

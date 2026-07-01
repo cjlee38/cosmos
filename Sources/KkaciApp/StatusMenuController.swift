@@ -4,6 +4,7 @@ import KkaciCore
 final class StatusMenuController: NSObject {
     private let axClient: AXClient
     private let controller: WorkspaceController
+    private let reloadConfigHandler: () -> Void
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
     private let permissionItem = NSMenuItem()
@@ -16,9 +17,10 @@ final class StatusMenuController: NSObject {
     private var renderedWorkspaces: [String] = []
     private var currentMessage = "Ready"
 
-    init(axClient: AXClient, controller: WorkspaceController) {
+    init(axClient: AXClient, controller: WorkspaceController, reloadConfigHandler: @escaping () -> Void) {
         self.axClient = axClient
         self.controller = controller
+        self.reloadConfigHandler = reloadConfigHandler
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         buildMenu()
@@ -72,6 +74,15 @@ final class StatusMenuController: NSObject {
         }
     }
 
+    func moveFocusedWindow(to workspace: String) {
+        do {
+            let result = try controller.moveFocusedWindow(to: workspace)
+            showMessage("Moved \(result.windowID) to workspace \(result.workspace)")
+        } catch {
+            showMessage("Error: \(error)")
+        }
+    }
+
     private func buildMenu() {
         menu.removeAllItems()
         workspaceItems.removeAll()
@@ -115,6 +126,7 @@ final class StatusMenuController: NSObject {
         let hotKeyHelp = NSMenuItem(title: "Hotkeys: configured in config.toml", action: nil, keyEquivalent: "")
         hotKeyHelp.isEnabled = false
         menu.addItem(hotKeyHelp)
+        menu.addItem(commandItem(title: "Reload Config", action: #selector(reloadConfig)))
         menu.addItem(.separator())
         menu.addItem(commandItem(title: "Show Debug Status", action: #selector(showDebugStatus)))
         menu.addItem(.separator())
@@ -206,6 +218,10 @@ final class StatusMenuController: NSObject {
 
     @objc private func showDebugStatus() {
         showDebugStatusWindow()
+    }
+
+    @objc private func reloadConfig() {
+        reloadConfigHandler()
     }
 
     @objc private func quit() {

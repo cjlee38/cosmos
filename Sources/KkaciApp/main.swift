@@ -19,13 +19,15 @@ let controller = WorkspaceController(
     windowSystem: registry,
     displayProvider: DisplayProvider(),
     config: config,
-    configStore: configLoadError == nil ? configStore : nil
+    configStore: configStore,
+    isConfigPersistenceEnabled: configLoadError == nil
 )
 
 let app = NSApplication.shared
 let appDelegate = AppDelegate(
     axClient: axClient,
     controller: controller,
+    configStore: configStore,
     config: config,
     configLoadError: configLoadError
 )

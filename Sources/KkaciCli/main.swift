@@ -20,7 +20,8 @@ let controller = WorkspaceController(
     windowSystem: registry,
     displayProvider: displayProvider,
     config: config,
-    configStore: configLoadError == nil ? configStore : nil
+    configStore: configStore,
+    isConfigPersistenceEnabled: configLoadError == nil
 )
 
 if let configLoadError {

@@ -4,7 +4,8 @@ import KkaciCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let axClient: AXClient
     private let controller: WorkspaceController
-    private let config: KkaciConfig
+    private let configStore: any KkaciConfigStore
+    private var config: KkaciConfig
     private let configLoadError: Error?
     private var statusMenuController: StatusMenuController?
     private var hotKeyController: HotKeyController?
@@ -12,11 +13,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     init(
         axClient: AXClient,
         controller: WorkspaceController,
+        configStore: any KkaciConfigStore,
         config: KkaciConfig,
         configLoadError: Error?
     ) {
         self.axClient = axClient
         self.controller = controller
+        self.configStore = configStore
         self.config = config
         self.configLoadError = configLoadError
     }
@@ -26,7 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let statusMenuController = StatusMenuController(
             axClient: axClient,
-            controller: controller
+            controller: controller,
+            reloadConfigHandler: { [weak self] in
+                self?.reloadConfig()
+            }
         )
         self.statusMenuController = statusMenuController
         statusMenuController.showDebugStatusWindow()
@@ -35,7 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusMenuController: statusMenuController,
             bindings: config.bindings
         )
-        hotKeyController.registerConfiguredHotKeys()
+        do {
+            try hotKeyController.registerConfiguredHotKeys()
+        } catch {
+            statusMenuController.showMessage("Hotkey registration failed: \(error)")
+        }
         self.hotKeyController = hotKeyController
 
         let hasPermission = axClient.ensureAccessibilityPermission(prompt: true)
@@ -55,7 +65,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let configLoadError, !captureFailed {
-            statusMenuController.showMessage("Config load failed; using defaults: \(configLoadError)")
+            statusMenuController.showMessage("Config load failed; using defaults until reload: \(configLoadError)")
+        }
+    }
+
+    private func reloadConfig() {
+        guard let statusMenuController, let hotKeyController else {
+            return
+        }
+
+        do {
+            let loadedConfig = try configStore.load()
+            try hotKeyController.replaceBindings(loadedConfig.bindings)
+            controller.applyConfig(loadedConfig, enablePersistence: true)
+            config = loadedConfig
+            statusMenuController.showMessage("Config reloaded")
+        } catch {
+            statusMenuController.showMessage("Config reload failed; keeping previous config: \(error)")
         }
     }
 }

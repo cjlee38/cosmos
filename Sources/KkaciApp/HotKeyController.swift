@@ -3,45 +3,52 @@ import Foundation
 import KkaciCore
 
 final class HotKeyController {
-    private enum Action {
+    fileprivate enum Action {
         case nextWorkspace
         case previousWorkspace
         case nextWindow
         case previousWindow
         case workspace(String)
+        case moveWindowToWorkspace(String)
     }
 
     private var hotKeyRefs: [EventHotKeyRef?] = []
     private var eventHandlerRef: EventHandlerRef?
     private var actionsByID: [UInt32: Action] = [:]
     private let statusMenuController: StatusMenuController
-    private let bindings: [HotKeyBinding]
+    private let initialBindings: [HotKeyBinding]
+    private var currentBindings: [HotKeyBinding] = []
 
     init(statusMenuController: StatusMenuController, bindings: [HotKeyBinding]) {
         self.statusMenuController = statusMenuController
-        self.bindings = bindings
+        self.initialBindings = bindings
     }
 
     deinit {
-        for hotKeyRef in hotKeyRefs {
-            if let hotKeyRef {
-                UnregisterEventHotKey(hotKeyRef)
-            }
-        }
+        unregisterHotKeys()
         if let eventHandlerRef {
             RemoveEventHandler(eventHandlerRef)
         }
     }
 
-    func registerConfiguredHotKeys() {
-        installHandler()
+    func registerConfiguredHotKeys() throws {
+        try replaceBindings(initialBindings)
+    }
 
-        for binding in bindings {
-            do {
-                try register(binding)
-            } catch {
-                statusMenuController.showMessage("Invalid hotkey \(binding.key): \(error)")
-            }
+    func replaceBindings(_ bindings: [HotKeyBinding]) throws {
+        let registrations = try makeRegistrations(bindings)
+        let previousBindings = currentBindings
+
+        installHandler()
+        unregisterHotKeys()
+
+        do {
+            try register(registrations)
+            currentBindings = bindings
+        } catch {
+            unregisterHotKeys()
+            try restorePreviousBindings(previousBindings)
+            throw error
         }
     }
 
@@ -88,20 +95,49 @@ final class HotKeyController {
         )
     }
 
-    private func register(_ binding: HotKeyBinding) throws {
-        let action = try parseAction(binding)
-        let keystroke = try parseKeystroke(binding.key)
-        let id = UInt32(actionsByID.count + 1)
-        actionsByID[id] = action
-        register(action: action, id: id, keyCode: keystroke.keyCode, modifiers: keystroke.modifiers)
+    private func restorePreviousBindings(_ bindings: [HotKeyBinding]) throws {
+        guard !bindings.isEmpty else {
+            currentBindings = []
+            return
+        }
+
+        let registrations = try makeRegistrations(bindings)
+        try register(registrations)
+        currentBindings = bindings
     }
 
-    private func register(action: Action, id: UInt32, keyCode: UInt32, modifiers: UInt32) {
+    private func makeRegistrations(_ bindings: [HotKeyBinding]) throws -> [HotKeyRegistration] {
+        var seenKeys: Set<String> = []
+
+        return try bindings.enumerated().map { index, binding in
+            let action = try parseAction(binding)
+            let keystroke = try parseKeystroke(binding.key)
+            let key = "\(keystroke.keyCode):\(keystroke.modifiers)"
+            guard seenKeys.insert(key).inserted else {
+                throw HotKeyConfigError.duplicateKey(binding.key)
+            }
+
+            return HotKeyRegistration(
+                id: UInt32(index + 1),
+                action: action,
+                keyCode: keystroke.keyCode,
+                modifiers: keystroke.modifiers
+            )
+        }
+    }
+
+    private func register(_ registrations: [HotKeyRegistration]) throws {
+        for registration in registrations {
+            try register(registration)
+        }
+    }
+
+    private func register(_ registration: HotKeyRegistration) throws {
         var hotKeyRef: EventHotKeyRef?
-        let hotKeyID = EventHotKeyID(signature: fourCharCode("KKCI"), id: id)
+        let hotKeyID = EventHotKeyID(signature: fourCharCode("KKCI"), id: registration.id)
         let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
+            registration.keyCode,
+            registration.modifiers,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -109,11 +145,21 @@ final class HotKeyController {
         )
 
         if status == noErr {
+            actionsByID[registration.id] = registration.action
             hotKeyRefs.append(hotKeyRef)
         } else {
-            actionsByID[id] = nil
-            statusMenuController.showMessage("Failed to register hotkey \(describe(action)): \(status)")
+            throw HotKeyConfigError.registrationFailed(describe(registration.action), status)
         }
+    }
+
+    private func unregisterHotKeys() {
+        for hotKeyRef in hotKeyRefs {
+            if let hotKeyRef {
+                UnregisterEventHotKey(hotKeyRef)
+            }
+        }
+        hotKeyRefs.removeAll()
+        actionsByID.removeAll()
     }
 
     private func handleHotKey(id: UInt32) {
@@ -137,6 +183,8 @@ final class HotKeyController {
                 statusMenuController.focusPreviousWindow()
             case .workspace(let workspace):
                 statusMenuController.switchWorkspace(named: workspace)
+            case .moveWindowToWorkspace(let workspace):
+                statusMenuController.moveFocusedWindow(to: workspace)
             }
         }
     }
@@ -156,6 +204,11 @@ final class HotKeyController {
                 throw HotKeyConfigError.missingWorkspace
             }
             return .workspace(workspace)
+        case "move-window-to-workspace", "move-focused-window-to-workspace":
+            guard let workspace = binding.workspace, !workspace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw HotKeyConfigError.missingWorkspace
+            }
+            return .moveWindowToWorkspace(workspace)
         default:
             throw HotKeyConfigError.unknownCommand(binding.command)
         }
@@ -255,6 +308,8 @@ final class HotKeyController {
             return "previous-window"
         case .workspace(let workspace):
             return "workspace \(workspace)"
+        case .moveWindowToWorkspace(let workspace):
+            return "move-window-to-workspace \(workspace)"
         }
     }
 
@@ -279,6 +334,8 @@ private enum HotKeyConfigError: Error, CustomStringConvertible {
     case unsupportedKey(String)
     case unknownCommand(String)
     case missingWorkspace
+    case duplicateKey(String)
+    case registrationFailed(String, OSStatus)
 
     var description: String {
         switch self {
@@ -294,6 +351,17 @@ private enum HotKeyConfigError: Error, CustomStringConvertible {
             return "unknown command \(command)"
         case .missingWorkspace:
             return "workspace command needs a workspace"
+        case .duplicateKey(let key):
+            return "duplicate key \(key)"
+        case .registrationFailed(let action, let status):
+            return "failed to register \(action): \(status)"
         }
     }
+}
+
+private struct HotKeyRegistration {
+    let id: UInt32
+    let action: HotKeyController.Action
+    let keyCode: UInt32
+    let modifiers: UInt32
 }
