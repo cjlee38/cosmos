@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 public enum WorkspaceError: Error, CustomStringConvertible {
@@ -83,34 +82,6 @@ public struct WindowListResult {
     public init(windows: [WindowSnapshot], sync: WorkspaceSyncSummary) {
         self.windows = windows
         self.sync = sync
-    }
-}
-
-public struct SnapshotWorkspaceAssignment: Equatable {
-    public let windowID: WindowID
-    public let workspace: String
-
-    public init(windowID: WindowID, workspace: String) {
-        self.windowID = windowID
-        self.workspace = workspace
-    }
-}
-
-public struct SnapshotStartupApplyResult: Equatable {
-    public static let empty = SnapshotStartupApplyResult(restored: [], reassigned: [], ignored: [])
-
-    public let restored: [WindowID]
-    public let reassigned: [SnapshotWorkspaceAssignment]
-    public let ignored: [HiddenWindowSnapshot]
-
-    public init(restored: [WindowID], reassigned: [SnapshotWorkspaceAssignment], ignored: [HiddenWindowSnapshot]) {
-        self.restored = restored
-        self.reassigned = reassigned
-        self.ignored = ignored
-    }
-
-    public var isEmpty: Bool {
-        restored.isEmpty && reassigned.isEmpty && ignored.isEmpty
     }
 }
 
@@ -238,23 +209,17 @@ public final class WorkspaceController {
         var ignored: [HiddenWindowSnapshot] = []
 
         for snapshot in snapshots {
-            guard let window = windowsByID[snapshot.windowID],
-                  window.app.pid == snapshot.pid,
-                  let currentFrame = window.frame
-            else {
+            let action = HiddenWindowSnapshotPolicy.startupAction(
+                for: snapshot,
+                liveWindow: windowsByID[snapshot.windowID]
+            )
+            guard let targetWorkspace = action.workspace else {
                 ignored.append(snapshot)
                 continue
             }
 
-            let isAtHiddenPosition = isPoint(currentFrame.origin, near: snapshot.hiddenPosition)
-            let isAtOriginalFrame = isFrame(currentFrame, near: snapshot.originalFrame)
-            guard isAtHiddenPosition || isAtOriginalFrame else {
-                ignored.append(snapshot)
-                continue
-            }
-
-            let workspace = try ensureWorkspace(snapshot.workspace)
-            if isAtHiddenPosition {
+            let workspace = try ensureWorkspace(targetWorkspace)
+            if action.shouldRestore {
                 try windowSystem.setFrame(snapshot.originalFrame, for: snapshot.windowID)
                 restored.append(snapshot.windowID)
             }
@@ -522,12 +487,8 @@ public final class WorkspaceController {
         }
 
         snapshotStore.upsertSnapshot(
-            HiddenWindowSnapshot(
-                windowID: id,
-                pid: window.app.pid,
-                bundleID: window.app.bundleID,
-                appName: window.app.name,
-                title: window.title,
+            HiddenWindowSnapshotPolicy.makeSnapshot(
+                window: window,
                 workspace: state.membership(for: id) ?? activeWorkspace,
                 originalFrame: originalFrame,
                 hiddenPosition: hiddenPosition
@@ -545,18 +506,6 @@ public final class WorkspaceController {
 
     private func snapshotMetadata(for id: WindowID) -> WindowSnapshot? {
         windowSystem.snapshot(for: id) ?? cachedWindows.first { $0.id == id }
-    }
-
-    private func isFrame(_ lhs: WindowFrame, near rhs: WindowFrame) -> Bool {
-        isPoint(lhs.origin, near: rhs.origin) && isSize(lhs.size, near: rhs.size)
-    }
-
-    private func isPoint(_ lhs: CGPoint, near rhs: CGPoint) -> Bool {
-        abs(lhs.x - rhs.x) <= 2 && abs(lhs.y - rhs.y) <= 2
-    }
-
-    private func isSize(_ lhs: CGSize, near rhs: CGSize) -> Bool {
-        abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
     }
 
     private func currentOrStoredFrame(for id: WindowID) throws -> WindowFrame {
