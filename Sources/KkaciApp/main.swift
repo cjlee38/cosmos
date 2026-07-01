@@ -4,6 +4,7 @@ import KkaciCore
 let axClient = AXClient()
 let registry = WindowRegistry(axClient: axClient)
 let configStore = FileKkaciConfigStore.default
+let snapshotStore = FileHiddenWindowSnapshotStore.default
 let configLoad = Result { try configStore.load() }
 let config: KkaciConfig
 let configLoadError: Error?
@@ -20,6 +21,7 @@ let controller = WorkspaceController(
     displayProvider: DisplayProvider(),
     config: config,
     configStore: configStore,
+    snapshotStore: snapshotStore,
     isConfigPersistenceEnabled: configLoadError == nil
 )
 

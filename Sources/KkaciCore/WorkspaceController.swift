@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 public enum WorkspaceError: Error, CustomStringConvertible {
@@ -85,10 +86,39 @@ public struct WindowListResult {
     }
 }
 
+public struct SnapshotWorkspaceAssignment: Equatable {
+    public let windowID: WindowID
+    public let workspace: String
+
+    public init(windowID: WindowID, workspace: String) {
+        self.windowID = windowID
+        self.workspace = workspace
+    }
+}
+
+public struct SnapshotStartupApplyResult: Equatable {
+    public static let empty = SnapshotStartupApplyResult(restored: [], reassigned: [], ignored: [])
+
+    public let restored: [WindowID]
+    public let reassigned: [SnapshotWorkspaceAssignment]
+    public let ignored: [HiddenWindowSnapshot]
+
+    public init(restored: [WindowID], reassigned: [SnapshotWorkspaceAssignment], ignored: [HiddenWindowSnapshot]) {
+        self.restored = restored
+        self.reassigned = reassigned
+        self.ignored = ignored
+    }
+
+    public var isEmpty: Bool {
+        restored.isEmpty && reassigned.isEmpty && ignored.isEmpty
+    }
+}
+
 public final class WorkspaceController {
     private let windowSystem: any WindowSystem
     private let displayProvider: any HidePointProviding
     private let configStore: (any KkaciConfigStore)?
+    private let snapshotStore: (any HiddenWindowSnapshotStoring)?
 
     private var state: WorkspaceState
     private var config: KkaciConfig
@@ -108,11 +138,13 @@ public final class WorkspaceController {
         displayProvider: any HidePointProviding,
         config: KkaciConfig = .default,
         configStore: (any KkaciConfigStore)? = nil,
+        snapshotStore: (any HiddenWindowSnapshotStoring)? = nil,
         isConfigPersistenceEnabled: Bool = true
     ) {
         self.windowSystem = windowSystem
         self.displayProvider = displayProvider
         self.configStore = configStore
+        self.snapshotStore = snapshotStore
         self.config = config
         self.isConfigPersistenceEnabled = configStore != nil && isConfigPersistenceEnabled
         self.state = WorkspaceState(workspaces: config.workspaces)
@@ -178,6 +210,71 @@ public final class WorkspaceController {
             .map(\.id)
         state.capture(visibleIDs, into: workspace)
         return result.sync
+    }
+
+    public func captureUnassignedVisibleWindows(into workspace: String) throws -> WorkspaceSyncSummary {
+        let result = syncWindows()
+        let workspace = try ensureWorkspace(workspace)
+        let visibleIDs = result.windows
+            .filter { !$0.isMinimized && state.membership(for: $0.id) == nil }
+            .map(\.id)
+        state.capture(visibleIDs, into: workspace)
+        return result.sync
+    }
+
+    public func applyWindowSnapshotsAtStartup() throws -> SnapshotStartupApplyResult {
+        guard let snapshotStore else {
+            return .empty
+        }
+
+        let snapshots = try snapshotStore.loadSnapshots()
+        guard !snapshots.isEmpty else {
+            return .empty
+        }
+
+        let windowsByID = Dictionary(uniqueKeysWithValues: syncWindows().windows.map { ($0.id, $0) })
+        var restored: [WindowID] = []
+        var reassigned: [SnapshotWorkspaceAssignment] = []
+        var ignored: [HiddenWindowSnapshot] = []
+
+        for snapshot in snapshots {
+            guard let window = windowsByID[snapshot.windowID],
+                  window.app.pid == snapshot.pid,
+                  let currentFrame = window.frame
+            else {
+                ignored.append(snapshot)
+                continue
+            }
+
+            let isAtHiddenPosition = isPoint(currentFrame.origin, near: snapshot.hiddenPosition)
+            let isAtOriginalFrame = isFrame(currentFrame, near: snapshot.originalFrame)
+            guard isAtHiddenPosition || isAtOriginalFrame else {
+                ignored.append(snapshot)
+                continue
+            }
+
+            let workspace = try ensureWorkspace(snapshot.workspace)
+            if isAtHiddenPosition {
+                try windowSystem.setFrame(snapshot.originalFrame, for: snapshot.windowID)
+                restored.append(snapshot.windowID)
+            }
+
+            state.assign(snapshot.windowID, to: workspace)
+            reassigned.append(SnapshotWorkspaceAssignment(windowID: snapshot.windowID, workspace: workspace))
+            snapshotStore.removeSnapshot(windowID: snapshot.windowID, pid: snapshot.pid)
+        }
+
+        return SnapshotStartupApplyResult(restored: restored, reassigned: reassigned, ignored: ignored)
+    }
+
+    public func restoreHiddenWindowsForShutdown() {
+        _ = syncWindows()
+        for id in state.hiddenWindowIDs {
+            guard let frame = state.hiddenFrame(for: id), windowSystem.contains(id) else {
+                continue
+            }
+            try? windowSystem.setFrame(frame, for: id)
+        }
     }
 
     public func switchWorkspace(to workspace: String) throws -> WorkspaceSyncSummary {
@@ -290,7 +387,13 @@ public final class WorkspaceController {
         state.storeHiddenFrameIfNeeded(frame, for: id)
 
         let point = displayProvider.hidePoint(for: frame)
-        try windowSystem.setPosition(point, for: id)
+        upsertHiddenWindowSnapshot(id: id, originalFrame: frame, hiddenPosition: point)
+        do {
+            try windowSystem.setPosition(point, for: id)
+        } catch {
+            removeHiddenWindowSnapshot(for: id)
+            throw error
+        }
     }
 
     private func restoreWindowWithoutSync(_ id: WindowID) throws -> RestoreResult {
@@ -305,6 +408,7 @@ public final class WorkspaceController {
 
         try windowSystem.setFrame(frame, for: id)
         state.clearHiddenFrame(for: id)
+        removeHiddenWindowSnapshot(for: id)
         return .restored
     }
 
@@ -410,6 +514,49 @@ public final class WorkspaceController {
         }
 
         return ids
+    }
+
+    private func upsertHiddenWindowSnapshot(id: WindowID, originalFrame: WindowFrame, hiddenPosition: CGPoint) {
+        guard let snapshotStore, let window = snapshotMetadata(for: id) else {
+            return
+        }
+
+        snapshotStore.upsertSnapshot(
+            HiddenWindowSnapshot(
+                windowID: id,
+                pid: window.app.pid,
+                bundleID: window.app.bundleID,
+                appName: window.app.name,
+                title: window.title,
+                workspace: state.membership(for: id) ?? activeWorkspace,
+                originalFrame: originalFrame,
+                hiddenPosition: hiddenPosition
+            )
+        )
+    }
+
+    private func removeHiddenWindowSnapshot(for id: WindowID) {
+        guard let snapshotStore else {
+            return
+        }
+
+        snapshotStore.removeSnapshot(windowID: id, pid: snapshotMetadata(for: id)?.app.pid)
+    }
+
+    private func snapshotMetadata(for id: WindowID) -> WindowSnapshot? {
+        windowSystem.snapshot(for: id) ?? cachedWindows.first { $0.id == id }
+    }
+
+    private func isFrame(_ lhs: WindowFrame, near rhs: WindowFrame) -> Bool {
+        isPoint(lhs.origin, near: rhs.origin) && isSize(lhs.size, near: rhs.size)
+    }
+
+    private func isPoint(_ lhs: CGPoint, near rhs: CGPoint) -> Bool {
+        abs(lhs.x - rhs.x) <= 2 && abs(lhs.y - rhs.y) <= 2
+    }
+
+    private func isSize(_ lhs: CGSize, near rhs: CGSize) -> Bool {
+        abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
     }
 
     private func currentOrStoredFrame(for id: WindowID) throws -> WindowFrame {

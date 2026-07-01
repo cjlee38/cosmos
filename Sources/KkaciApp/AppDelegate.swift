@@ -35,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.reloadConfig()
             },
             accessibilityGrantedHandler: { [weak self] in
-                self?.startWindowEventMonitor()
+                self?.bootstrapWindowStateAfterPermission()
             }
         )
         self.statusMenuController = statusMenuController
@@ -60,18 +60,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        var captureFailed = false
-        do {
-            try statusMenuController.captureVisibleWindowsToDefaultWorkspace()
-            startWindowEventMonitor()
-        } catch {
-            captureFailed = true
-            statusMenuController.showMessage("Initial capture failed: \(error)")
-        }
+        let bootstrapSucceeded = bootstrapWindowStateAfterPermission()
 
-        if let configLoadError, !captureFailed {
+        if let configLoadError, bootstrapSucceeded {
             statusMenuController.showMessage("Config load failed; using defaults until reload: \(configLoadError)")
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controller.restoreHiddenWindowsForShutdown()
     }
 
     private func reloadConfig() {
@@ -105,5 +102,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         monitor.start()
         windowEventMonitor = monitor
+    }
+
+    @discardableResult
+    private func bootstrapWindowStateAfterPermission() -> Bool {
+        guard let statusMenuController else {
+            return false
+        }
+
+        do {
+            let snapshotResult = try controller.applyWindowSnapshotsAtStartup()
+            _ = try controller.captureUnassignedVisibleWindows(into: "1")
+            _ = try controller.switchWorkspace(to: controller.activeWorkspace)
+            startWindowEventMonitor()
+            statusMenuController.showMessage(bootstrapMessage(for: snapshotResult))
+            return true
+        } catch {
+            statusMenuController.showMessage("Initial window bootstrap failed: \(error)")
+            return false
+        }
+    }
+
+    private func bootstrapMessage(for snapshotResult: SnapshotStartupApplyResult) -> String {
+        guard !snapshotResult.reassigned.isEmpty || !snapshotResult.restored.isEmpty else {
+            return "Captured visible windows to workspace 1"
+        }
+
+        return "Applied \(snapshotResult.reassigned.count) snapshots, restored \(snapshotResult.restored.count)"
     }
 }

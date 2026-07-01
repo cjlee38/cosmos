@@ -18,7 +18,7 @@ public struct RunningAppInfo: Equatable {
     }
 }
 
-public struct WindowFrame: Equatable {
+public struct WindowFrame: Codable, Equatable {
     public var origin: CGPoint
     public var size: CGSize
 

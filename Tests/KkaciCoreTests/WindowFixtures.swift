@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 @testable import KkaciCore
 
 extension WindowFrame {
@@ -8,12 +9,20 @@ extension WindowFrame {
 }
 
 extension WindowSnapshot {
-    static func window(id: WindowID, title: String, isMinimized: Bool = false) -> WindowSnapshot {
+    static func window(
+        id: WindowID,
+        title: String,
+        pid: pid_t = 1,
+        appName: String = "FakeApp",
+        bundleID: String? = "test.fake",
+        frame: WindowFrame? = nil,
+        isMinimized: Bool = false
+    ) -> WindowSnapshot {
         WindowSnapshot(
             id: id,
-            app: RunningAppInfo(pid: 1, name: "FakeApp", bundleID: "test.fake"),
+            app: RunningAppInfo(pid: pid, name: appName, bundleID: bundleID),
             title: title,
-            frame: .frame(x: CGFloat(id), y: CGFloat(id)),
+            frame: frame ?? .frame(x: CGFloat(id), y: CGFloat(id)),
             isMinimized: isMinimized
         )
     }

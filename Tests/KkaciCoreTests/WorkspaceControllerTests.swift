@@ -155,6 +155,120 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
     }
 
+    func testHideWritesHiddenWindowSnapshot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+        let originalFrame = try XCTUnwrap(windowSystem.frames[100])
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "2")
+
+        XCTAssertEqual(snapshotStore.snapshots, [
+            HiddenWindowSnapshot(
+                windowID: 100,
+                pid: 7,
+                bundleID: "com.apple.Notes",
+                appName: "Notes",
+                title: "One",
+                workspace: "2",
+                originalFrame: originalFrame,
+                hiddenPosition: hidePoint,
+                updatedAt: snapshotStore.snapshots[0].updatedAt
+            ),
+        ])
+    }
+
+    func testNormalRestoreRemovesHiddenWindowSnapshot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+
+        _ = controller.listWindows()
+        try controller.hideWindow(100)
+        XCTAssertEqual(snapshotStore.snapshots.map(\.windowID), [100])
+
+        _ = try controller.restoreWindow(100)
+
+        XCTAssertTrue(snapshotStore.snapshots.isEmpty)
+    }
+
+    func testShutdownRestoreDoesNotRemoveHiddenWindowSnapshot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+        let originalFrame = try XCTUnwrap(windowSystem.frames[100])
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "2")
+        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+
+        controller.restoreHiddenWindowsForShutdown()
+
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertEqual(snapshotStore.snapshots.map(\.windowID), [100])
+    }
+
+    func testStartupSnapshotsRestoreCornerWindowAndReassignWorkspace() throws {
+        let originalFrame = WindowFrame.frame(x: 120, y: 140)
+        let snapshot = HiddenWindowSnapshot(
+            windowID: 100,
+            pid: 7,
+            bundleID: "test.fake",
+            appName: "FakeApp",
+            title: "One",
+            workspace: "2",
+            originalFrame: originalFrame,
+            hiddenPosition: hidePoint
+        )
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y)),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore(snapshots: [snapshot])
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+
+        let result = try controller.applyWindowSnapshotsAtStartup()
+
+        XCTAssertEqual(result.restored, [100])
+        XCTAssertEqual(result.reassigned, [SnapshotWorkspaceAssignment(windowID: 100, workspace: "2")])
+        XCTAssertTrue(result.ignored.isEmpty)
+        XCTAssertEqual(controller.membership(for: 100), "2")
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertTrue(snapshotStore.snapshots.isEmpty)
+    }
+
+    func testStartupSnapshotsIgnorePidMismatch() throws {
+        let snapshot = HiddenWindowSnapshot(
+            windowID: 100,
+            pid: 7,
+            bundleID: "test.fake",
+            appName: "FakeApp",
+            title: "One",
+            workspace: "2",
+            originalFrame: .frame(x: 120, y: 140),
+            hiddenPosition: hidePoint
+        )
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 8, frame: .frame(x: hidePoint.x, y: hidePoint.y)),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore(snapshots: [snapshot])
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+
+        let result = try controller.applyWindowSnapshotsAtStartup()
+
+        XCTAssertTrue(result.restored.isEmpty)
+        XCTAssertTrue(result.reassigned.isEmpty)
+        XCTAssertEqual(result.ignored, [snapshot])
+        XCTAssertNil(controller.membership(for: 100))
+        XCTAssertEqual(snapshotStore.snapshots, [snapshot])
+    }
+
     func testAssigningWindowToInactiveWorkspaceHidesItImmediately() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -483,12 +597,14 @@ final class WorkspaceControllerTests: XCTestCase {
     private func makeController(
         _ windowSystem: FakeWindowSystem,
         configStore: (any KkaciConfigStore)? = nil,
+        snapshotStore: (any HiddenWindowSnapshotStoring)? = nil,
         isConfigPersistenceEnabled: Bool = true
     ) -> WorkspaceController {
         WorkspaceController(
             windowSystem: windowSystem,
             displayProvider: FakeDisplayProvider(point: hidePoint),
             configStore: configStore,
+            snapshotStore: snapshotStore,
             isConfigPersistenceEnabled: isConfigPersistenceEnabled
         )
     }

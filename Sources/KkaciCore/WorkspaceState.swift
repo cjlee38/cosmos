@@ -60,6 +60,10 @@ struct WorkspaceState {
         hiddenFrames[id]
     }
 
+    var hiddenWindowIDs: [WindowID] {
+        hiddenFrames.keys.sorted()
+    }
+
     func containsWorkspace(_ workspace: String) -> Bool {
         workspaceOrder.contains(workspace)
     }

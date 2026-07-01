@@ -46,11 +46,6 @@ final class StatusMenuController: NSObject {
         debugStatusWindowController.refresh()
     }
 
-    func captureVisibleWindowsToDefaultWorkspace() throws {
-        _ = try controller.captureVisibleWindows(into: "1")
-        showMessage("Captured visible windows to workspace 1")
-    }
-
     func showDebugStatusWindow() {
         debugStatusWindowController.show()
     }
@@ -212,12 +207,7 @@ final class StatusMenuController: NSObject {
             return
         }
 
-        do {
-            try captureVisibleWindowsToDefaultWorkspace()
-            accessibilityGrantedHandler()
-        } catch {
-            showMessage("Initial capture failed: \(error)")
-        }
+        accessibilityGrantedHandler()
     }
 
     @objc private func switchWorkspace(_ sender: NSMenuItem) {
