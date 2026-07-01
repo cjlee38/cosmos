@@ -39,6 +39,7 @@ public protocol HiddenWindowSnapshotStoring: AnyObject {
     func loadSnapshots() throws -> [HiddenWindowSnapshot]
     func upsertSnapshot(_ snapshot: HiddenWindowSnapshot)
     func removeSnapshot(windowID: WindowID, pid: pid_t?)
+    func flushPendingWrites()
 }
 
 public final class FileHiddenWindowSnapshotStore: HiddenWindowSnapshotStoring {
@@ -90,6 +91,10 @@ public final class FileHiddenWindowSnapshotStore: HiddenWindowSnapshotStoring {
             }
             writeSnapshotsIgnoringErrors()
         }
+    }
+
+    public func flushPendingWrites() {
+        queue.sync {}
     }
 
     private func loadSnapshotsIfNeeded() throws {

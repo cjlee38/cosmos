@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 @testable import KkaciCore
 import XCTest
 
@@ -47,6 +48,28 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(snapshotStore.snapshots.isEmpty)
     }
 
+    func testFileSnapshotStoreFlushesPendingWrites() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kkaci-snapshot-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let url = directory.appendingPathComponent("snapshot.json")
+        let store = FileHiddenWindowSnapshotStore(url: url)
+        let snapshot = hiddenSnapshot(originalFrame: .frame(x: 120, y: 140), workspace: "2")
+
+        store.upsertSnapshot(snapshot)
+        store.flushPendingWrites()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(try store.loadSnapshots().map(\.windowID), [100])
+
+        store.removeSnapshot(windowID: 100, pid: 7)
+        store.flushPendingWrites()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(try store.loadSnapshots().isEmpty)
+    }
+
     func testEmergencyUnhideRestoresAllHiddenWindowsAndRemovesSnapshots() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
@@ -89,6 +112,26 @@ final class WorkspaceSnapshotTests: XCTestCase {
 
         XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [], skipped: [200]))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertTrue(snapshotStore.snapshots.isEmpty)
+    }
+
+    func testWindowSyncRemovesSnapshotForClosedHiddenWindow() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+            .window(id: 200, title: "Two", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(200, to: "2")
+        XCTAssertEqual(snapshotStore.snapshots.map(\.windowID), [200])
+
+        windowSystem.windows.removeAll { $0.id == 200 }
+        _ = controller.syncWindowState()
+
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertTrue(snapshotStore.snapshots.isEmpty)
     }
 
     func testShutdownRestoreDoesNotRemoveHiddenWindowSnapshot() throws {

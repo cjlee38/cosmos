@@ -24,4 +24,6 @@ final class InMemoryHiddenWindowSnapshotStore: HiddenWindowSnapshotStoring {
             snapshot.windowID == windowID && (pid == nil || snapshot.pid == pid)
         }
     }
+
+    func flushPendingWrites() {}
 }
