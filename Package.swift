@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "KkaciCore", targets: ["KkaciCore"]),
         .executable(name: "kkaci", targets: ["KkaciCli"]),
         .executable(name: "kkaci-app", targets: ["KkaciApp"]),
+        .executable(name: "kkaci-fixture-app", targets: ["KkaciFixtureApp"]),
     ],
     dependencies: [
         .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.0"),
@@ -38,6 +39,10 @@ let package = Package(
             name: "KkaciApp",
             dependencies: ["KkaciCore"],
             path: "Sources/KkaciApp"
+        ),
+        .executableTarget(
+            name: "KkaciFixtureApp",
+            path: "Sources/KkaciFixtureApp"
         ),
         .testTarget(
             name: "KkaciCoreTests",

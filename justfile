@@ -9,6 +9,9 @@ run:
 app:
     swift run kkaci-app
 
+fixture:
+    swift run kkaci-fixture-app
+
 test:
     swift test
 
