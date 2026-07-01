@@ -73,6 +73,7 @@ final class WindowEventMonitor {
         ) { [weak self] notification in
             if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
                 self?.observe(app)
+                self?.scheduleFocusSyncIfObservable(app)
             }
         })
 
@@ -102,8 +103,7 @@ final class WindowEventMonitor {
 
     private func observe(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
-        guard app.activationPolicy == .regular,
-              pid != getpid(),
+        guard isObservable(app),
               observedApps[pid] == nil
         else {
             return
@@ -152,6 +152,16 @@ final class WindowEventMonitor {
 
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
         observedApps[pid] = ObservedApp(appElement: appElement, observer: observer)
+    }
+
+    private func scheduleFocusSyncIfObservable(_ app: NSRunningApplication) {
+        if isObservable(app) {
+            schedule(.focusedWindowChanged)
+        }
+    }
+
+    private func isObservable(_ app: NSRunningApplication) -> Bool {
+        app.activationPolicy == .regular && app.processIdentifier != getpid()
     }
 
     private func removeObserver(for pid: pid_t) {
