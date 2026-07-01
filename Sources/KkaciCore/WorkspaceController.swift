@@ -5,6 +5,7 @@ public enum WorkspaceError: Error, CustomStringConvertible {
     case windowNotFound(WindowID)
     case noFocusedWindow
     case frameUnavailable(WindowID)
+    case windowFrameVerificationFailed(windowID: WindowID, operation: String)
 
     public var description: String {
         switch self {
@@ -16,6 +17,8 @@ public enum WorkspaceError: Error, CustomStringConvertible {
             "No focused window."
         case .frameUnavailable(let id):
             "Window frame is unavailable: \(id)"
+        case .windowFrameVerificationFailed(let id, let operation):
+            "Window frame verification failed after \(operation): \(id)"
         }
     }
 }
@@ -172,13 +175,19 @@ public final class WorkspaceController {
             throw WorkspaceError.windowNotFound(id)
         }
 
+        let previousWorkspace = state.membership(for: id)
         state.assign(id, to: workspace)
 
-        if workspace == activeWorkspace {
-            _ = try restoreWindowWithoutSync(id)
-            windowSystem.focus(id)
-        } else {
-            try hideWindowWithoutSync(id)
+        do {
+            if workspace == activeWorkspace {
+                _ = try restoreWindowWithoutSync(id)
+                windowSystem.focus(id)
+            } else {
+                try hideWindowWithoutSync(id)
+            }
+        } catch {
+            restoreMembership(id, to: previousWorkspace)
+            throw error
         }
     }
 
@@ -225,7 +234,7 @@ public final class WorkspaceController {
 
             let workspace = try ensureWorkspace(targetWorkspace)
             if action.shouldRestore {
-                try windowSystem.setFrame(snapshot.originalFrame, for: snapshot.windowID)
+                try setFrameAndVerify(snapshot.originalFrame, for: snapshot.windowID, operation: "startup restore")
                 restored.append(snapshot.windowID)
             }
 
@@ -244,7 +253,7 @@ public final class WorkspaceController {
             guard let frame = state.hiddenFrame(for: id), windowSystem.contains(id) else {
                 continue
             }
-            try? windowSystem.setFrame(frame, for: id)
+            try? setFrameAndVerify(frame, for: id, operation: "shutdown restore")
         }
         windowStore.flushHiddenSnapshotWrites()
     }
@@ -308,18 +317,24 @@ public final class WorkspaceController {
             throw WorkspaceError.windowNotFound(id)
         }
 
-        let sourceWorkspace = state.membership(for: id) ?? activeWorkspace
+        let previousWorkspace = state.membership(for: id)
+        let sourceWorkspace = previousWorkspace ?? activeWorkspace
         state.assign(id, to: workspace)
 
-        if workspace == activeWorkspace {
-            _ = try restoreWindowWithoutSync(id)
-            windowSystem.focus(id)
-            return WindowMoveResult(windowID: id, workspace: workspace, replacementFocus: nil)
-        }
+        do {
+            if workspace == activeWorkspace {
+                _ = try restoreWindowWithoutSync(id)
+                windowSystem.focus(id)
+                return WindowMoveResult(windowID: id, workspace: workspace, replacementFocus: nil)
+            }
 
-        try hideWindowWithoutSync(id)
-        let replacementFocus = focusReplacementAfterMovingWindow(id, from: sourceWorkspace)
-        return WindowMoveResult(windowID: id, workspace: workspace, replacementFocus: replacementFocus)
+            try hideWindowWithoutSync(id)
+            let replacementFocus = focusReplacementAfterMovingWindow(id, from: sourceWorkspace)
+            return WindowMoveResult(windowID: id, workspace: workspace, replacementFocus: replacementFocus)
+        } catch {
+            restoreMembership(id, to: previousWorkspace)
+            throw error
+        }
     }
 
     @discardableResult
@@ -384,6 +399,7 @@ public final class WorkspaceController {
         }
 
         let frame = try currentOrStoredFrame(for: id)
+        let wasAlreadyHidden = state.isHidden(id)
         state.storeHiddenFrameIfNeeded(frame, for: id)
 
         let point = displayProvider.hidePoint(for: frame)
@@ -394,9 +410,13 @@ public final class WorkspaceController {
             hiddenPosition: point
         )
         do {
-            try windowSystem.setPosition(point, for: id)
+            try setPositionAndVerify(point, for: id, operation: "hide")
         } catch {
-            windowStore.removeHiddenSnapshot(for: id)
+            if !wasAlreadyHidden {
+                windowStore.removeHiddenSnapshot(for: id)
+                state.clearHiddenFrame(for: id)
+                try? setFrameAndVerify(frame, for: id, operation: "hide rollback")
+            }
             throw error
         }
     }
@@ -412,7 +432,7 @@ public final class WorkspaceController {
             return .alreadyVisible
         }
 
-        try windowSystem.setFrame(frame, for: id)
+        try setFrameAndVerify(frame, for: id, operation: "restore")
         state.clearHiddenFrame(for: id)
         windowStore.removeHiddenSnapshot(for: id)
         return .restored
@@ -526,6 +546,14 @@ public final class WorkspaceController {
         return ids
     }
 
+    private func restoreMembership(_ id: WindowID, to workspace: String?) {
+        if let workspace {
+            state.assign(id, to: workspace)
+        } else {
+            state.unassign(id)
+        }
+    }
+
     private func currentOrStoredFrame(for id: WindowID) throws -> WindowFrame {
         if let hiddenFrame = state.hiddenFrame(for: id) {
             return hiddenFrame
@@ -534,5 +562,37 @@ public final class WorkspaceController {
             throw WorkspaceError.frameUnavailable(id)
         }
         return frame
+    }
+
+    private func setPositionAndVerify(_ point: CGPoint, for id: WindowID, operation: String) throws {
+        try windowSystem.setPosition(point, for: id)
+        guard let frame = windowSystem.frame(for: id) else {
+            throw WorkspaceError.frameUnavailable(id)
+        }
+        guard isPoint(frame.origin, near: point) else {
+            throw WorkspaceError.windowFrameVerificationFailed(windowID: id, operation: operation)
+        }
+    }
+
+    private func setFrameAndVerify(_ frame: WindowFrame, for id: WindowID, operation: String) throws {
+        try windowSystem.setFrame(frame, for: id)
+        guard let actualFrame = windowSystem.frame(for: id) else {
+            throw WorkspaceError.frameUnavailable(id)
+        }
+        guard isFrame(actualFrame, near: frame) else {
+            throw WorkspaceError.windowFrameVerificationFailed(windowID: id, operation: operation)
+        }
+    }
+
+    private func isFrame(_ lhs: WindowFrame, near rhs: WindowFrame) -> Bool {
+        isPoint(lhs.origin, near: rhs.origin) && isSize(lhs.size, near: rhs.size)
+    }
+
+    private func isPoint(_ lhs: CGPoint, near rhs: CGPoint) -> Bool {
+        abs(lhs.x - rhs.x) <= 2 && abs(lhs.y - rhs.y) <= 2
+    }
+
+    private func isSize(_ lhs: CGSize, near rhs: CGSize) -> Bool {
+        abs(lhs.width - rhs.width) <= 2 && abs(lhs.height - rhs.height) <= 2
     }
 }

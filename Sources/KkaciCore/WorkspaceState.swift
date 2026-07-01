@@ -103,6 +103,13 @@ struct WorkspaceState {
         lastFocusedByWorkspace[workspace] = id
     }
 
+    mutating func unassign(_ id: WindowID) {
+        memberships[id] = nil
+        for (workspace, windowID) in lastFocusedByWorkspace where windowID == id {
+            lastFocusedByWorkspace[workspace] = nil
+        }
+    }
+
     mutating func capture(_ ids: [WindowID], into workspace: String) {
         for id in ids {
             memberships[id] = workspace

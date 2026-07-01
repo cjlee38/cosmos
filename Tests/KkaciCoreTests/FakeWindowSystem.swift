@@ -16,6 +16,10 @@ final class FakeWindowSystem: WindowSystem {
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
     var operations: [Operation] = []
+    var ignoredPositionWindowIDs: Set<WindowID> = []
+    var ignoredFrameWindowIDs: Set<WindowID> = []
+    var positionResultOverrides: [WindowID: CGPoint] = [:]
+    var frameResultOverrides: [WindowID: WindowFrame] = [:]
     var refreshCount = 0
 
     init(windows: [WindowSnapshot]) {
@@ -65,17 +69,27 @@ final class FakeWindowSystem: WindowSystem {
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
         operations.append(.setPosition(id, point))
-        positions[id] = point
+        guard !ignoredPositionWindowIDs.contains(id) else {
+            return
+        }
+
+        let appliedPoint = positionResultOverrides[id] ?? point
+        positions[id] = appliedPoint
         if var frame = frames[id] {
-            frame.origin = point
+            frame.origin = appliedPoint
             frames[id] = frame
         }
     }
 
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
         operations.append(.setFrame(id, frame))
-        frames[id] = frame
-        positions[id] = frame.origin
+        guard !ignoredFrameWindowIDs.contains(id) else {
+            return
+        }
+
+        let appliedFrame = frameResultOverrides[id] ?? frame
+        frames[id] = appliedFrame
+        positions[id] = appliedFrame.origin
     }
 
     func focus(_ id: WindowID) {

@@ -48,6 +48,46 @@ final class WorkspaceSnapshotTests: XCTestCase {
         XCTAssertTrue(snapshotStore.snapshots.isEmpty)
     }
 
+    func testHideVerificationFailureDoesNotMarkWindowHiddenOrKeepSnapshot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+        let originalFrame = try XCTUnwrap(windowSystem.frames[100])
+        windowSystem.ignoredPositionWindowIDs.insert(100)
+
+        _ = controller.listWindows()
+
+        XCTAssertThrowsError(try controller.assignWindow(100, to: "2")) { error in
+            XCTAssertTrue(error is WorkspaceError)
+        }
+        XCTAssertNil(controller.membership(for: 100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertTrue(snapshotStore.snapshots.isEmpty)
+    }
+
+    func testRestoreVerificationFailureKeepsHiddenStateAndSnapshot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+        ])
+        let snapshotStore = InMemoryHiddenWindowSnapshotStore()
+        let controller = makeController(windowSystem, snapshotStore: snapshotStore)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "2")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(snapshotStore.snapshots.map(\.windowID), [100])
+
+        windowSystem.ignoredFrameWindowIDs.insert(100)
+        XCTAssertThrowsError(try controller.restoreWindow(100))
+
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+        XCTAssertEqual(snapshotStore.snapshots.map(\.windowID), [100])
+    }
+
     func testFileSnapshotStoreFlushesPendingWrites() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kkaci-snapshot-tests-\(UUID().uuidString)", isDirectory: true)
