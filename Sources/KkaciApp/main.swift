@@ -1,9 +1,8 @@
-import Foundation
+import AppKit
 import KkaciCore
 
 let axClient = AXClient()
 let registry = WindowRegistry(axClient: axClient)
-let displayProvider = DisplayProvider()
 let configStore = FileKkaciConfigStore.default
 let configLoad = Result { try configStore.load() }
 let config: KkaciConfig
@@ -18,12 +17,18 @@ case .failure(let error):
 }
 let controller = WorkspaceController(
     windowSystem: registry,
-    displayProvider: displayProvider,
+    displayProvider: DisplayProvider(),
     config: config,
     configStore: configLoadError == nil ? configStore : nil
 )
 
-if let configLoadError {
-    print("warning: failed to load config.toml; using defaults: \(configLoadError)")
-}
-REPL(axClient: axClient, controller: controller).run()
+let app = NSApplication.shared
+let appDelegate = AppDelegate(
+    axClient: axClient,
+    controller: controller,
+    config: config,
+    configLoadError: configLoadError
+)
+app.delegate = appDelegate
+app.setActivationPolicy(.accessory)
+app.run()

@@ -27,6 +27,35 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.focusedIDs.last, 200)
     }
 
+    func testSwitchRestoresAndFocusesTargetBeforeHidingPreviousWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 101, title: "Two"),
+            .window(id: 200, title: "Three"),
+        ])
+        let controller = makeController(windowSystem)
+        let targetFrame = try XCTUnwrap(windowSystem.frames[200])
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(101, to: "1")
+        try controller.assignWindow(200, to: "2")
+        windowSystem.focusedWindow = 100
+        windowSystem.operations.removeAll()
+        windowSystem.refreshCount = 0
+
+        _ = try controller.switchWorkspace(to: "2")
+
+        XCTAssertEqual(windowSystem.refreshCount, 1)
+        XCTAssertEqual(windowSystem.operations, [
+            .refresh,
+            .setFrame(200, targetFrame),
+            .focus(200),
+            .setPosition(101, hidePoint),
+            .setPosition(100, hidePoint),
+        ])
+    }
+
     func testNewWindowsAreAutoAssignedToCurrentWorkspaceAfterBaseline() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Baseline"),
@@ -106,7 +135,7 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.positions[100], hidePoint)
     }
 
-    func testNextWorkspaceSwitchesThroughFixedWorkspaces() throws {
+    func testNextWorkspaceSwitchesThroughConfiguredWorkspaces() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
@@ -125,7 +154,7 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
     }
 
-    func testPreviousWorkspaceWrapsToLastFixedWorkspace() throws {
+    func testPreviousWorkspaceWrapsToLastConfiguredWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
@@ -142,21 +171,46 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.activeWorkspace, "3")
     }
 
-    func testInvalidWorkspaceIsRejected() throws {
+    func testMissingWorkspaceIsCreatedAndPersisted() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
         ])
-        let controller = makeController(windowSystem)
+        let store = InMemoryWorkspaceConfigStore()
+        let controller = makeController(windowSystem, configStore: store)
 
         _ = controller.listWindows()
+        try controller.assignWindow(100, to: "4")
 
-        XCTAssertThrowsError(try controller.assignWindow(100, to: "4")) { error in
-            guard case WorkspaceError.invalidWorkspace("4", ["1", "2", "3"]) = error else {
-                return XCTFail("unexpected error: \(error)")
-            }
-        }
-        XCTAssertThrowsError(try controller.switchWorkspace(to: "4"))
-        XCTAssertThrowsError(try controller.captureVisibleWindows(into: "4"))
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "4"])
+        XCTAssertEqual(controller.membership(for: 100), "4")
+        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "4"])
+        XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
+    }
+
+    func testSwitchingToMissingWorkspaceCreatesIt() throws {
+        let windowSystem = FakeWindowSystem(windows: [])
+        let store = InMemoryWorkspaceConfigStore()
+        let controller = makeController(windowSystem, configStore: store)
+
+        _ = try controller.switchWorkspace(to: "dev")
+
+        XCTAssertEqual(controller.activeWorkspace, "dev")
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
+        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
+        XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
+    }
+
+    func testCaptureVisibleWindowsAssignsOnlyVisibleWindows() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two", isMinimized: true),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.captureVisibleWindows(into: "1")
+
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertNil(controller.membership(for: 200))
     }
 
     func testNextWindowFocusesNextWindowInActiveWorkspace() throws {
@@ -211,10 +265,14 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(result, .noWindowsInWorkspace("2"))
     }
 
-    private func makeController(_ windowSystem: FakeWindowSystem) -> WorkspaceController {
+    private func makeController(
+        _ windowSystem: FakeWindowSystem,
+        configStore: (any KkaciConfigStore)? = nil
+    ) -> WorkspaceController {
         WorkspaceController(
             windowSystem: windowSystem,
-            displayProvider: FakeDisplayProvider(point: hidePoint)
+            displayProvider: FakeDisplayProvider(point: hidePoint),
+            configStore: configStore
         )
     }
 }

@@ -48,7 +48,7 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.hiddenFrame(for: 100), .frame(x: 10, y: 10))
     }
 
-    func testWorkspacesAreFixedToOneTwoThree() {
+    func testDefaultWorkspacesAreOneTwoThree() {
         var state = WorkspaceState()
 
         state.assign(100, to: "2")
@@ -59,6 +59,15 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertTrue(state.containsWorkspace("2"))
         XCTAssertTrue(state.containsWorkspace("3"))
         XCTAssertFalse(state.containsWorkspace("4"))
+    }
+
+    func testWorkspaceCanBeAddedAtRuntime() {
+        var state = WorkspaceState()
+
+        state.addWorkspace("4")
+
+        XCTAssertEqual(state.workspaces, ["1", "2", "3", "4"])
+        XCTAssertTrue(state.containsWorkspace("4"))
     }
 
     func testWorkspaceCycleWrapsInBothDirections() {

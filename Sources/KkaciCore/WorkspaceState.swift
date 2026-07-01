@@ -4,15 +4,14 @@ struct WorkspaceState {
     private(set) var activeWorkspace: String
     private var didLoadInitialWindowSet = false
     private var knownWindowIDs: Set<WindowID> = []
-    private let workspaceOrder: [String]
+    private var workspaceOrder: [String]
     private var memberships: [WindowID: String] = [:]
     private var hiddenFrames: [WindowID: WindowFrame] = [:]
     private var lastFocusedByWorkspace: [String: WindowID] = [:]
 
-    init(workspaces: [String] = ["1", "2", "3"]) {
-        precondition(!workspaces.isEmpty)
-        self.workspaceOrder = workspaces
-        self.activeWorkspace = workspaces[0]
+    init(workspaces: WorkspaceConfig = WorkspaceConfig(names: ["1", "2", "3"])) {
+        self.workspaceOrder = workspaces.names
+        self.activeWorkspace = workspaces.names[0]
     }
 
     var assignedWindowIDs: [WindowID] {
@@ -63,6 +62,12 @@ struct WorkspaceState {
 
     func containsWorkspace(_ workspace: String) -> Bool {
         workspaceOrder.contains(workspace)
+    }
+
+    mutating func addWorkspace(_ workspace: String) {
+        if !workspaceOrder.contains(workspace) {
+            workspaceOrder.append(workspace)
+        }
     }
 
     mutating func activate(_ workspace: String) {

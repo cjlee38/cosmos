@@ -10,6 +10,10 @@ let package = Package(
     products: [
         .library(name: "KkaciCore", targets: ["KkaciCore"]),
         .executable(name: "kkaci", targets: ["KkaciCli"]),
+        .executable(name: "kkaci-app", targets: ["KkaciApp"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.0"),
     ],
     targets: [
         .target(
@@ -19,13 +23,21 @@ let package = Package(
         ),
         .target(
             name: "KkaciCore",
-            dependencies: ["PrivateApi"],
+            dependencies: [
+                "PrivateApi",
+                .product(name: "TOMLKit", package: "TOMLKit"),
+            ],
             path: "Sources/KkaciCore"
         ),
         .executableTarget(
             name: "KkaciCli",
             dependencies: ["KkaciCore"],
             path: "Sources/KkaciCli"
+        ),
+        .executableTarget(
+            name: "KkaciApp",
+            dependencies: ["KkaciCore"],
+            path: "Sources/KkaciApp"
         ),
         .testTarget(
             name: "KkaciCoreTests",

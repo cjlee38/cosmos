@@ -79,8 +79,8 @@ public final class REPL {
           assign <workspace> [id]    assign focused window or id to workspace
           capture <workspace>        assign all visible windows to workspace
           switch | ws <workspace>    switch workspace
-          next-workspace | next-ws    switch to the next fixed workspace
-          prev-workspace | prev-ws    switch to the previous fixed workspace
+          next-workspace | next-ws    switch to the next configured workspace
+          prev-workspace | prev-ws    switch to the previous configured workspace
           next-window | next-win      focus the next window in the active workspace
           prev-window | prev-win      focus the previous window in the active workspace
           hide <id>                  move one window to the hide corner

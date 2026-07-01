@@ -3,11 +3,20 @@ import Foundation
 @testable import KkaciCore
 
 final class FakeWindowSystem: WindowSystem {
+    enum Operation: Equatable {
+        case refresh
+        case setPosition(WindowID, CGPoint)
+        case setFrame(WindowID, WindowFrame)
+        case focus(WindowID)
+    }
+
     var windows: [WindowSnapshot]
     var focusedWindow: WindowID?
     var focusedIDs: [WindowID] = []
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
+    var operations: [Operation] = []
+    var refreshCount = 0
 
     init(windows: [WindowSnapshot]) {
         self.windows = windows
@@ -17,7 +26,9 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func refresh() -> [WindowSnapshot] {
-        windows.map { snapshot in
+        refreshCount += 1
+        operations.append(.refresh)
+        return windows.map { snapshot in
             WindowSnapshot(
                 id: snapshot.id,
                 app: snapshot.app,
@@ -41,6 +52,7 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
+        operations.append(.setPosition(id, point))
         positions[id] = point
         if var frame = frames[id] {
             frame.origin = point
@@ -49,11 +61,13 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
+        operations.append(.setFrame(id, frame))
         frames[id] = frame
         positions[id] = frame.origin
     }
 
     func focus(_ id: WindowID) {
+        operations.append(.focus(id))
         focusedWindow = id
         focusedIDs.append(id)
     }
