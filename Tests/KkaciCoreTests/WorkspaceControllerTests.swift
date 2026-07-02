@@ -89,7 +89,7 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertNil(controller.membership(for: 200))
     }
 
-    func testExplicitWindowStateSyncDiscoversAndAssignsNewWindows() throws {
+    func testWindowSetChangedDiscoversAndAssignsNewWindows() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Baseline"),
         ])
@@ -99,14 +99,14 @@ final class WorkspaceControllerTests: XCTestCase {
         _ = try controller.switchWorkspace(to: "3")
         windowSystem.windows.append(.window(id: 200, title: "New"))
 
-        let sync = controller.syncWindowState()
+        let sync = try controller.applyExternalWindowSetChange()
 
         XCTAssertEqual(sync.autoAssigned.map(\.0), [200])
         XCTAssertEqual(controller.currentWindows().windows.map(\.id), [100, 200])
         XCTAssertEqual(controller.membership(for: 200), "3")
     }
 
-    func testReconcileWindowStateRepairsInactiveWorkspaceVisibility() throws {
+    func testWindowSetChangedRepairsInactiveWorkspaceVisibility() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
@@ -120,7 +120,7 @@ final class WorkspaceControllerTests: XCTestCase {
         windowSystem.frames[200] = originalFrame
         windowSystem.positions[200] = originalFrame.origin
 
-        let sync = try controller.reconcileWindowState()
+        let sync = try controller.applyExternalWindowSetChange()
 
         XCTAssertTrue(sync.isEmpty)
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
@@ -308,6 +308,23 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
+    func testFailedStartupConfigLoadUsesDefaultsAndDisablesPersistence() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+        ])
+        let store = FailingLoadWorkspaceConfigStore()
+        let controller = makeController(windowSystem, configStore: store)
+
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(controller.startupConfigLoadError as? FailingLoadWorkspaceConfigStore.Error, .loadFailed)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "scratch")
+
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch"])
+        XCTAssertTrue(store.savedConfigs.isEmpty)
+    }
+
     func testApplyConfigEnablesPersistenceAndKeepsReferencedRuntimeWorkspaces() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -321,7 +338,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
         _ = controller.listWindows()
         try controller.assignWindow(100, to: "scratch")
-        controller.applyConfig(
+        try controller.applyConfig(
             KkaciConfig(
                 workspaces: WorkspaceConfig(names: ["1", "2", "3"]),
                 bindings: [HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")]

@@ -6,81 +6,81 @@ import XCTest
 final class WorkspaceHeadlessIntegrationTests: XCTestCase {
     private let hidePoint = CGPoint(x: -1, y: -1)
 
-    func testShutdownSnapshotIsAppliedOnRestartAndInactiveWorkspaceIsHiddenAgain() throws {
+    func testShutdownRecordIsAppliedOnRestartAndInactiveWorkspaceIsHiddenAgain() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstSnapshotStore = snapshotStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, snapshotStore: firstSnapshotStore)
+        let firstRecordStore = recordStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
-        _ = try firstController.applyWindowSnapshotsAtStartup()
+        _ = try firstController.applyHiddenWindowRecordsAtStartup()
         _ = try firstController.captureUnassignedVisibleWindows(into: "1")
         try firstController.assignWindow(200, to: "2")
-        firstSnapshotStore.flushPendingWrites()
-        XCTAssertEqual(try firstSnapshotStore.loadSnapshots().map(\.windowID), [200])
+        firstRecordStore.flushPendingWrites()
+        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
         XCTAssertEqual(firstSystem.positions[200], hidePoint)
 
         firstController.restoreHiddenWindowsForShutdown()
         XCTAssertEqual(firstSystem.frames[200], window200Frame)
-        XCTAssertEqual(try firstSnapshotStore.loadSnapshots().map(\.windowID), [200])
+        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
-        let secondSnapshotStore = snapshotStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, snapshotStore: secondSnapshotStore)
+        let secondRecordStore = recordStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.applyWindowSnapshotsAtStartup()
+        let startup = try secondController.applyHiddenWindowRecordsAtStartup()
         _ = try secondController.captureUnassignedVisibleWindows(into: "1")
         _ = try secondController.switchWorkspace(to: secondController.activeWorkspace)
-        secondSnapshotStore.flushPendingWrites()
+        secondRecordStore.flushPendingWrites()
 
         XCTAssertTrue(startup.restored.isEmpty)
-        XCTAssertEqual(startup.reassigned, [SnapshotWorkspaceAssignment(windowID: 200, workspace: "2")])
+        XCTAssertEqual(startup.reassigned, [HiddenWindowRecordAssignment(windowID: 200, workspace: "2")])
         XCTAssertEqual(secondController.membership(for: 100), "1")
         XCTAssertEqual(secondController.membership(for: 200), "2")
         XCTAssertTrue(secondController.isHiddenByWorkspace(200))
         XCTAssertEqual(secondSystem.positions[200], hidePoint)
-        XCTAssertEqual(try secondSnapshotStore.loadSnapshots().map(\.windowID), [200])
+        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.windowID), [200])
     }
 
-    func testEmergencyUnhideClearsSnapshotBeforeShutdownAndRestart() throws {
+    func testEmergencyUnhideClearsRecordBeforeShutdownAndRestart() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstSnapshotStore = snapshotStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, snapshotStore: firstSnapshotStore)
+        let firstRecordStore = recordStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.captureUnassignedVisibleWindows(into: "1")
         try firstController.assignWindow(200, to: "2")
-        firstSnapshotStore.flushPendingWrites()
-        XCTAssertEqual(try firstSnapshotStore.loadSnapshots().map(\.windowID), [200])
+        firstRecordStore.flushPendingWrites()
+        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
 
         let result = firstController.restoreAllHiddenWindows()
         firstController.restoreHiddenWindowsForShutdown()
 
         XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [200], skipped: []))
         XCTAssertEqual(firstSystem.frames[200], window200Frame)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: snapshotURL(in: directory).path))
-        XCTAssertTrue(try firstSnapshotStore.loadSnapshots().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
+        XCTAssertTrue(try firstRecordStore.loadRecords().isEmpty)
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
-        let secondSnapshotStore = snapshotStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, snapshotStore: secondSnapshotStore)
+        let secondRecordStore = recordStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.applyWindowSnapshotsAtStartup()
+        let startup = try secondController.applyHiddenWindowRecordsAtStartup()
         _ = try secondController.captureUnassignedVisibleWindows(into: "1")
         _ = try secondController.switchWorkspace(to: secondController.activeWorkspace)
-        secondSnapshotStore.flushPendingWrites()
+        secondRecordStore.flushPendingWrites()
 
         XCTAssertTrue(startup.isEmpty)
         XCTAssertEqual(secondController.membership(for: 100), "1")
         XCTAssertEqual(secondController.membership(for: 200), "1")
         XCTAssertFalse(secondController.isHiddenByWorkspace(200))
         XCTAssertEqual(secondSystem.frames[200], window200Frame)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: snapshotURL(in: directory).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
     }
 
     func testCrashStyleRestartRestoresCornerWindowBeforeRehidingInactiveWorkspace() throws {
@@ -88,59 +88,59 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstSnapshotStore = snapshotStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, snapshotStore: firstSnapshotStore)
+        let firstRecordStore = recordStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.captureUnassignedVisibleWindows(into: "1")
         try firstController.assignWindow(200, to: "2")
-        firstSnapshotStore.flushPendingWrites()
+        firstRecordStore.flushPendingWrites()
         XCTAssertEqual(firstSystem.positions[200], hidePoint)
 
         let hiddenFrame = try XCTUnwrap(firstSystem.frames[200])
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: hiddenFrame))
-        let secondSnapshotStore = snapshotStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, snapshotStore: secondSnapshotStore)
+        let secondRecordStore = recordStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.applyWindowSnapshotsAtStartup()
+        let startup = try secondController.applyHiddenWindowRecordsAtStartup()
         XCTAssertEqual(startup.restored, [200])
         XCTAssertEqual(secondSystem.frames[200], window200Frame)
 
         _ = try secondController.captureUnassignedVisibleWindows(into: "1")
         _ = try secondController.switchWorkspace(to: secondController.activeWorkspace)
-        secondSnapshotStore.flushPendingWrites()
+        secondRecordStore.flushPendingWrites()
 
         XCTAssertEqual(secondController.membership(for: 100), "1")
         XCTAssertEqual(secondController.membership(for: 200), "2")
         XCTAssertTrue(secondController.isHiddenByWorkspace(200))
         XCTAssertEqual(secondSystem.positions[200], hidePoint)
-        XCTAssertEqual(try secondSnapshotStore.loadSnapshots().map(\.windowID), [200])
+        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.windowID), [200])
     }
 
-    func testExternalFocusSyncMovesToFocusedWindowWorkspaceAndUpdatesSnapshots() throws {
+    func testExternalFocusSyncMovesToFocusedWindowWorkspaceAndUpdatesRecords() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let windowSystem = FakeWindowSystem(windows: windows())
-        let snapshotStore = snapshotStore(in: directory)
-        let controller = try makeController(windowSystem, in: directory, snapshotStore: snapshotStore)
+        let recordStore = recordStore(in: directory)
+        let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
 
         _ = try controller.captureUnassignedVisibleWindows(into: "1")
         try controller.assignWindow(200, to: "2")
         _ = try controller.switchWorkspace(to: "1")
-        snapshotStore.flushPendingWrites()
-        XCTAssertEqual(try snapshotStore.loadSnapshots().map(\.windowID), [200])
+        recordStore.flushPendingWrites()
+        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200])
 
         windowSystem.focusedWindow = 200
         let result = try controller.syncWorkspaceToFocusedWindow()
-        snapshotStore.flushPendingWrites()
+        recordStore.flushPendingWrites()
 
         XCTAssertEqual(result, .switched(windowID: 200, workspace: "2"))
         XCTAssertEqual(controller.activeWorkspace, "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(windowSystem.focusedIDs.last, 200)
-        XCTAssertEqual(try snapshotStore.loadSnapshots().map(\.windowID), [100])
+        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [100])
     }
 
     func testNewWindowDiscoveredOnActiveWorkspaceThenHiddenWhenSwitchingAway() throws {
@@ -148,8 +148,8 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let windowSystem = FakeWindowSystem(windows: windows())
-        let snapshotStore = snapshotStore(in: directory)
-        let controller = try makeController(windowSystem, in: directory, snapshotStore: snapshotStore)
+        let recordStore = recordStore(in: directory)
+        let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
 
         _ = try controller.captureUnassignedVisibleWindows(into: "1")
         try controller.assignWindow(200, to: "2")
@@ -165,103 +165,103 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         windowSystem.windows.append(newWindow)
         windowSystem.frames[300] = try XCTUnwrap(newWindow.frame)
 
-        let sync = controller.syncWindowState()
+        let sync = try controller.applyExternalWindowSetChange()
         XCTAssertEqual(sync.autoAssigned.map(\.0), [300])
         XCTAssertEqual(controller.membership(for: 300), "2")
 
         _ = try controller.switchWorkspace(to: "1")
-        snapshotStore.flushPendingWrites()
+        recordStore.flushPendingWrites()
 
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
         XCTAssertTrue(controller.isHiddenByWorkspace(300))
         XCTAssertEqual(windowSystem.positions[200], hidePoint)
         XCTAssertEqual(windowSystem.positions[300], hidePoint)
-        XCTAssertEqual(try snapshotStore.loadSnapshots().map(\.windowID), [200, 300])
+        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200, 300])
     }
 
-    func testCreatedWorkspacePersistsAndSnapshotReassignsToItAfterRestart() throws {
+    func testCreatedWorkspacePersistsAndRecordReassignsToItAfterRestart() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstSnapshotStore = snapshotStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, snapshotStore: firstSnapshotStore)
+        let firstRecordStore = recordStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.captureUnassignedVisibleWindows(into: "1")
         try firstController.assignWindow(200, to: "dev")
-        firstSnapshotStore.flushPendingWrites()
+        firstRecordStore.flushPendingWrites()
         firstController.restoreHiddenWindowsForShutdown()
 
         let persistedConfig = try FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml")).load()
         XCTAssertEqual(persistedConfig.workspaces.names, ["1", "2", "3", "dev"])
-        XCTAssertEqual(try firstSnapshotStore.loadSnapshots().map(\.workspace), ["dev"])
+        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.workspace), ["dev"])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
-        let secondSnapshotStore = snapshotStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, snapshotStore: secondSnapshotStore)
+        let secondRecordStore = recordStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.applyWindowSnapshotsAtStartup()
+        let startup = try secondController.applyHiddenWindowRecordsAtStartup()
         _ = try secondController.captureUnassignedVisibleWindows(into: "1")
         _ = try secondController.switchWorkspace(to: secondController.activeWorkspace)
-        secondSnapshotStore.flushPendingWrites()
+        secondRecordStore.flushPendingWrites()
 
         XCTAssertEqual(secondController.workspaces, ["1", "2", "3", "dev"])
-        XCTAssertEqual(startup.reassigned, [SnapshotWorkspaceAssignment(windowID: 200, workspace: "dev")])
+        XCTAssertEqual(startup.reassigned, [HiddenWindowRecordAssignment(windowID: 200, workspace: "dev")])
         XCTAssertEqual(secondController.membership(for: 200), "dev")
         XCTAssertTrue(secondController.isHiddenByWorkspace(200))
-        XCTAssertEqual(try secondSnapshotStore.loadSnapshots().map(\.workspace), ["dev"])
+        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.workspace), ["dev"])
     }
 
-    func testClosedHiddenWindowPrunesSnapshotBeforeRestart() throws {
+    func testClosedHiddenWindowPrunesRecordBeforeRestart() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstSnapshotStore = snapshotStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, snapshotStore: firstSnapshotStore)
+        let firstRecordStore = recordStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
 
         _ = try firstController.captureUnassignedVisibleWindows(into: "1")
         try firstController.assignWindow(200, to: "2")
-        firstSnapshotStore.flushPendingWrites()
-        XCTAssertEqual(try firstSnapshotStore.loadSnapshots().map(\.windowID), [200])
+        firstRecordStore.flushPendingWrites()
+        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
 
         firstSystem.windows.removeAll { $0.id == 200 }
-        _ = firstController.syncWindowState()
-        firstSnapshotStore.flushPendingWrites()
+        _ = try firstController.applyExternalWindowSetChange()
+        firstRecordStore.flushPendingWrites()
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: snapshotURL(in: directory).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
 
         let secondSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
         ])
-        let secondSnapshotStore = snapshotStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, snapshotStore: secondSnapshotStore)
+        let secondRecordStore = recordStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.applyWindowSnapshotsAtStartup()
+        let startup = try secondController.applyHiddenWindowRecordsAtStartup()
         _ = try secondController.captureUnassignedVisibleWindows(into: "1")
 
         XCTAssertTrue(startup.isEmpty)
         XCTAssertEqual(secondController.membership(for: 100), "1")
-        XCTAssertTrue(try secondSnapshotStore.loadSnapshots().isEmpty)
+        XCTAssertTrue(try secondRecordStore.loadRecords().isEmpty)
     }
 
-    func testEmergencyUnhideRestoresMultipleHiddenWorkspacesWithFileSnapshots() throws {
+    func testEmergencyUnhideRestoresMultipleHiddenWorkspacesWithFileRecords() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let window300 = WindowSnapshot.window(id: 300, title: "Three", pid: 9, appName: "Finder", bundleID: "com.apple.finder")
         let windowSystem = FakeWindowSystem(windows: windows() + [window300])
-        let snapshotStore = snapshotStore(in: directory)
-        let controller = try makeController(windowSystem, in: directory, snapshotStore: snapshotStore)
+        let recordStore = recordStore(in: directory)
+        let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
         let window200Frame = try XCTUnwrap(windowSystem.frames[200])
         let window300Frame = try XCTUnwrap(windowSystem.frames[300])
 
         _ = try controller.captureUnassignedVisibleWindows(into: "1")
         try controller.assignWindow(200, to: "2")
         try controller.assignWindow(300, to: "3")
-        snapshotStore.flushPendingWrites()
-        XCTAssertEqual(try snapshotStore.loadSnapshots().map(\.windowID), [200, 300])
+        recordStore.flushPendingWrites()
+        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200, 300])
 
         let result = controller.restoreAllHiddenWindows()
         controller.restoreHiddenWindowsForShutdown()
@@ -271,30 +271,35 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         XCTAssertFalse(controller.isHiddenByWorkspace(300))
         XCTAssertEqual(windowSystem.frames[200], window200Frame)
         XCTAssertEqual(windowSystem.frames[300], window300Frame)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: snapshotURL(in: directory).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
     }
 
     private func makeController(
         _ windowSystem: FakeWindowSystem,
         in directory: URL,
-        snapshotStore: FileHiddenWindowSnapshotStore
+        recordStore: FileHiddenWindowRecordStore
     ) throws -> WorkspaceController {
         let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml"))
-        let config = try configStore.load()
         return WorkspaceController(
             windowSystem: windowSystem,
             displayProvider: FakeDisplayProvider(point: hidePoint),
-            config: config,
             configStore: configStore,
-            snapshotStore: snapshotStore
+            recordStore: recordStore
         )
     }
 
-    private func snapshotStore(in directory: URL) -> FileHiddenWindowSnapshotStore {
-        FileHiddenWindowSnapshotStore(url: snapshotURL(in: directory))
+    private func recordStore(in directory: URL) -> FileHiddenWindowRecordStore {
+        FileHiddenWindowRecordStore(
+            url: recordURL(in: directory),
+            legacyURL: legacySnapshotURL(in: directory)
+        )
     }
 
-    private func snapshotURL(in directory: URL) -> URL {
+    private func recordURL(in directory: URL) -> URL {
+        directory.appendingPathComponent("hidden-window-records.json")
+    }
+
+    private func legacySnapshotURL(in directory: URL) -> URL {
         directory.appendingPathComponent("snapshot.json")
     }
 

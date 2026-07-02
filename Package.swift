@@ -33,7 +33,9 @@ let package = Package(
         ),
         .executableTarget(
             name: "KkaciCli",
-            dependencies: ["KkaciCore"],
+            dependencies: [
+                "KkaciCore",
+            ],
             path: "Sources/KkaciCli"
         ),
         .executableTarget(
@@ -50,7 +52,9 @@ let package = Package(
         ),
         .testTarget(
             name: "KkaciCoreTests",
-            dependencies: ["KkaciCore"],
+            dependencies: [
+                "KkaciCore",
+            ],
             path: "Tests/KkaciCoreTests"
         ),
     ]

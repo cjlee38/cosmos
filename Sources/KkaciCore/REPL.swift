@@ -1,17 +1,20 @@
 import Foundation
 
 public final class REPL {
-    private let axClient: AXClient
     private let controller: WorkspaceController
+    private let ensureAccessibilityPermission: (Bool) -> Bool
 
-    public init(axClient: AXClient, controller: WorkspaceController) {
-        self.axClient = axClient
+    public init(
+        controller: WorkspaceController,
+        ensureAccessibilityPermission: @escaping (Bool) -> Bool
+    ) {
         self.controller = controller
+        self.ensureAccessibilityPermission = ensureAccessibilityPermission
     }
 
     public func run() {
         print("kkaci prototype")
-        if !axClient.ensureAccessibilityPermission(prompt: true) {
+        if !ensureAccessibilityPermission(true) {
             print("Accessibility permission is required. Grant it in System Settings, then restart this executable.")
         }
         printHelp()
@@ -33,7 +36,7 @@ public final class REPL {
                 case "help", "?":
                     printHelp()
                 case "permission":
-                    print(axClient.ensureAccessibilityPermission(prompt: true) ? "granted" : "missing")
+                    print(ensureAccessibilityPermission(true) ? "granted" : "missing")
                 case "list", "ls":
                     printWindows()
                 case "focused":

@@ -11,3 +11,19 @@ final class InMemoryWorkspaceConfigStore: KkaciConfigStore {
         savedConfigs.append(config)
     }
 }
+
+final class FailingLoadWorkspaceConfigStore: KkaciConfigStore {
+    enum Error: Swift.Error, Equatable {
+        case loadFailed
+    }
+
+    private(set) var savedConfigs: [KkaciConfig] = []
+
+    func load() throws -> KkaciConfig {
+        throw Error.loadFailed
+    }
+
+    func save(_ config: KkaciConfig) throws {
+        savedConfigs.append(config)
+    }
+}

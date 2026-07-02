@@ -1,0 +1,17 @@
+import KkaciCore
+
+final class AccessibilityPermissionController {
+    private let axClient: AXClient
+
+    init(axClient: AXClient) {
+        self.axClient = axClient
+    }
+
+    func checkAtLaunch() -> Bool {
+        axClient.ensureAccessibilityPermission(prompt: true)
+    }
+
+    func requestFromUser() -> Bool {
+        axClient.ensureAccessibilityPermission(prompt: true)
+    }
+}
