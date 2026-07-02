@@ -9,7 +9,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
 
     init() {
         let window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -18,7 +18,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.level = .statusBar
-        window.ignoresMouseEvents = true
+        window.ignoresMouseEvents = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         super.init(window: window)
     }
@@ -27,30 +27,53 @@ final class SwitcherOverlayWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func showWindowSwitcher(items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
-        let listView = viewFactory.makeWindowList(items: items, selectedIndex: selectedIndex, compact: false)
+    func showWindowSwitcher(
+        items: [WindowSwitcherItem],
+        selectedIndex: Int,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (WindowID) -> Void,
+        onClick: @escaping (WindowID) -> Void
+    ) {
+        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
+        let listView = viewFactory.makeWindowList(
+            items: items,
+            selectedIndex: selectedIndex,
+            compact: false,
+            availableFrame: screenFrame,
+            onHover: onHover,
+            onClick: onClick
+        )
         windowListView = listView
         workspaceListView = nil
         setContent(
-            title: "Windows",
+            title: nil,
             content: listView
         )
-        showOverlay(anchorFrame: anchorFrame)
+        showOverlay(in: screenFrame)
     }
 
     func showWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
-        let listView = viewFactory.makeWorkspaceList(groups: groups, selectedIndex: selectedIndex)
+        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
+        let listView = viewFactory.makeWorkspaceList(
+            groups: groups,
+            selectedIndex: selectedIndex,
+            availableFrame: screenFrame
+        )
         windowListView = nil
         workspaceListView = listView
         setContent(
             title: "Workspaces",
             content: listView
         )
-        showOverlay(anchorFrame: anchorFrame)
+        showOverlay(in: screenFrame)
     }
 
     func updateWindowSwitcher(items: [WindowSwitcherItem]) {
         windowListView?.updatePreviews(items: items)
+    }
+
+    func updateWindowSelection(selectedID: WindowID) {
+        windowListView?.updateSelection(selectedID: selectedID)
     }
 
     func updateWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup]) {
@@ -63,16 +86,19 @@ final class SwitcherOverlayWindowController: NSWindowController {
         window?.orderOut(nil)
     }
 
-    private func setContent(title: String, content: NSView) {
-        window?.contentView = viewFactory.makeRootContent(title: title, content: content)
+    private func setContent(title: String?, content: NSView) {
+        let root = viewFactory.makeRootContent(title: title, content: content)
+        let contentSize = root.frame.size
+        window?.setContentSize(contentSize)
+        root.frame = NSRect(origin: .zero, size: contentSize)
+        window?.contentView = root
     }
 
-    private func showOverlay(anchorFrame: WindowFrame?) {
+    private func showOverlay(in screenFrame: NSRect) {
         guard let window else {
             return
         }
 
-        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
         let size = window.frame.size
         window.setFrameOrigin(NSPoint(
             x: screenFrame.midX - size.width / 2,

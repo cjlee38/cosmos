@@ -2,34 +2,37 @@ import AppKit
 import KkaciCore
 
 final class SwitcherOverlayViewFactory {
-    func makeRootContent(title: String, content: NSView) -> NSView {
-        let root = NSVisualEffectView()
-        root.translatesAutoresizingMaskIntoConstraints = false
+    func makeRootContent(title: String?, content: NSView) -> NSView {
+        let horizontalPadding: CGFloat = 20
+        let verticalPadding: CGFloat = 18
+        let titleSpacing: CGFloat = title == nil ? 0 : 12
+        let titleHeight: CGFloat = title == nil ? 0 : 22
+        let rootSize = NSSize(
+            width: content.frame.width + horizontalPadding * 2,
+            height: content.frame.height + verticalPadding * 2 + titleSpacing + titleHeight
+        )
+
+        let root = NSVisualEffectView(frame: NSRect(origin: .zero, size: rootSize))
         root.material = .hudWindow
         root.blendingMode = .behindWindow
         root.state = .active
         root.wantsLayer = true
-        root.layer?.cornerRadius = 16
+        root.layer?.cornerRadius = 14
         root.layer?.masksToBounds = true
 
-        let titleLabel = label(title, font: .systemFont(ofSize: 18, weight: .semibold), color: .white)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        content.translatesAutoresizingMaskIntoConstraints = false
+        content.frame.origin = NSPoint(x: horizontalPadding, y: verticalPadding)
+        root.addSubview(content)
 
-        let stack = NSStackView(views: [titleLabel, content])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 16
-
-        root.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 22),
-            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -24),
-            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -22),
-            content.widthAnchor.constraint(equalTo: stack.widthAnchor),
-        ])
+        if let title {
+            let titleLabel = label(title, font: .systemFont(ofSize: 16, weight: .semibold), color: .white)
+            titleLabel.frame = NSRect(
+                x: horizontalPadding,
+                y: verticalPadding + content.frame.height + titleSpacing,
+                width: content.frame.width,
+                height: titleHeight
+            )
+            root.addSubview(titleLabel)
+        }
 
         return root
     }
@@ -37,84 +40,112 @@ final class SwitcherOverlayViewFactory {
     func makeWindowList(
         items: [WindowSwitcherItem],
         selectedIndex: Int,
-        compact: Bool
+        compact: Bool,
+        availableFrame: NSRect,
+        onHover: ((WindowID) -> Void)? = nil,
+        onClick: ((WindowID) -> Void)? = nil
     ) -> WindowSwitcherListView {
-        let stack = NSStackView()
-        stack.orientation = .horizontal
-        stack.alignment = .top
-        stack.spacing = compact ? 8 : 12
-        let tileWidth: CGFloat = compact ? 112 : 176
-        let height: CGFloat = compact ? 122 : 318
-        var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
+        let metrics = tileMetrics(count: items.count, compact: compact, availableFrame: availableFrame)
+        let frame = NSRect(x: 0, y: 0, width: metrics.contentWidth, height: metrics.contentHeight)
+        let listView = WindowSwitcherListView(frame: frame)
 
         if items.isEmpty {
             let empty = label("No windows", font: .systemFont(ofSize: 15), color: .secondaryLabelColor)
-            empty.frame = NSRect(x: 0, y: 0, width: 180, height: 80)
-            stack.addArrangedSubview(empty)
-        } else {
-            for (index, item) in items.enumerated() {
-                let tile = WindowSwitcherTileView(
-                    item: item,
-                    isSelected: index == selectedIndex,
-                    compact: compact
-                )
-                tileViewsByID[item.id, default: []].append(tile)
-                stack.addArrangedSubview(tile)
-            }
+            empty.alignment = .center
+            empty.frame = frame
+            listView.addSubview(empty)
+            return listView
         }
 
-        let width = items.isEmpty
-            ? CGFloat(180)
-            : CGFloat(items.count) * tileWidth + CGFloat(max(items.count - 1, 0)) * stack.spacing
-        stack.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        for (index, item) in items.enumerated() {
+            let tile = WindowSwitcherTileView(
+                item: item,
+                isSelected: index == selectedIndex,
+                metrics: metrics,
+                onHover: onHover,
+                onClick: onClick
+            )
+            tile.frame.origin = tileOrigin(index: index, metrics: metrics)
+            listView.addTile(tile, id: item.id)
+        }
 
-        return WindowSwitcherListView(documentView: stack, tileViewsByID: tileViewsByID)
+        return listView
     }
 
-    func makeWorkspaceList(groups: [WorkspaceSwitcherGroup], selectedIndex: Int) -> WorkspaceSwitcherListView {
-        let stack = NSStackView()
-        stack.orientation = .horizontal
-        stack.alignment = .top
-        stack.spacing = 12
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
+    func makeWorkspaceList(
+        groups: [WorkspaceSwitcherGroup],
+        selectedIndex: Int,
+        availableFrame: NSRect
+    ) -> WorkspaceSwitcherListView {
+        let groupWidth = min(260, max(210, availableFrame.width * 0.24))
+        let maxContentWidth = max(1, availableFrame.width * 0.86)
+        let spacing: CGFloat = 12
+        let columns = max(1, min(groups.count, Int((maxContentWidth + spacing) / (groupWidth + spacing))))
+        let rows = max(1, Int(ceil(Double(max(groups.count, 1)) / Double(columns))))
+        var renderedGroups: [(view: NSView, tileViewsByID: [WindowID: [WindowSwitcherTileView]])] = []
+        var rowHeights = Array(repeating: CGFloat(0), count: rows)
 
         for (index, group) in groups.enumerated() {
-            let rendered = makeWorkspaceGroup(group, isSelected: index == selectedIndex)
-            mergeTileViews(rendered.tileViewsByID, into: &tileViewsByID)
-            stack.addArrangedSubview(rendered.view)
+            let rendered = makeWorkspaceGroup(
+                group,
+                isSelected: index == selectedIndex,
+                width: groupWidth,
+                availableFrame: availableFrame
+            )
+            renderedGroups.append(rendered)
+            rowHeights[index / columns] = max(rowHeights[index / columns], rendered.view.frame.height)
         }
-        stack.frame = NSRect(
-            x: 0,
-            y: 0,
-            width: CGFloat(max(groups.count, 1)) * 260 + CGFloat(max(groups.count - 1, 0)) * stack.spacing,
-            height: 250
-        )
 
-        return WorkspaceSwitcherListView(documentView: stack, tileViewsByID: tileViewsByID)
+        let contentWidth = CGFloat(columns) * groupWidth + CGFloat(max(columns - 1, 0)) * spacing
+        let contentHeight = rowHeights.reduce(0, +) + CGFloat(max(rows - 1, 0)) * spacing
+        let listView = WorkspaceSwitcherListView(frame: NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight))
+
+        var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
+        for (index, rendered) in renderedGroups.enumerated() {
+            let row = index / columns
+            let column = index % columns
+            let y = contentHeight
+                - rowHeights.prefix(row + 1).reduce(0, +)
+                - CGFloat(row) * spacing
+            rendered.view.frame.origin = NSPoint(
+                x: CGFloat(column) * (groupWidth + spacing),
+                y: y
+            )
+            mergeTileViews(rendered.tileViewsByID, into: &tileViewsByID)
+            listView.addSubview(rendered.view)
+        }
+
+        listView.setTileViews(tileViewsByID)
+        return listView
     }
 
     private func makeWorkspaceGroup(
         _ group: WorkspaceSwitcherGroup,
-        isSelected: Bool
+        isSelected: Bool,
+        width: CGFloat,
+        availableFrame: NSRect
     ) -> (view: NSView, tileViewsByID: [WindowID: [WindowSwitcherTileView]]) {
+        let padding: CGFloat = 12
+        let titleHeight: CGFloat = 20
         let title = label(
             "Workspace \(group.name)",
-            font: .systemFont(ofSize: 15, weight: .semibold),
+            font: .systemFont(ofSize: 14, weight: .semibold),
             color: .white
         )
+        title.frame = NSRect(x: padding, y: 0, width: width - padding * 2, height: titleHeight)
 
-        let windows = makeWindowList(items: group.windows, selectedIndex: -1, compact: true)
-        let stack = NSStackView(views: [title, windows])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 10
+        let windowListFrame = NSRect(x: 0, y: 0, width: width - padding * 2, height: availableFrame.height)
+        let windows = makeWindowList(
+            items: group.windows,
+            selectedIndex: -1,
+            compact: true,
+            availableFrame: windowListFrame
+        )
 
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
+        let groupHeight = padding + titleHeight + 10 + windows.frame.height + padding
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: groupHeight))
         container.wantsLayer = true
-        container.layer?.cornerRadius = 10
+        container.layer?.cornerRadius = 8
         container.layer?.borderWidth = isSelected ? 2 : 1
         container.layer?.borderColor = isSelected
             ? NSColor.controlAccentColor.cgColor
@@ -123,19 +154,52 @@ final class SwitcherOverlayViewFactory {
             ? NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
             : NSColor.black.withAlphaComponent(0.22).cgColor
 
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            container.widthAnchor.constraint(equalToConstant: 260),
-            container.heightAnchor.constraint(equalToConstant: 250),
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -12),
-            windows.widthAnchor.constraint(equalToConstant: 236),
-            windows.heightAnchor.constraint(equalToConstant: 122),
-        ])
+        windows.frame.origin = NSPoint(x: padding, y: padding)
+        title.frame.origin.y = padding + windows.frame.height + 10
+        container.addSubview(windows)
+        container.addSubview(title)
 
         return (container, windows.tileViewsByID)
+    }
+
+    private func tileMetrics(count: Int, compact: Bool, availableFrame: NSRect) -> WindowTileMetrics {
+        let spacing: CGFloat = compact ? 8 : 10
+        let baseWidth: CGFloat = compact ? 104 : 168
+        let minWidth: CGFloat = compact ? 82 : 104
+        let maxContentWidth = max(minWidth, availableFrame.width * (compact ? 1 : 0.86))
+        let itemCount = max(count, 1)
+        let maxColumns = max(1, Int((maxContentWidth + spacing) / (minWidth + spacing)))
+        let columns = max(1, min(itemCount, maxColumns))
+        let widthThatFits = (maxContentWidth - CGFloat(max(columns - 1, 0)) * spacing) / CGFloat(columns)
+        let tileWidth = min(baseWidth, max(minWidth, floor(widthThatFits)))
+        let rows = Int(ceil(Double(itemCount) / Double(columns)))
+        let previewHeight = compact
+            ? max(48, min(64, floor(tileWidth * 0.62)))
+            : max(68, min(104, floor(tileWidth * 0.62)))
+        let tileHeight = previewHeight + (compact ? 42 : 56)
+        let contentWidth = CGFloat(columns) * tileWidth + CGFloat(max(columns - 1, 0)) * spacing
+        let contentHeight = CGFloat(rows) * tileHeight + CGFloat(max(rows - 1, 0)) * spacing
+
+        return WindowTileMetrics(
+            width: tileWidth,
+            height: tileHeight,
+            previewHeight: previewHeight,
+            columns: columns,
+            spacing: spacing,
+            contentWidth: contentWidth,
+            contentHeight: contentHeight
+        )
+    }
+
+    private func tileOrigin(index: Int, metrics: WindowTileMetrics) -> NSPoint {
+        let row = index / metrics.columns
+        let column = index % metrics.columns
+        return NSPoint(
+            x: CGFloat(column) * (metrics.width + metrics.spacing),
+            y: metrics.contentHeight
+                - CGFloat(row + 1) * metrics.height
+                - CGFloat(row) * metrics.spacing
+        )
     }
 
     private func mergeTileViews(
@@ -156,22 +220,22 @@ final class SwitcherOverlayViewFactory {
     }
 }
 
-final class WindowSwitcherListView: NSScrollView {
-    let tileViewsByID: [WindowID: [WindowSwitcherTileView]]
+private struct WindowTileMetrics {
+    let width: CGFloat
+    let height: CGFloat
+    let previewHeight: CGFloat
+    let columns: Int
+    let spacing: CGFloat
+    let contentWidth: CGFloat
+    let contentHeight: CGFloat
+}
 
-    init(documentView: NSView, tileViewsByID: [WindowID: [WindowSwitcherTileView]]) {
-        self.tileViewsByID = tileViewsByID
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        hasHorizontalScroller = true
-        hasVerticalScroller = false
-        autohidesScrollers = true
-        drawsBackground = false
-        self.documentView = documentView
-    }
+final class WindowSwitcherListView: NSView {
+    private(set) var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+    func addTile(_ tile: WindowSwitcherTileView, id: WindowID) {
+        tileViewsByID[id, default: []].append(tile)
+        addSubview(tile)
     }
 
     func updatePreviews(items: [WindowSwitcherItem]) {
@@ -179,24 +243,19 @@ final class WindowSwitcherListView: NSScrollView {
             tileViewsByID[item.id]?.forEach { $0.updatePreview(item) }
         }
     }
+
+    func updateSelection(selectedID: WindowID) {
+        for (id, tiles) in tileViewsByID {
+            tiles.forEach { $0.updateSelection(id == selectedID) }
+        }
+    }
 }
 
-final class WorkspaceSwitcherListView: NSScrollView {
-    private let tileViewsByID: [WindowID: [WindowSwitcherTileView]]
+final class WorkspaceSwitcherListView: NSView {
+    private var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
 
-    init(documentView: NSView, tileViewsByID: [WindowID: [WindowSwitcherTileView]]) {
+    func setTileViews(_ tileViewsByID: [WindowID: [WindowSwitcherTileView]]) {
         self.tileViewsByID = tileViewsByID
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        hasHorizontalScroller = true
-        hasVerticalScroller = false
-        autohidesScrollers = true
-        drawsBackground = false
-        self.documentView = documentView
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
     }
 
     func updatePreviews(groups: [WorkspaceSwitcherGroup]) {
@@ -207,18 +266,53 @@ final class WorkspaceSwitcherListView: NSScrollView {
 }
 
 final class WindowSwitcherTileView: NSView {
+    private let id: WindowID
+    private let onHover: ((WindowID) -> Void)?
+    private let onClick: ((WindowID) -> Void)?
     private let previewImageView = NSImageView()
     private let fallbackIconView = NSImageView()
     private let fallbackInitialLabel = NSTextField(labelWithString: "")
 
-    init(item: WindowSwitcherItem, isSelected: Bool, compact: Bool) {
-        super.init(frame: .zero)
-        setup(item: item, isSelected: isSelected, compact: compact)
+    fileprivate init(
+        item: WindowSwitcherItem,
+        isSelected: Bool,
+        metrics: WindowTileMetrics,
+        onHover: ((WindowID) -> Void)?,
+        onClick: ((WindowID) -> Void)?
+    ) {
+        self.id = item.id
+        self.onHover = onHover
+        self.onClick = onClick
+        super.init(frame: NSRect(x: 0, y: 0, width: metrics.width, height: metrics.height))
+        setup(item: item, metrics: metrics)
+        updateSelection(isSelected)
         updatePreview(item)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHover?(id)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onClick?(id)
     }
 
     func updatePreview(_ item: WindowSwitcherItem) {
@@ -232,91 +326,85 @@ final class WindowSwitcherTileView: NSView {
         fallbackInitialLabel.isHidden = item.preview != nil || item.icon != nil
     }
 
-    private func setup(item: WindowSwitcherItem, isSelected: Bool, compact: Bool) {
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = 10
+    func updateSelection(_ isSelected: Bool) {
         layer?.borderWidth = isSelected ? 2 : 1
         layer?.borderColor = isSelected
             ? NSColor.controlAccentColor.cgColor
             : NSColor.white.withAlphaComponent(0.14).cgColor
         layer?.backgroundColor = isSelected
-            ? NSColor.controlAccentColor.withAlphaComponent(0.2).cgColor
-            : NSColor.black.withAlphaComponent(0.2).cgColor
+            ? NSColor.controlAccentColor.withAlphaComponent(0.22).cgColor
+            : NSColor.black.withAlphaComponent(0.22).cgColor
+    }
+
+    private func setup(item: WindowSwitcherItem, metrics: WindowTileMetrics) {
+        wantsLayer = true
+        layer?.cornerRadius = 8
 
         let preview = makePreviewContainer()
         let appLabel = label(
             item.appName,
-            font: .systemFont(ofSize: compact ? 11 : 12, weight: .semibold),
+            font: .systemFont(ofSize: metrics.width < 120 ? 11 : 12, weight: .semibold),
             color: .white
         )
         let titleLabel = label(
             item.displayTitle,
-            font: .systemFont(ofSize: compact ? 10 : 12),
+            font: .systemFont(ofSize: metrics.width < 120 ? 10 : 11),
             color: .secondaryLabelColor
         )
         appLabel.lineBreakMode = .byTruncatingTail
         titleLabel.lineBreakMode = .byTruncatingTail
 
-        let stack = NSStackView(views: [preview, appLabel, titleLabel])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = compact ? 5 : 8
+        preview.frame = NSRect(
+            x: 8,
+            y: metrics.height - metrics.previewHeight - 8,
+            width: metrics.width - 16,
+            height: metrics.previewHeight
+        )
+        appLabel.frame = NSRect(
+            x: 8,
+            y: max(8, preview.frame.minY - 23),
+            width: metrics.width - 16,
+            height: 16
+        )
+        titleLabel.frame = NSRect(
+            x: 8,
+            y: max(4, appLabel.frame.minY - 18),
+            width: metrics.width - 16,
+            height: 15
+        )
 
-        addSubview(stack)
-
-        let tileWidth: CGFloat = compact ? 112 : 176
-        let previewHeight: CGFloat = compact ? 68 : 108
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: tileWidth),
-            heightAnchor.constraint(equalToConstant: compact ? 116 : 192),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: compact ? 8 : 10),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: compact ? 8 : 10),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: compact ? -8 : -10),
-            preview.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            preview.heightAnchor.constraint(equalToConstant: previewHeight),
-            appLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            titleLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-        ])
+        addSubview(preview)
+        addSubview(appLabel)
+        addSubview(titleLabel)
     }
 
     private func makePreviewContainer() -> NSView {
         let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
         container.wantsLayer = true
         container.layer?.cornerRadius = 6
         container.layer?.masksToBounds = true
         container.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.35).cgColor
 
-        previewImageView.translatesAutoresizingMaskIntoConstraints = false
         previewImageView.imageScaling = .scaleProportionallyUpOrDown
-        fallbackIconView.translatesAutoresizingMaskIntoConstraints = false
         fallbackIconView.imageScaling = .scaleProportionallyUpOrDown
-        fallbackInitialLabel.translatesAutoresizingMaskIntoConstraints = false
         fallbackInitialLabel.alignment = .center
-        fallbackInitialLabel.font = .systemFont(ofSize: 26, weight: .semibold)
+        fallbackInitialLabel.font = .systemFont(ofSize: 24, weight: .semibold)
         fallbackInitialLabel.textColor = .white
 
         container.addSubview(previewImageView)
         container.addSubview(fallbackIconView)
         container.addSubview(fallbackInitialLabel)
-
-        NSLayoutConstraint.activate([
-            previewImageView.topAnchor.constraint(equalTo: container.topAnchor),
-            previewImageView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            previewImageView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            previewImageView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            fallbackIconView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            fallbackIconView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            fallbackIconView.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor, multiplier: 0.45),
-            fallbackIconView.heightAnchor.constraint(lessThanOrEqualTo: container.heightAnchor, multiplier: 0.45),
-            fallbackInitialLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            fallbackInitialLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            fallbackInitialLabel.widthAnchor.constraint(equalTo: container.widthAnchor),
-        ])
-
         return container
+    }
+
+    override func layout() {
+        super.layout()
+        guard let previewContainer = previewImageView.superview else {
+            return
+        }
+        previewImageView.frame = previewContainer.bounds
+        fallbackIconView.frame = previewContainer.bounds.insetBy(dx: previewContainer.bounds.width * 0.28, dy: previewContainer.bounds.height * 0.28)
+        fallbackInitialLabel.frame = previewContainer.bounds
     }
 
     private func label(_ text: String, font: NSFont, color: NSColor) -> NSTextField {

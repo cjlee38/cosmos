@@ -41,7 +41,7 @@ final class SwitcherCoordinator {
                 count: items.count,
                 direction: direction
             )
-            showWindows(items, selectedIndex: nextIndex, anchorFrame: anchorFrame)
+            selectWindow(at: nextIndex, items: items, anchorFrame: anchorFrame)
             refreshManagedThumbnails(priorityIDs: selectedWindowIDs(items: items, selectedIndex: nextIndex))
         default:
             startWindowSession(direction: direction)
@@ -113,7 +113,17 @@ final class SwitcherCoordinator {
     private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
         session = .windows(items: items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show windows count=\(items.count) selected=\(selectedIndex)")
-        overlay.showWindowSwitcher(items: items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
+        overlay.showWindowSwitcher(
+            items: items,
+            selectedIndex: selectedIndex,
+            anchorFrame: anchorFrame,
+            onHover: { [weak self] id in
+                _ = self?.selectWindow(id: id)
+            },
+            onClick: { [weak self] id in
+                self?.commitWindow(id: id)
+            }
+        )
     }
 
     private func showWorkspaces(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
@@ -168,6 +178,40 @@ final class SwitcherCoordinator {
         } catch {
             eventLog.record("Workspace switch failed: \(error)")
         }
+    }
+
+    @discardableResult
+    private func selectWindow(id: WindowID) -> Bool {
+        guard case .windows(let items, _, let anchorFrame) = session,
+              let index = items.firstIndex(where: { $0.id == id })
+        else {
+            return false
+        }
+
+        selectWindow(at: index, items: items, anchorFrame: anchorFrame)
+        refreshManagedThumbnails(priorityIDs: [id])
+        return true
+    }
+
+    private func selectWindow(
+        at index: Int,
+        items: [WindowSwitcherItem],
+        anchorFrame: WindowFrame?
+    ) {
+        guard items.indices.contains(index) else {
+            return
+        }
+
+        session = .windows(items: items, selectedIndex: index, anchorFrame: anchorFrame)
+        overlay.updateWindowSelection(selectedID: items[index].id)
+    }
+
+    private func commitWindow(id: WindowID) {
+        guard selectWindow(id: id) else {
+            return
+        }
+
+        commitWindowSelection()
     }
 
     private func refreshManagedThumbnails(priorityIDs: [WindowID] = []) {
