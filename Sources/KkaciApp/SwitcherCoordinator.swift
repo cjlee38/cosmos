@@ -3,8 +3,8 @@ import KkaciCore
 
 final class SwitcherCoordinator {
     private enum Session {
-        case windows(items: [WindowSwitcherItem], selectedIndex: Int)
-        case workspaces(groups: [WorkspaceSwitcherGroup], selectedIndex: Int)
+        case windows(items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?)
+        case workspaces(groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?)
     }
 
     private let controller: WorkspaceController
@@ -27,12 +27,12 @@ final class SwitcherCoordinator {
     func stepWindow(direction: SwitcherDirection) {
         log("step window direction=\(direction)")
         switch session {
-        case .windows(let items, let selectedIndex):
+        case .windows(let items, let selectedIndex, let anchorFrame):
             showWindows(items, selectedIndex: advancedIndex(
                 selectedIndex,
                 count: items.count,
                 direction: direction
-            ))
+            ), anchorFrame: anchorFrame)
         default:
             startWindowSession(direction: direction)
         }
@@ -41,12 +41,12 @@ final class SwitcherCoordinator {
     func stepWorkspace(direction: SwitcherDirection) {
         log("step workspace direction=\(direction)")
         switch session {
-        case .workspaces(let groups, let selectedIndex):
+        case .workspaces(let groups, let selectedIndex, let anchorFrame):
             showWorkspaces(groups, selectedIndex: advancedIndex(
                 selectedIndex,
                 count: groups.count,
                 direction: direction
-            ))
+            ), anchorFrame: anchorFrame)
         default:
             startWorkspaceSession(direction: direction)
         }
@@ -70,6 +70,7 @@ final class SwitcherCoordinator {
 
         let windows = controller.currentWindows().windows
         let items = windowItems(in: controller.activeWorkspace, from: windows)
+        let anchorFrame = overlayAnchorFrame(from: windows)
 
         guard !items.isEmpty else {
             showMessage("No windows in workspace \(controller.activeWorkspace)")
@@ -81,7 +82,7 @@ final class SwitcherCoordinator {
             in: items.map(\.id),
             direction: direction
         )
-        showWindows(items, selectedIndex: selectedIndex)
+        showWindows(items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
     }
 
     private func startWorkspaceSession(direction: SwitcherDirection) {
@@ -93,6 +94,7 @@ final class SwitcherCoordinator {
         }
 
         let windows = controller.currentWindows().windows
+        let anchorFrame = overlayAnchorFrame(from: windows)
         let groups = controller.workspaces.map { workspace in
             WorkspaceSwitcherGroup(
                 name: workspace,
@@ -110,23 +112,23 @@ final class SwitcherCoordinator {
             in: groups.map(\.name),
             direction: direction
         )
-        showWorkspaces(groups, selectedIndex: selectedIndex)
+        showWorkspaces(groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
     }
 
-    private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int) {
-        session = .windows(items: items, selectedIndex: selectedIndex)
+    private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
+        session = .windows(items: items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show windows count=\(items.count) selected=\(selectedIndex)")
-        overlay.showWindowSwitcher(items: items, selectedIndex: selectedIndex)
+        overlay.showWindowSwitcher(items: items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
     }
 
-    private func showWorkspaces(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int) {
-        session = .workspaces(groups: groups, selectedIndex: selectedIndex)
+    private func showWorkspaces(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
+        session = .workspaces(groups: groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show workspaces count=\(groups.count) selected=\(selectedIndex)")
-        overlay.showWorkspaceSwitcher(groups: groups, selectedIndex: selectedIndex)
+        overlay.showWorkspaceSwitcher(groups: groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
     }
 
     func commitWindowSelection() {
-        guard case .windows(let items, let selectedIndex) = session else {
+        guard case .windows(let items, let selectedIndex, _) = session else {
             return
         }
 
@@ -149,7 +151,7 @@ final class SwitcherCoordinator {
     }
 
     func commitWorkspaceSelection() {
-        guard case .workspaces(let groups, let selectedIndex) = session else {
+        guard case .workspaces(let groups, let selectedIndex, _) = session else {
             return
         }
 
@@ -217,11 +219,26 @@ final class SwitcherCoordinator {
             }
     }
 
+    private func overlayAnchorFrame(from windows: [WindowSnapshot]) -> WindowFrame? {
+        if let focusedID = controller.focusedWindowID(),
+           let focusedFrame = windows.first(where: { $0.id == focusedID })?.frame
+        {
+            return focusedFrame
+        }
+
+        return windows.first {
+            controller.membership(for: $0.id) == controller.activeWorkspace
+                && !controller.isHiddenByWorkspace($0.id)
+                && !$0.isMinimized
+                && $0.frame != nil
+        }?.frame
+    }
+
     private func describeSession() -> String {
         switch session {
-        case .windows(_, let selectedIndex):
+        case .windows(_, let selectedIndex, _):
             return "windows selected=\(selectedIndex)"
-        case .workspaces(_, let selectedIndex):
+        case .workspaces(_, let selectedIndex, _):
             return "workspaces selected=\(selectedIndex)"
         case nil:
             return "none"
