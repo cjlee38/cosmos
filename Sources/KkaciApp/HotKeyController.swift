@@ -4,10 +4,8 @@ import KkaciCore
 
 final class HotKeyController {
     fileprivate enum Action {
-        case nextWorkspace
-        case previousWorkspace
-        case nextWindow
-        case previousWindow
+        case workspaceSwitcher(SwitcherDirection)
+        case windowSwitcher(SwitcherDirection)
         case workspace(String)
         case moveWindowToWorkspace(String)
     }
@@ -173,14 +171,10 @@ final class HotKeyController {
             }
 
             switch action {
-            case .nextWorkspace:
-                statusMenuController.switchToNextWorkspace()
-            case .previousWorkspace:
-                statusMenuController.switchToPreviousWorkspace()
-            case .nextWindow:
-                statusMenuController.focusNextWindow()
-            case .previousWindow:
-                statusMenuController.focusPreviousWindow()
+            case .workspaceSwitcher(let direction):
+                statusMenuController.stepWorkspaceSwitcher(direction: direction)
+            case .windowSwitcher(let direction):
+                statusMenuController.stepWindowSwitcher(direction: direction)
             case .workspace(let workspace):
                 statusMenuController.switchWorkspace(named: workspace)
             case .moveWindowToWorkspace(let workspace):
@@ -192,13 +186,13 @@ final class HotKeyController {
     private func parseAction(_ binding: HotKeyBinding) throws -> Action {
         switch binding.command.lowercased() {
         case "next-workspace":
-            return .nextWorkspace
+            return .workspaceSwitcher(.forward)
         case "previous-workspace", "prev-workspace":
-            return .previousWorkspace
+            return .workspaceSwitcher(.backward)
         case "next-window":
-            return .nextWindow
+            return .windowSwitcher(.forward)
         case "previous-window", "prev-window":
-            return .previousWindow
+            return .windowSwitcher(.backward)
         case "workspace":
             guard let workspace = binding.workspace, !workspace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw HotKeyConfigError.missingWorkspace
@@ -298,13 +292,13 @@ final class HotKeyController {
 
     private func describe(_ action: Action) -> String {
         switch action {
-        case .nextWorkspace:
+        case .workspaceSwitcher(.forward):
             return "next-workspace"
-        case .previousWorkspace:
+        case .workspaceSwitcher(.backward):
             return "previous-workspace"
-        case .nextWindow:
+        case .windowSwitcher(.forward):
             return "next-window"
-        case .previousWindow:
+        case .windowSwitcher(.backward):
             return "previous-window"
         case .workspace(let workspace):
             return "workspace \(workspace)"

@@ -107,7 +107,7 @@ public final class AXClient {
         guard let focused = copyAttribute(kAXFocusedWindowAttribute, from: axApp) else {
             return nil
         }
-        return manageableWindowID(startingAt: focused as! AXUIElement)
+        return (focused as! AXUIElement).containingWindowID()
     }
 
     public func snapshot(for handle: WindowHandle) -> WindowSnapshot {
@@ -168,23 +168,6 @@ public final class AXClient {
             }
             return WindowHandle(id: id, app: appInfo, runningApp: app, axWindow: axWindow)
         }
-    }
-
-    private func manageableWindowID(startingAt element: AXUIElement) -> WindowID? {
-        var current = element
-        for _ in 0 ..< 8 {
-            if isManageableWindow(current),
-               let id = current.containingWindowID()
-            {
-                return id
-            }
-
-            guard let parent = copyAttribute(kAXParentAttribute, from: current) else {
-                return nil
-            }
-            current = parent as! AXUIElement
-        }
-        return nil
     }
 
     private func isManageableWindow(_ window: AXUIElement) -> Bool {

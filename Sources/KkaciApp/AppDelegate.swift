@@ -36,6 +36,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             accessibilityGrantedHandler: { [weak self] in
                 self?.bootstrapWindowStateAfterPermission()
+            },
+            settingsSnapshotProvider: { [weak self] in
+                guard let self else {
+                    return SettingsSnapshot(
+                        config: .default,
+                        configURL: nil,
+                        activeWorkspace: "1",
+                        runtimeWorkspaces: ["1", "2", "3"]
+                    )
+                }
+
+                return SettingsSnapshot(
+                    config: controller.currentConfig,
+                    configURL: (configStore as? FileKkaciConfigStore)?.url,
+                    activeWorkspace: controller.activeWorkspace,
+                    runtimeWorkspaces: controller.workspaces
+                )
             }
         )
         self.statusMenuController = statusMenuController
@@ -81,7 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try hotKeyController.replaceBindings(loadedConfig.bindings)
             controller.applyConfig(loadedConfig, enablePersistence: true)
             config = loadedConfig
-            statusMenuController.showMessage("Config reloaded")
+            do {
+                try controller.reconcileWindowState()
+                statusMenuController.showMessage("Config reloaded")
+            } catch {
+                statusMenuController.showMessage("Config reloaded; window reconcile failed: \(error)")
+            }
         } catch {
             statusMenuController.showMessage("Config reload failed; keeping previous config: \(error)")
         }
@@ -97,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.statusMenuController?.syncWorkspaceToFocusedWindow()
             },
             onWindowSetChanged: { [weak self] in
-                self?.statusMenuController?.syncWindowState()
+                self?.statusMenuController?.reconcileWindowState()
             }
         )
         monitor.start()
@@ -113,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let snapshotResult = try controller.applyWindowSnapshotsAtStartup()
             _ = try controller.captureUnassignedVisibleWindows(into: "1")
-            _ = try controller.switchWorkspace(to: controller.activeWorkspace)
+            try controller.reconcileWindowState()
             startWindowEventMonitor()
             statusMenuController.showMessage(bootstrapMessage(for: snapshotResult))
             return true

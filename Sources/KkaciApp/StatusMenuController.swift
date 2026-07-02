@@ -6,6 +6,7 @@ final class StatusMenuController: NSObject {
     private let controller: WorkspaceController
     private let reloadConfigHandler: () -> Void
     private let accessibilityGrantedHandler: () -> Void
+    private let settingsSnapshotProvider: () -> SettingsSnapshot
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
     private let permissionItem = NSMenuItem()
@@ -14,24 +15,38 @@ final class StatusMenuController: NSObject {
         controller: controller,
         lastMessage: { [weak self] in self?.currentMessage ?? "" }
     )
+    private lazy var switcherCoordinator = SwitcherCoordinator(
+        controller: controller,
+        showMessage: { [weak self] message in
+            self?.showMessage(message)
+        },
+        refreshStatus: { [weak self] in
+            self?.refreshSurfaces()
+        }
+    )
+    private var settingsWindowController: SettingsWindowController?
     private var workspaceItems: [String: NSMenuItem] = [:]
     private var renderedWorkspaces: [String] = []
     private var currentMessage = "Ready"
+    private var suppressedFocusedWindowID: WindowID?
 
     init(
         axClient: AXClient,
         controller: WorkspaceController,
         reloadConfigHandler: @escaping () -> Void,
-        accessibilityGrantedHandler: @escaping () -> Void
+        accessibilityGrantedHandler: @escaping () -> Void,
+        settingsSnapshotProvider: @escaping () -> SettingsSnapshot
     ) {
         self.axClient = axClient
         self.controller = controller
         self.reloadConfigHandler = reloadConfigHandler
         self.accessibilityGrantedHandler = accessibilityGrantedHandler
+        self.settingsSnapshotProvider = settingsSnapshotProvider
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         buildMenu()
         refreshMenu()
+        switcherCoordinator.startMonitoringModifierRelease()
     }
 
     func updatePermissionStatus(_ isGranted: Bool) {
@@ -42,43 +57,69 @@ final class StatusMenuController: NSObject {
     func showMessage(_ message: String) {
         currentMessage = message
         messageItem.title = message
-        refreshMenu()
-        debugStatusWindowController.refresh()
+        refreshSurfaces()
     }
 
     func showDebugStatusWindow() {
         debugStatusWindowController.show()
     }
 
+    func showSettingsWindow() {
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(
+                settingsSnapshotProvider: settingsSnapshotProvider,
+                reloadConfigHandler: reloadConfigHandler
+            )
+        }
+        settingsWindowController?.show()
+    }
+
+    func stepWindowSwitcher(direction: SwitcherDirection) {
+        switcherCoordinator.stepWindow(direction: direction)
+    }
+
+    func stepWorkspaceSwitcher(direction: SwitcherDirection) {
+        switcherCoordinator.stepWorkspace(direction: direction)
+    }
+
     func switchToNextWorkspace() {
+        switcherCoordinator.cancel()
         perform("Switched to next workspace") {
             _ = try controller.switchToNextWorkspace()
         }
     }
 
     func switchToPreviousWorkspace() {
+        switcherCoordinator.cancel()
         perform("Switched to previous workspace") {
             _ = try controller.switchToPreviousWorkspace()
         }
     }
 
     func focusNextWindow() {
+        switcherCoordinator.cancel()
         showWindowFocusResult(controller.focusNextWindow())
     }
 
     func focusPreviousWindow() {
+        switcherCoordinator.cancel()
         showWindowFocusResult(controller.focusPreviousWindow())
     }
 
     func switchWorkspace(named workspace: String) {
+        switcherCoordinator.cancel()
         perform("Switched to workspace \(workspace)") {
             _ = try controller.switchWorkspace(to: workspace)
         }
     }
 
     func moveFocusedWindow(to workspace: String) {
+        switcherCoordinator.cancel()
         do {
             let result = try controller.moveFocusedWindow(to: workspace)
+            if result.workspace != controller.activeWorkspace {
+                suppressedFocusedWindowID = result.windowID
+            }
             showMessage("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
             showMessage("Error: \(error)")
@@ -86,23 +127,40 @@ final class StatusMenuController: NSObject {
     }
 
     func syncWorkspaceToFocusedWindow() {
+        if let suppressedFocusedWindowID,
+           controller.focusedWindowID() == suppressedFocusedWindowID
+        {
+            self.suppressedFocusedWindowID = nil
+            reconcileWindowState()
+            return
+        }
+
+        suppressedFocusedWindowID = nil
         do {
             switch try controller.syncWorkspaceToFocusedWindow() {
             case .switched(let windowID, let workspace):
                 showMessage("Switched to workspace \(workspace) for \(windowID)")
             case .alreadyActive(_, _), .noFocusedWindow, .unmanagedWindow(_):
-                refreshMenu()
-                debugStatusWindowController.refresh()
+                refreshSurfaces()
             }
         } catch {
             showMessage("Focus sync failed: \(error)")
         }
     }
 
-    func syncWindowState() {
-        _ = controller.syncWindowState()
+    func reconcileWindowState() {
+        do {
+            _ = try controller.reconcileWindowState()
+            refreshSurfaces()
+        } catch {
+            showMessage("Window reconcile failed: \(error)")
+        }
+    }
+
+    private func refreshSurfaces() {
         refreshMenu()
         debugStatusWindowController.refresh()
+        settingsWindowController?.refresh()
     }
 
     private func buildMenu() {
@@ -150,6 +208,7 @@ final class StatusMenuController: NSObject {
         menu.addItem(hotKeyHelp)
         menu.addItem(commandItem(title: "Reload Config", action: #selector(reloadConfig)))
         menu.addItem(.separator())
+        menu.addItem(commandItem(title: "Settings...", action: #selector(showSettings)))
         menu.addItem(commandItem(title: "Show Debug Status", action: #selector(showDebugStatus)))
         menu.addItem(.separator())
         menu.addItem(commandItem(title: "Emergency Unhide All", action: #selector(emergencyUnhideAll)))
@@ -238,6 +297,10 @@ final class StatusMenuController: NSObject {
 
     @objc private func showDebugStatus() {
         showDebugStatusWindow()
+    }
+
+    @objc private func showSettings() {
+        showSettingsWindow()
     }
 
     @objc private func emergencyUnhideAll() {

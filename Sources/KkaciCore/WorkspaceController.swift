@@ -1,8 +1,9 @@
 import Foundation
 
-public enum WorkspaceError: Error, CustomStringConvertible {
+public enum WorkspaceError: Error, Equatable, CustomStringConvertible {
     case invalidWorkspaceName(String)
     case windowNotFound(WindowID)
+    case windowNotInActiveWorkspace(WindowID, String)
     case noFocusedWindow
     case frameUnavailable(WindowID)
 
@@ -12,6 +13,8 @@ public enum WorkspaceError: Error, CustomStringConvertible {
             "Invalid workspace name: \(workspace)"
         case .windowNotFound(let id):
             "Window not found: \(id)"
+        case .windowNotInActiveWorkspace(let id, let workspace):
+            "Window \(id) belongs to inactive workspace \(workspace)."
         case .noFocusedWindow:
             "No focused window."
         case .frameUnavailable(let id):
@@ -50,12 +53,10 @@ public enum FocusedWindowWorkspaceSyncResult: Equatable {
 public struct WindowMoveResult: Equatable {
     public let windowID: WindowID
     public let workspace: String
-    public let replacementFocus: WindowFocusResult?
 
-    public init(windowID: WindowID, workspace: String, replacementFocus: WindowFocusResult?) {
+    public init(windowID: WindowID, workspace: String) {
         self.windowID = windowID
         self.workspace = workspace
-        self.replacementFocus = replacementFocus
     }
 }
 
@@ -113,6 +114,10 @@ public final class WorkspaceController {
         state.workspaces
     }
 
+    public var currentConfig: KkaciConfig {
+        config
+    }
+
     public init(
         windowSystem: any WindowSystem,
         displayProvider: any HidePointProviding,
@@ -141,6 +146,13 @@ public final class WorkspaceController {
     @discardableResult
     public func syncWindowState() -> WorkspaceSyncSummary {
         syncWindows().sync
+    }
+
+    @discardableResult
+    public func reconcileWindowState() throws -> WorkspaceSyncSummary {
+        let sync = syncWindows().sync
+        try reconcileVisibility()
+        return sync
     }
 
     public func membership(for id: WindowID) -> String? {
@@ -176,14 +188,10 @@ public final class WorkspaceController {
         state.assign(id, to: workspace)
 
         do {
-            if workspace == activeWorkspace {
-                _ = try restoreWindowWithoutSync(id)
-                windowSystem.focus(id)
-            } else {
-                try hideWindowWithoutSync(id)
-            }
+            try reconcileVisibility(strictWindowIDs: [id])
         } catch {
             restoreMembership(id, to: previousWorkspace)
+            try? reconcileVisibility()
             throw error
         }
     }
@@ -279,8 +287,16 @@ public final class WorkspaceController {
             return .alreadyActive(windowID: id, workspace: workspace)
         }
 
+        let previousWorkspace = activeWorkspace
         state.recordFocus(id, in: workspace)
-        try switchWorkspaceWithoutSync(to: workspace)
+        state.activate(workspace)
+        do {
+            try reconcileVisibility(focusActiveWorkspace: true, preferredFocus: id, oldFocusedWindow: nil, strictWindowIDs: [id])
+        } catch {
+            state.activate(previousWorkspace)
+            try? reconcileVisibility()
+            throw error
+        }
         return .switched(windowID: id, workspace: workspace)
     }
 
@@ -319,17 +335,12 @@ public final class WorkspaceController {
         state.assign(id, to: workspace)
 
         do {
-            if workspace == activeWorkspace {
-                _ = try restoreWindowWithoutSync(id)
-                windowSystem.focus(id)
-                return WindowMoveResult(windowID: id, workspace: workspace, replacementFocus: nil)
-            }
-
-            try hideWindowWithoutSync(id)
-            let replacementFocus = focusReplacementAfterMovingWindow(id, from: sourceWorkspace)
-            return WindowMoveResult(windowID: id, workspace: workspace, replacementFocus: replacementFocus)
+            try reconcileVisibility(strictWindowIDs: [id])
+            state.clearFocus(id, in: sourceWorkspace)
+            return WindowMoveResult(windowID: id, workspace: workspace)
         } catch {
             restoreMembership(id, to: previousWorkspace)
+            try? reconcileVisibility()
             throw error
         }
     }
@@ -360,6 +371,21 @@ public final class WorkspaceController {
             windowSystem.focus(id)
         }
         return result
+    }
+
+    public func focusWindow(_ id: WindowID) throws {
+        _ = syncWindows()
+        guard windowSystem.contains(id) else {
+            throw WorkspaceError.windowNotFound(id)
+        }
+
+        if let workspace = state.membership(for: id), workspace != activeWorkspace {
+            throw WorkspaceError.windowNotInActiveWorkspace(id, workspace)
+        }
+
+        _ = try restoreWindowWithoutSync(id)
+        windowSystem.focus(id)
+        state.recordFocus(id, in: activeWorkspace)
     }
 
     public func restoreAllHiddenWindows() -> RestoreAllHiddenWindowsResult {
@@ -484,24 +510,20 @@ public final class WorkspaceController {
 
     private func switchWorkspaceWithoutSync(to workspace: String) throws {
         let workspace = try ensureWorkspace(workspace)
+        let previousWorkspace = activeWorkspace
         let oldFocusedWindow = focusedWindowInActiveWorkspace()
             ?? state.focusTarget(for: activeWorkspace, fallback: nil)
         state.activate(workspace)
-
-        var firstRestored: WindowID?
-        for id in state.windowIDs(in: workspace) {
-            _ = try restoreWindowWithoutSync(id)
-            firstRestored = firstRestored ?? id
-        }
-
-        let focusTarget = state.focusTarget(for: workspace, fallback: firstRestored)
-        if let focusTarget {
-            windowSystem.focus(focusTarget)
-            state.recordFocus(focusTarget, in: workspace)
-        }
-
-        for id in hideOrder(targetWorkspace: workspace, oldFocusedWindow: oldFocusedWindow) {
-            hideInactiveWindowBestEffort(id)
+        do {
+            try reconcileVisibility(
+                focusActiveWorkspace: true,
+                oldFocusedWindow: oldFocusedWindow,
+                strictWindowIDs: Set(state.windowIDs(in: workspace))
+            )
+        } catch {
+            state.activate(previousWorkspace)
+            try? reconcileVisibility()
+            throw error
         }
     }
 
@@ -512,21 +534,6 @@ public final class WorkspaceController {
             return nil
         }
         return id
-    }
-
-    private func focusReplacementAfterMovingWindow(_ movedID: WindowID, from sourceWorkspace: String) -> WindowFocusResult? {
-        guard sourceWorkspace == activeWorkspace else {
-            return nil
-        }
-
-        guard let target = state.nextWindow(in: activeWorkspace, after: movedID) else {
-            state.clearFocus(movedID, in: activeWorkspace)
-            return .noWindowsInWorkspace(activeWorkspace)
-        }
-
-        windowSystem.focus(target)
-        state.recordFocus(target, in: activeWorkspace)
-        return .focused(target)
     }
 
     private func hideOrder(targetWorkspace: String, oldFocusedWindow: WindowID?) -> [WindowID] {
@@ -542,10 +549,40 @@ public final class WorkspaceController {
         return ids
     }
 
-    private func hideInactiveWindowBestEffort(_ id: WindowID) {
-        do {
-            try hideWindowWithoutSync(id)
-        } catch {
+    private func reconcileVisibility(
+        focusActiveWorkspace: Bool = false,
+        preferredFocus: WindowID? = nil,
+        oldFocusedWindow: WindowID? = nil,
+        strictWindowIDs: Set<WindowID> = []
+    ) throws {
+        var firstRestored: WindowID?
+        for id in state.windowIDs(in: activeWorkspace) {
+            do {
+                _ = try restoreWindowWithoutSync(id)
+            } catch {
+                if strictWindowIDs.contains(id) {
+                    throw error
+                }
+            }
+            firstRestored = firstRestored ?? id
+        }
+
+        if focusActiveWorkspace {
+            let focusTarget = preferredFocus ?? state.focusTarget(for: activeWorkspace, fallback: firstRestored)
+            if let focusTarget {
+                windowSystem.focus(focusTarget)
+                state.recordFocus(focusTarget, in: activeWorkspace)
+            }
+        }
+
+        for id in hideOrder(targetWorkspace: activeWorkspace, oldFocusedWindow: oldFocusedWindow) {
+            do {
+                try hideWindowWithoutSync(id)
+            } catch {
+                if strictWindowIDs.contains(id) {
+                    throw error
+                }
+            }
         }
     }
 

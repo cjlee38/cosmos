@@ -17,6 +17,7 @@ final class WindowEventMonitor {
     private let onWindowSetChanged: () -> Void
     private var observedApps: [pid_t: ObservedApp] = [:]
     private var workspaceObserverTokens: [NSObjectProtocol] = []
+    private var appObserverTokens: [NSObjectProtocol] = []
     private var pendingCallbacks: Set<Callback> = []
 
     init(
@@ -38,6 +39,7 @@ final class WindowEventMonitor {
 
         observeRunningApplications()
         observeWorkspaceLifecycle()
+        observeDisplayChanges()
     }
 
     func stop() {
@@ -46,6 +48,11 @@ final class WindowEventMonitor {
             notificationCenter.removeObserver(token)
         }
         workspaceObserverTokens.removeAll()
+
+        for token in appObserverTokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+        appObserverTokens.removeAll()
 
         for observedApp in observedApps.values {
             CFRunLoopRemoveSource(
@@ -97,6 +104,16 @@ final class WindowEventMonitor {
                 return
             }
             self?.removeObserver(for: app.processIdentifier)
+            self?.schedule(.windowSetChanged)
+        })
+    }
+
+    private func observeDisplayChanges() {
+        appObserverTokens.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             self?.schedule(.windowSetChanged)
         })
     }
