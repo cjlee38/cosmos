@@ -12,13 +12,20 @@ final class SwitcherOverlayViewFactory {
             height: content.frame.height + verticalPadding * 2 + titleSpacing + titleHeight
         )
 
-        let root = NSVisualEffectView(frame: NSRect(origin: .zero, size: rootSize))
-        root.material = .hudWindow
-        root.blendingMode = .behindWindow
-        root.state = .active
+        let root = NSView(frame: NSRect(origin: .zero, size: rootSize))
         root.wantsLayer = true
         root.layer?.cornerRadius = 14
         root.layer?.masksToBounds = true
+
+        let background = NSVisualEffectView(frame: root.bounds)
+        background.autoresizingMask = [.width, .height]
+        background.material = .hudWindow
+        background.blendingMode = .behindWindow
+        background.state = .active
+        background.alphaValue = 0.89
+        background.wantsLayer = true
+        background.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.32).cgColor
+        root.addSubview(background)
 
         content.frame.origin = NSPoint(x: horizontalPadding, y: verticalPadding)
         root.addSubview(content)
@@ -176,7 +183,7 @@ final class SwitcherOverlayViewFactory {
         let previewHeight = compact
             ? max(48, min(64, floor(tileWidth * 0.62)))
             : max(68, min(174, floor(tileWidth * 0.62)))
-        let tileHeight = previewHeight + (compact ? 42 : 56)
+        let tileHeight = previewHeight + (tileWidth < 120 ? 50 : 57)
         let contentWidth = CGFloat(columns) * tileWidth + CGFloat(max(columns - 1, 0)) * spacing
         let contentHeight = CGFloat(rows) * tileHeight + CGFloat(max(rows - 1, 0)) * spacing
 
@@ -288,6 +295,7 @@ final class WindowSwitcherTileView: NSView {
     private let id: WindowID
     private let onHover: ((WindowID) -> Void)?
     private let onClick: ((WindowID) -> Void)?
+    private let appIconView = NSImageView()
     private let previewImageView = NSImageView()
     private let fallbackIconView = NSImageView()
     private let fallbackInitialLabel = NSTextField(labelWithString: "")
@@ -335,6 +343,7 @@ final class WindowSwitcherTileView: NSView {
     }
 
     func updatePreview(_ item: WindowSwitcherItem) {
+        appIconView.image = item.icon
         previewImageView.image = item.preview
         previewImageView.isHidden = item.preview == nil
 
@@ -359,42 +368,57 @@ final class WindowSwitcherTileView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 8
 
+        let padding: CGFloat = 8
+        let isNarrow = metrics.width < 120
+        let iconSize: CGFloat = isNarrow ? 14 : 18
+        let titleHeight: CGFloat = isNarrow ? 14 : 16
+        let appLabelHeight: CGFloat = isNarrow ? 14 : 16
         let preview = makePreviewContainer()
+        appIconView.image = item.icon
+        appIconView.imageScaling = .scaleProportionallyUpOrDown
         let appLabel = label(
             item.appName,
-            font: .systemFont(ofSize: metrics.width < 120 ? 11 : 12, weight: .semibold),
+            font: .systemFont(ofSize: isNarrow ? 11 : 12, weight: .semibold),
             color: .white
         )
         let titleLabel = label(
             item.displayTitle,
-            font: .systemFont(ofSize: metrics.width < 120 ? 10 : 11),
+            font: .systemFont(ofSize: isNarrow ? 10 : 11),
             color: .secondaryLabelColor
         )
         appLabel.lineBreakMode = .byTruncatingTail
         titleLabel.lineBreakMode = .byTruncatingTail
 
         preview.frame = NSRect(
-            x: 8,
-            y: metrics.height - metrics.previewHeight - 8,
-            width: metrics.width - 16,
+            x: padding,
+            y: padding,
+            width: metrics.width - padding * 2,
             height: metrics.previewHeight
         )
-        appLabel.frame = NSRect(
-            x: 8,
-            y: max(8, preview.frame.minY - 23),
-            width: metrics.width - 16,
-            height: 16
-        )
         titleLabel.frame = NSRect(
-            x: 8,
-            y: max(4, appLabel.frame.minY - 18),
-            width: metrics.width - 16,
-            height: 15
+            x: padding,
+            y: preview.frame.maxY + 3,
+            width: metrics.width - padding * 2,
+            height: titleHeight
+        )
+        let appRowY = titleLabel.frame.maxY + (isNarrow ? 3 : 4)
+        appIconView.frame = NSRect(
+            x: padding,
+            y: appRowY,
+            width: iconSize,
+            height: iconSize
+        )
+        appLabel.frame = NSRect(
+            x: appIconView.frame.maxX + 6,
+            y: appRowY + floor((iconSize - appLabelHeight) / 2),
+            width: metrics.width - padding * 2 - iconSize - 6,
+            height: appLabelHeight
         )
 
-        addSubview(preview)
+        addSubview(appIconView)
         addSubview(appLabel)
         addSubview(titleLabel)
+        addSubview(preview)
     }
 
     private func makePreviewContainer() -> NSView {
