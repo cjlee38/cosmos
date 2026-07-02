@@ -16,10 +16,14 @@ final class SwitcherOverlayWindowController: NSWindowController {
         )
         window.isReleasedWhenClosed = false
         window.isOpaque = false
+        window.isFloatingPanel = true
+        window.animationBehavior = .none
+        window.hidesOnDeactivate = false
         window.backgroundColor = .clear
         window.level = .statusBar
         window.ignoresMouseEvents = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        window.setAccessibilitySubrole(.unknown)
         super.init(window: window)
     }
 

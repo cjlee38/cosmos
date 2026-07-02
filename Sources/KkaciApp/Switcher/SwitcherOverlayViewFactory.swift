@@ -164,18 +164,18 @@ final class SwitcherOverlayViewFactory {
 
     private func tileMetrics(count: Int, compact: Bool, availableFrame: NSRect) -> WindowTileMetrics {
         let spacing: CGFloat = compact ? 8 : 10
-        let baseWidth: CGFloat = compact ? 104 : 168
+        let targetWidth = targetTileWidth(count: count, compact: compact)
         let minWidth: CGFloat = compact ? 82 : 104
         let maxContentWidth = max(minWidth, availableFrame.width * (compact ? 1 : 0.86))
         let itemCount = max(count, 1)
         let maxColumns = max(1, Int((maxContentWidth + spacing) / (minWidth + spacing)))
         let columns = max(1, min(itemCount, maxColumns))
         let widthThatFits = (maxContentWidth - CGFloat(max(columns - 1, 0)) * spacing) / CGFloat(columns)
-        let tileWidth = min(baseWidth, max(minWidth, floor(widthThatFits)))
+        let tileWidth = min(targetWidth, max(minWidth, floor(widthThatFits)))
         let rows = Int(ceil(Double(itemCount) / Double(columns)))
         let previewHeight = compact
             ? max(48, min(64, floor(tileWidth * 0.62)))
-            : max(68, min(104, floor(tileWidth * 0.62)))
+            : max(68, min(174, floor(tileWidth * 0.62)))
         let tileHeight = previewHeight + (compact ? 42 : 56)
         let contentWidth = CGFloat(columns) * tileWidth + CGFloat(max(columns - 1, 0)) * spacing
         let contentHeight = CGFloat(rows) * tileHeight + CGFloat(max(rows - 1, 0)) * spacing
@@ -189,6 +189,25 @@ final class SwitcherOverlayViewFactory {
             contentWidth: contentWidth,
             contentHeight: contentHeight
         )
+    }
+
+    private func targetTileWidth(count: Int, compact: Bool) -> CGFloat {
+        if compact {
+            return 104
+        }
+
+        switch count {
+        case ...1:
+            return 280
+        case 2:
+            return 240
+        case 3:
+            return 210
+        case 4:
+            return 185
+        default:
+            return 168
+        }
     }
 
     private func tileOrigin(index: Int, metrics: WindowTileMetrics) -> NSPoint {
