@@ -15,6 +15,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.0"),
+        .package(url: "https://github.com/soffes/HotKey.git", exact: "0.2.1"),
     ],
     targets: [
         .target(
@@ -37,7 +38,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "KkaciApp",
-            dependencies: ["KkaciCore"],
+            dependencies: [
+                "KkaciCore",
+                .product(name: "HotKey", package: "HotKey"),
+            ],
             path: "Sources/KkaciApp"
         ),
         .executableTarget(

@@ -13,7 +13,6 @@ final class SwitcherCoordinator {
     private let showMessage: (String) -> Void
     private let refreshStatus: () -> Void
     private var session: Session?
-    private var releaseMonitor: ModifierReleaseMonitor?
 
     init(
         controller: WorkspaceController,
@@ -25,19 +24,8 @@ final class SwitcherCoordinator {
         self.refreshStatus = refreshStatus
     }
 
-    func startMonitoringModifierRelease() {
-        guard releaseMonitor == nil else {
-            return
-        }
-
-        let monitor = ModifierReleaseMonitor { [weak self] flags in
-            self?.handleFlagsChanged(flags)
-        }
-        monitor.start()
-        releaseMonitor = monitor
-    }
-
     func stepWindow(direction: SwitcherDirection) {
+        log("step window direction=\(direction)")
         switch session {
         case .windows(let items, let selectedIndex):
             showWindows(items, selectedIndex: advancedIndex(
@@ -51,6 +39,7 @@ final class SwitcherCoordinator {
     }
 
     func stepWorkspace(direction: SwitcherDirection) {
+        log("step workspace direction=\(direction)")
         switch session {
         case .workspaces(let groups, let selectedIndex):
             showWorkspaces(groups, selectedIndex: advancedIndex(
@@ -64,6 +53,9 @@ final class SwitcherCoordinator {
     }
 
     func cancel() {
+        if session != nil {
+            log("cancel session=\(describeSession())")
+        }
         session = nil
         overlay.hideOverlay()
     }
@@ -123,26 +115,17 @@ final class SwitcherCoordinator {
 
     private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int) {
         session = .windows(items: items, selectedIndex: selectedIndex)
+        log("show windows count=\(items.count) selected=\(selectedIndex)")
         overlay.showWindowSwitcher(items: items, selectedIndex: selectedIndex)
     }
 
     private func showWorkspaces(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int) {
         session = .workspaces(groups: groups, selectedIndex: selectedIndex)
+        log("show workspaces count=\(groups.count) selected=\(selectedIndex)")
         overlay.showWorkspaceSwitcher(groups: groups, selectedIndex: selectedIndex)
     }
 
-    private func handleFlagsChanged(_ flags: NSEvent.ModifierFlags) {
-        switch session {
-        case .windows? where !flags.contains(.option):
-            commitWindowSelection()
-        case .workspaces? where !flags.contains(.control):
-            commitWorkspaceSelection()
-        default:
-            break
-        }
-    }
-
-    private func commitWindowSelection() {
+    func commitWindowSelection() {
         guard case .windows(let items, let selectedIndex) = session else {
             return
         }
@@ -155,6 +138,7 @@ final class SwitcherCoordinator {
         }
 
         let item = items[selectedIndex]
+        log("commit window id=\(item.id) selected=\(selectedIndex)")
         do {
             try controller.focusWindow(item.id)
             showMessage("Focused \(item.id)")
@@ -164,7 +148,7 @@ final class SwitcherCoordinator {
         }
     }
 
-    private func commitWorkspaceSelection() {
+    func commitWorkspaceSelection() {
         guard case .workspaces(let groups, let selectedIndex) = session else {
             return
         }
@@ -177,6 +161,7 @@ final class SwitcherCoordinator {
         }
 
         let workspace = groups[selectedIndex].name
+        log("commit workspace=\(workspace) selected=\(selectedIndex)")
         do {
             _ = try controller.switchWorkspace(to: workspace)
             showMessage("Switched to workspace \(workspace)")
@@ -230,5 +215,20 @@ final class SwitcherCoordinator {
                     includeThumbnail: !controller.isHiddenByWorkspace($0.id)
                 )
             }
+    }
+
+    private func describeSession() -> String {
+        switch session {
+        case .windows(_, let selectedIndex):
+            return "windows selected=\(selectedIndex)"
+        case .workspaces(_, let selectedIndex):
+            return "workspaces selected=\(selectedIndex)"
+        case nil:
+            return "none"
+        }
+    }
+
+    private func log(_ message: String) {
+        NSLog("[kkaci switcher] %@", message)
     }
 }

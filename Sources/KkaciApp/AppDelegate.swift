@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var config: KkaciConfig
     private let configLoadError: Error?
     private var statusMenuController: StatusMenuController?
-    private var hotKeyController: HotKeyController?
+    private let keyboardShortcutManager = KeyboardShortcutManager()
     private var windowEventMonitor: WindowEventMonitor?
 
     init(
@@ -58,16 +58,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusMenuController = statusMenuController
         statusMenuController.showDebugStatusWindow()
 
-        let hotKeyController = HotKeyController(
-            statusMenuController: statusMenuController,
-            bindings: config.bindings
-        )
+        keyboardShortcutManager.start()
         do {
-            try hotKeyController.registerConfiguredHotKeys()
+            try keyboardShortcutManager.replaceShortcuts(
+                makeKeyboardShortcutRegistrations(
+                    for: config.bindings,
+                    statusMenuController: statusMenuController
+                )
+            )
         } catch {
             statusMenuController.showMessage("Hotkey registration failed: \(error)")
         }
-        self.hotKeyController = hotKeyController
 
         let hasPermission = axClient.ensureAccessibilityPermission(prompt: true)
         statusMenuController.updatePermissionStatus(hasPermission)
@@ -89,13 +90,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func reloadConfig() {
-        guard let statusMenuController, let hotKeyController else {
+        guard let statusMenuController else {
             return
         }
 
         do {
             let loadedConfig = try configStore.load()
-            try hotKeyController.replaceBindings(loadedConfig.bindings)
+            try keyboardShortcutManager.replaceShortcuts(
+                makeKeyboardShortcutRegistrations(
+                    for: loadedConfig.bindings,
+                    statusMenuController: statusMenuController
+                )
+            )
             controller.applyConfig(loadedConfig, enablePersistence: true)
             config = loadedConfig
             do {
@@ -151,5 +157,116 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         return "Applied \(snapshotResult.reassigned.count) snapshots, restored \(snapshotResult.restored.count)"
+    }
+
+    private func makeKeyboardShortcutRegistrations(
+        for bindings: [HotKeyBinding],
+        statusMenuController: StatusMenuController
+    ) throws -> [KeyboardShortcutRegistration] {
+        try bindings.map { binding in
+            try makeKeyboardShortcutRegistration(
+                for: binding,
+                statusMenuController: statusMenuController
+            )
+        }
+    }
+
+    private func makeKeyboardShortcutRegistration(
+        for binding: HotKeyBinding,
+        statusMenuController: StatusMenuController
+    ) throws -> KeyboardShortcutRegistration {
+        switch binding.command.lowercased() {
+        case "next-workspace":
+            return .hold(
+                key: binding.key,
+                name: "next-workspace",
+                releaseGroup: "workspace-switcher",
+                onPress: { [weak statusMenuController] in
+                    statusMenuController?.stepWorkspaceSwitcher(direction: .forward)
+                },
+                onRelease: { [weak statusMenuController] in
+                    statusMenuController?.commitWorkspaceSwitcher()
+                }
+            )
+        case "previous-workspace", "prev-workspace":
+            return .hold(
+                key: binding.key,
+                name: "previous-workspace",
+                releaseGroup: "workspace-switcher",
+                onPress: { [weak statusMenuController] in
+                    statusMenuController?.stepWorkspaceSwitcher(direction: .backward)
+                },
+                onRelease: { [weak statusMenuController] in
+                    statusMenuController?.commitWorkspaceSwitcher()
+                }
+            )
+        case "next-window":
+            return .hold(
+                key: binding.key,
+                name: "next-window",
+                releaseGroup: "window-switcher",
+                onPress: { [weak statusMenuController] in
+                    statusMenuController?.stepWindowSwitcher(direction: .forward)
+                },
+                onRelease: { [weak statusMenuController] in
+                    statusMenuController?.commitWindowSwitcher()
+                }
+            )
+        case "previous-window", "prev-window":
+            return .hold(
+                key: binding.key,
+                name: "previous-window",
+                releaseGroup: "window-switcher",
+                onPress: { [weak statusMenuController] in
+                    statusMenuController?.stepWindowSwitcher(direction: .backward)
+                },
+                onRelease: { [weak statusMenuController] in
+                    statusMenuController?.commitWindowSwitcher()
+                }
+            )
+        case "workspace":
+            let workspace = try workspaceName(from: binding)
+            return .press(
+                key: binding.key,
+                name: "workspace \(workspace)",
+                onPress: { [weak statusMenuController] in
+                    statusMenuController?.switchWorkspace(named: workspace)
+                }
+            )
+        case "move-window-to-workspace", "move-focused-window-to-workspace":
+            let workspace = try workspaceName(from: binding)
+            return .press(
+                key: binding.key,
+                name: "move-window-to-workspace \(workspace)",
+                onPress: { [weak statusMenuController] in
+                    statusMenuController?.moveFocusedWindow(to: workspace)
+                }
+            )
+        default:
+            throw KeyboardBindingError.unknownCommand(binding.command)
+        }
+    }
+
+    private func workspaceName(from binding: HotKeyBinding) throws -> String {
+        guard let workspace = binding.workspace?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !workspace.isEmpty
+        else {
+            throw KeyboardBindingError.missingWorkspace
+        }
+        return workspace
+    }
+}
+
+private enum KeyboardBindingError: Error, CustomStringConvertible {
+    case unknownCommand(String)
+    case missingWorkspace
+
+    var description: String {
+        switch self {
+        case .unknownCommand(let command):
+            return "unknown command \(command)"
+        case .missingWorkspace:
+            return "workspace command needs a workspace"
+        }
     }
 }

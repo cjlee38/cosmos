@@ -46,7 +46,6 @@ final class StatusMenuController: NSObject {
         super.init()
         buildMenu()
         refreshMenu()
-        switcherCoordinator.startMonitoringModifierRelease()
     }
 
     func updatePermissionStatus(_ isGranted: Bool) {
@@ -80,6 +79,14 @@ final class StatusMenuController: NSObject {
 
     func stepWorkspaceSwitcher(direction: SwitcherDirection) {
         switcherCoordinator.stepWorkspace(direction: direction)
+    }
+
+    func commitWindowSwitcher() {
+        switcherCoordinator.commitWindowSelection()
+    }
+
+    func commitWorkspaceSwitcher() {
+        switcherCoordinator.commitWorkspaceSelection()
     }
 
     func switchToNextWorkspace() {
