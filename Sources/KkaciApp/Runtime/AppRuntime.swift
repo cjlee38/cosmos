@@ -6,11 +6,13 @@ final class AppRuntime {
     private let configRuntime: ConfigRuntime
     private let permissionController: AccessibilityPermissionController
     private let keyboardShortcutManager: KeyboardShortcutManager
+    private let thumbnailRefresher: WindowThumbnailRefresher
     private let eventLog: RuntimeEventLog
     private var windowEventMonitor: WindowEventMonitor?
 
     private lazy var statusMenuController = StatusMenuController(
         controller: controller,
+        thumbnailRefresher: thumbnailRefresher,
         eventLog: eventLog,
         reloadConfigHandler: { [unowned self] in
             reloadConfig()
@@ -28,12 +30,14 @@ final class AppRuntime {
         configRuntime: ConfigRuntime,
         permissionController: AccessibilityPermissionController,
         keyboardShortcutManager: KeyboardShortcutManager,
+        thumbnailRefresher: WindowThumbnailRefresher,
         eventLog: RuntimeEventLog
     ) {
         self.controller = controller
         self.configRuntime = configRuntime
         self.permissionController = permissionController
         self.keyboardShortcutManager = keyboardShortcutManager
+        self.thumbnailRefresher = thumbnailRefresher
         self.eventLog = eventLog
     }
 
@@ -73,6 +77,7 @@ final class AppRuntime {
     private func reloadConfig() {
         do {
             try configRuntime.reload(actions: statusMenuController)
+            thumbnailRefresher.refreshManagedThumbnails()
             eventLog.record("Config reloaded")
         } catch {
             eventLog.record("Config reload failed; keeping previous config: \(error)")
@@ -109,6 +114,7 @@ final class AppRuntime {
         do {
             let bootstrapResult = try controller.bootstrapWindowState(defaultWorkspace: "1")
             startWindowEventMonitor()
+            thumbnailRefresher.refreshManagedThumbnails()
             eventLog.record(bootstrapMessage(for: bootstrapResult.hiddenRecords))
             return true
         } catch {
@@ -133,4 +139,5 @@ final class AppRuntime {
             runtimeWorkspaces: controller.workspaces
         )
     }
+
 }

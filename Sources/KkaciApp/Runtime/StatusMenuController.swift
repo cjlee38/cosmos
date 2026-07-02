@@ -3,6 +3,7 @@ import KkaciCore
 
 final class StatusMenuController: NSObject {
     private let controller: WorkspaceController
+    private let thumbnailRefresher: WindowThumbnailRefresher
     private let eventLog: RuntimeEventLog
     private let reloadConfigHandler: () -> Void
     private let requestAccessibilityPermissionHandler: () -> Bool
@@ -17,6 +18,7 @@ final class StatusMenuController: NSObject {
     )
     private lazy var actionController = WorkspaceActionController(
         controller: controller,
+        thumbnailRefresher: thumbnailRefresher,
         eventLog: eventLog,
         refreshSurfaces: { [weak self] in
             self?.refreshSurfaces()
@@ -28,12 +30,14 @@ final class StatusMenuController: NSObject {
 
     init(
         controller: WorkspaceController,
+        thumbnailRefresher: WindowThumbnailRefresher,
         eventLog: RuntimeEventLog,
         reloadConfigHandler: @escaping () -> Void,
         requestAccessibilityPermissionHandler: @escaping () -> Bool,
         settingsSnapshotProvider: @escaping () -> SettingsSnapshot
     ) {
         self.controller = controller
+        self.thumbnailRefresher = thumbnailRefresher
         self.eventLog = eventLog
         self.reloadConfigHandler = reloadConfigHandler
         self.requestAccessibilityPermissionHandler = requestAccessibilityPermissionHandler

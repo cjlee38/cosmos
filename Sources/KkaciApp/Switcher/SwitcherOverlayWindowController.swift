@@ -4,6 +4,8 @@ import KkaciCore
 final class SwitcherOverlayWindowController: NSWindowController {
     private let viewFactory = SwitcherOverlayViewFactory()
     private let screenLocator = SwitcherOverlayScreenLocator()
+    private var windowListView: WindowSwitcherListView?
+    private var workspaceListView: WorkspaceSwitcherListView?
 
     init() {
         let window = NSPanel(
@@ -26,22 +28,38 @@ final class SwitcherOverlayWindowController: NSWindowController {
     }
 
     func showWindowSwitcher(items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
+        let listView = viewFactory.makeWindowList(items: items, selectedIndex: selectedIndex, compact: false)
+        windowListView = listView
+        workspaceListView = nil
         setContent(
             title: "Windows",
-            content: viewFactory.makeWindowList(items: items, selectedIndex: selectedIndex, compact: false)
+            content: listView
         )
         showOverlay(anchorFrame: anchorFrame)
     }
 
     func showWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
+        let listView = viewFactory.makeWorkspaceList(groups: groups, selectedIndex: selectedIndex)
+        windowListView = nil
+        workspaceListView = listView
         setContent(
             title: "Workspaces",
-            content: viewFactory.makeWorkspaceList(groups: groups, selectedIndex: selectedIndex)
+            content: listView
         )
         showOverlay(anchorFrame: anchorFrame)
     }
 
+    func updateWindowSwitcher(items: [WindowSwitcherItem]) {
+        windowListView?.updatePreviews(items: items)
+    }
+
+    func updateWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup]) {
+        workspaceListView?.updatePreviews(groups: groups)
+    }
+
     func hideOverlay() {
+        windowListView = nil
+        workspaceListView = nil
         window?.orderOut(nil)
     }
 

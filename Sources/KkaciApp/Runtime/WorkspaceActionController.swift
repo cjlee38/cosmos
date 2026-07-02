@@ -3,10 +3,12 @@ import KkaciCore
 
 final class WorkspaceActionController {
     private let controller: WorkspaceController
+    private let thumbnailRefresher: WindowThumbnailRefresher
     private let eventLog: RuntimeEventLog
     private let refreshSurfaces: () -> Void
     private lazy var switcherCoordinator = SwitcherCoordinator(
         controller: controller,
+        thumbnailRefresher: thumbnailRefresher,
         eventLog: eventLog,
         refreshStatus: { [weak self] in
             self?.refreshSurfaces()
@@ -16,10 +18,12 @@ final class WorkspaceActionController {
 
     init(
         controller: WorkspaceController,
+        thumbnailRefresher: WindowThumbnailRefresher,
         eventLog: RuntimeEventLog,
         refreshSurfaces: @escaping () -> Void
     ) {
         self.controller = controller
+        self.thumbnailRefresher = thumbnailRefresher
         self.eventLog = eventLog
         self.refreshSurfaces = refreshSurfaces
     }
@@ -82,6 +86,7 @@ final class WorkspaceActionController {
             if result.workspace != controller.activeWorkspace {
                 suppressedFocusedWindowID = result.windowID
             }
+            thumbnailRefresher.refreshManagedThumbnails()
             eventLog.record("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
             eventLog.record("Error: \(error)")
@@ -89,7 +94,7 @@ final class WorkspaceActionController {
     }
 
     func createWorkspace(named workspace: String) {
-        perform("Created workspace \(workspace)") {
+        perform("Created workspace \(workspace)", refreshThumbnails: false) {
             _ = try controller.createWorkspace(named: workspace)
         }
     }
@@ -107,8 +112,10 @@ final class WorkspaceActionController {
         do {
             switch try controller.syncWorkspaceToFocusedWindow() {
             case .switched(let windowID, let workspace):
+                thumbnailRefresher.refreshManagedThumbnails()
                 eventLog.record("Switched to workspace \(workspace) for \(windowID)")
             case .alreadyActive(_, _), .noFocusedWindow, .unmanagedWindow(_):
+                thumbnailRefresher.refreshManagedThumbnails()
                 refreshSurfaces()
             }
         } catch {
@@ -119,6 +126,7 @@ final class WorkspaceActionController {
     func applyExternalWindowSetChange() {
         do {
             _ = try controller.applyExternalWindowSetChange()
+            thumbnailRefresher.refreshManagedThumbnails()
             refreshSurfaces()
         } catch {
             eventLog.record("Window update failed: \(error)")
@@ -127,12 +135,20 @@ final class WorkspaceActionController {
 
     func restoreAllHiddenWindows() {
         let result = controller.restoreAllHiddenWindows()
+        thumbnailRefresher.refreshManagedThumbnails()
         eventLog.record("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
     }
 
-    private func perform(_ successMessage: String, action: () throws -> Void) {
+    private func perform(
+        _ successMessage: String,
+        refreshThumbnails: Bool = true,
+        action: () throws -> Void
+    ) {
         do {
             try action()
+            if refreshThumbnails {
+                thumbnailRefresher.refreshManagedThumbnails()
+            }
             eventLog.record(successMessage)
         } catch {
             eventLog.record("Error: \(error)")
@@ -147,4 +163,5 @@ final class WorkspaceActionController {
             eventLog.record("No windows in workspace \(workspace)")
         }
     }
+
 }

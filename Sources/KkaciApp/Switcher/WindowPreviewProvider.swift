@@ -1,35 +1,20 @@
 import AppKit
-import CoreGraphics
 import KkaciCore
 
 final class WindowPreviewProvider {
-    func makeItem(for window: WindowSnapshot, includeThumbnail: Bool) -> WindowSwitcherItem {
+    private let thumbnailCache: WindowThumbnailCache
+
+    init(thumbnailCache: WindowThumbnailCache) {
+        self.thumbnailCache = thumbnailCache
+    }
+
+    func makeItem(for window: WindowSnapshot) -> WindowSwitcherItem {
         WindowSwitcherItem(
             id: window.id,
             appName: window.app.name,
             title: window.title,
-            preview: includeThumbnail ? thumbnail(for: window.id) : nil,
+            preview: thumbnailCache.thumbnail(for: window.id),
             icon: icon(for: window.app.pid)
-        )
-    }
-
-    private func thumbnail(for id: WindowID) -> NSImage? {
-        guard let image = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            id,
-            [.boundsIgnoreFraming, .bestResolution]
-        ) else {
-            return nil
-        }
-
-        guard image.width > 2, image.height > 2 else {
-            return nil
-        }
-
-        return NSImage(
-            cgImage: image,
-            size: NSSize(width: image.width, height: image.height)
         )
     }
 

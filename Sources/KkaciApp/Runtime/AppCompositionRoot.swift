@@ -13,6 +13,10 @@ struct AppCompositionRoot {
             configStore: configStore,
             recordStore: recordStore
         )
+        let thumbnailRefresher = WindowThumbnailRefresher(
+            controller: controller,
+            thumbnailCache: WindowThumbnailCache()
+        )
         let keyboardShortcutManager = KeyboardShortcutManager()
 
         return AppRuntime(
@@ -26,6 +30,7 @@ struct AppCompositionRoot {
             ),
             permissionController: AccessibilityPermissionController(axClient: axClient),
             keyboardShortcutManager: keyboardShortcutManager,
+            thumbnailRefresher: thumbnailRefresher,
             eventLog: eventLog
         )
     }

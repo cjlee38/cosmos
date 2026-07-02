@@ -3,10 +3,11 @@ import KkaciCore
 
 final class SwitcherContentProvider {
     private let controller: WorkspaceController
-    private let previewProvider = WindowPreviewProvider()
+    private let previewProvider: WindowPreviewProvider
 
-    init(controller: WorkspaceController) {
+    init(controller: WorkspaceController, thumbnailCache: WindowThumbnailCache) {
         self.controller = controller
+        self.previewProvider = WindowPreviewProvider(thumbnailCache: thumbnailCache)
     }
 
     func windowItems(in workspace: String, from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
@@ -18,12 +19,7 @@ final class SwitcherContentProvider {
             .filter { controller.membership(for: $0.id) == workspace && !orderedIDSet.contains($0.id) }
             .sorted { $0.id < $1.id }
 
-        return (orderedWindows + remainingWindows).map {
-            previewProvider.makeItem(
-                for: $0,
-                includeThumbnail: !controller.isHiddenByWorkspace($0.id)
-            )
-        }
+        return (orderedWindows + remainingWindows).map(previewProvider.makeItem)
     }
 
     func workspaceGroups(from windows: [WindowSnapshot]) -> [WorkspaceSwitcherGroup] {

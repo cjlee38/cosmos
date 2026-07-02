@@ -9,18 +9,25 @@ final class SwitcherCoordinator {
 
     private let controller: WorkspaceController
     private let contentProvider: SwitcherContentProvider
+    private let thumbnailRefresher: WindowThumbnailRefresher
     private let overlay = SwitcherOverlayWindowController()
     private let eventLog: RuntimeEventLog
     private let refreshStatus: () -> Void
     private var session: Session?
+    private var thumbnailViewUpdateScheduled = false
 
     init(
         controller: WorkspaceController,
+        thumbnailRefresher: WindowThumbnailRefresher,
         eventLog: RuntimeEventLog,
         refreshStatus: @escaping () -> Void
     ) {
         self.controller = controller
-        self.contentProvider = SwitcherContentProvider(controller: controller)
+        self.contentProvider = SwitcherContentProvider(
+            controller: controller,
+            thumbnailCache: thumbnailRefresher.thumbnailCache
+        )
+        self.thumbnailRefresher = thumbnailRefresher
         self.eventLog = eventLog
         self.refreshStatus = refreshStatus
     }
@@ -29,11 +36,13 @@ final class SwitcherCoordinator {
         log("step window direction=\(direction)")
         switch session {
         case .windows(let items, let selectedIndex, let anchorFrame):
-            showWindows(items, selectedIndex: advancedIndex(
+            let nextIndex = advancedIndex(
                 selectedIndex,
                 count: items.count,
                 direction: direction
-            ), anchorFrame: anchorFrame)
+            )
+            showWindows(items, selectedIndex: nextIndex, anchorFrame: anchorFrame)
+            refreshManagedThumbnails(priorityIDs: selectedWindowIDs(items: items, selectedIndex: nextIndex))
         default:
             startWindowSession(direction: direction)
         }
@@ -43,11 +52,13 @@ final class SwitcherCoordinator {
         log("step workspace direction=\(direction)")
         switch session {
         case .workspaces(let groups, let selectedIndex, let anchorFrame):
-            showWorkspaces(groups, selectedIndex: advancedIndex(
+            let nextIndex = advancedIndex(
                 selectedIndex,
                 count: groups.count,
                 direction: direction
-            ), anchorFrame: anchorFrame)
+            )
+            showWorkspaces(groups, selectedIndex: nextIndex, anchorFrame: anchorFrame)
+            refreshManagedThumbnails()
         default:
             startWorkspaceSession(direction: direction)
         }
@@ -77,6 +88,7 @@ final class SwitcherCoordinator {
             direction: direction
         )
         showWindows(items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
+        refreshManagedThumbnails(priorityIDs: selectedWindowIDs(items: items, selectedIndex: selectedIndex))
     }
 
     private func startWorkspaceSession(direction: SwitcherDirection) {
@@ -95,6 +107,7 @@ final class SwitcherCoordinator {
             direction: direction
         )
         showWorkspaces(groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
+        refreshManagedThumbnails()
     }
 
     private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
@@ -126,6 +139,7 @@ final class SwitcherCoordinator {
         do {
             try controller.focusWindow(item.id)
             eventLog.record("Focused \(item.id)")
+            refreshManagedThumbnails(priorityIDs: [item.id])
             refreshStatus()
         } catch {
             eventLog.record("Window switch failed: \(error)")
@@ -149,10 +163,80 @@ final class SwitcherCoordinator {
         do {
             _ = try controller.switchWorkspace(to: workspace)
             eventLog.record("Switched to workspace \(workspace)")
+            refreshManagedThumbnails()
             refreshStatus()
         } catch {
             eventLog.record("Workspace switch failed: \(error)")
         }
+    }
+
+    private func refreshManagedThumbnails(priorityIDs: [WindowID] = []) {
+        thumbnailRefresher.refreshManagedThumbnails(
+            priorityIDs: priorityIDs,
+            onThumbnailUpdated: { [weak self] _ in
+                self?.scheduleThumbnailViewUpdate()
+            }
+        )
+    }
+
+    private func scheduleThumbnailViewUpdate() {
+        guard session != nil, !thumbnailViewUpdateScheduled else {
+            return
+        }
+
+        thumbnailViewUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            thumbnailViewUpdateScheduled = false
+            updateActiveSessionThumbnails()
+        }
+    }
+
+    private func updateActiveSessionThumbnails() {
+        switch session {
+        case .windows(_, let selectedIndex, let anchorFrame):
+            let windows = controller.currentWindows().windows
+            let items = contentProvider.windowItems(in: controller.activeWorkspace, from: windows)
+            guard !items.isEmpty else {
+                cancel()
+                return
+            }
+            session = .windows(
+                items: items,
+                selectedIndex: clampedIndex(selectedIndex, count: items.count),
+                anchorFrame: anchorFrame
+            )
+            overlay.updateWindowSwitcher(items: items)
+        case .workspaces(_, let selectedIndex, let anchorFrame):
+            let windows = controller.currentWindows().windows
+            let groups = contentProvider.workspaceGroups(from: windows)
+            guard !groups.isEmpty else {
+                cancel()
+                return
+            }
+            session = .workspaces(
+                groups: groups,
+                selectedIndex: clampedIndex(selectedIndex, count: groups.count),
+                anchorFrame: anchorFrame
+            )
+            overlay.updateWorkspaceSwitcher(groups: groups)
+        case nil:
+            return
+        }
+    }
+
+    private func selectedWindowIDs(items: [WindowSwitcherItem], selectedIndex: Int) -> [WindowID] {
+        guard items.indices.contains(selectedIndex) else {
+            return []
+        }
+        return [items[selectedIndex].id]
+    }
+
+    private func clampedIndex(_ index: Int, count: Int) -> Int {
+        min(max(index, 0), max(count - 1, 0))
     }
 
     private func initialIndex<T: Equatable>(
