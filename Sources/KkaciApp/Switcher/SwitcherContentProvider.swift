@@ -10,15 +10,20 @@ final class SwitcherContentProvider {
     }
 
     func windowItems(in workspace: String, from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
-        windows
-            .filter { controller.membership(for: $0.id) == workspace }
-            .sorted(by: compareWindows)
-            .map {
-                previewProvider.makeItem(
-                    for: $0,
-                    includeThumbnail: !controller.isHiddenByWorkspace($0.id)
-                )
-            }
+        let windowsByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+        let orderedIDs = controller.windowIDsByMostRecentFocus(in: workspace)
+        let orderedWindows = orderedIDs.compactMap { windowsByID[$0] }
+        let orderedIDSet = Set(orderedIDs)
+        let remainingWindows = windows
+            .filter { controller.membership(for: $0.id) == workspace && !orderedIDSet.contains($0.id) }
+            .sorted { $0.id < $1.id }
+
+        return (orderedWindows + remainingWindows).map {
+            previewProvider.makeItem(
+                for: $0,
+                includeThumbnail: !controller.isHiddenByWorkspace($0.id)
+            )
+        }
     }
 
     func workspaceGroups(from windows: [WindowSnapshot]) -> [WorkspaceSwitcherGroup] {
@@ -45,10 +50,4 @@ final class SwitcherContentProvider {
         }?.frame
     }
 
-    private func compareWindows(_ lhs: WindowSnapshot, _ rhs: WindowSnapshot) -> Bool {
-        if lhs.app.name == rhs.app.name {
-            return lhs.id < rhs.id
-        }
-        return lhs.app.name.localizedCaseInsensitiveCompare(rhs.app.name) == .orderedAscending
-    }
 }

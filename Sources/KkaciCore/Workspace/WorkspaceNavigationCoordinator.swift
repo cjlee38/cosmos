@@ -74,8 +74,12 @@ final class WorkspaceNavigationCoordinator {
 
     func focusCycledWindow(next: Bool, state: inout WorkspaceState) -> WindowFocusResult {
         let workspace = state.activeWorkspace
-        let current = focusedWindowInActiveWorkspace(state: state)
-            ?? state.focusTarget(for: workspace, fallback: nil)
+        let currentFocused = focusedWindowInActiveWorkspace(state: state)
+        if let currentFocused {
+            state.recordFocus(currentFocused, in: workspace)
+        }
+
+        let current = currentFocused ?? state.focusTarget(for: workspace, fallback: nil)
         let target = next
             ? state.nextWindow(in: workspace, after: current)
             : state.previousWindow(in: workspace, before: current)

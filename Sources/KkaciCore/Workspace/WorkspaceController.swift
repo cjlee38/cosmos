@@ -105,6 +105,10 @@ public final class WorkspaceController {
         windowSystem.focusedWindowID()
     }
 
+    public func windowIDsByMostRecentFocus(in workspace: String) -> [WindowID] {
+        state.windowIDsByMostRecentFocus(in: workspace, currentFocused: windowSystem.focusedWindowID())
+    }
+
     public func assignFocused(to workspace: String) throws -> WindowID {
         _ = syncWindows()
         return try assignmentCoordinator.assignFocused(to: workspace, state: &state)

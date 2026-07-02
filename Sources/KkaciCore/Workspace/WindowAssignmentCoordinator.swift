@@ -77,12 +77,10 @@ final class WindowAssignmentCoordinator {
         }
 
         let previousWorkspace = state.membership(for: id)
-        let sourceWorkspace = previousWorkspace ?? state.activeWorkspace
         state.assign(id, to: workspace)
 
         do {
             try visibilityCoordinator.applyActiveWorkspace(state: &state, strictWindowIDs: [id])
-            state.clearFocus(id, in: sourceWorkspace)
             return WindowMoveResult(windowID: id, workspace: workspace)
         } catch {
             restoreMembership(id, to: previousWorkspace, state: &state)

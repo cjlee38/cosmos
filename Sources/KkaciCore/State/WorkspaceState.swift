@@ -5,7 +5,6 @@ struct WorkspaceState {
     private var memberships = WorkspaceMemberships()
     private var liveWindows = LiveWindowSetTracker()
     private var hiddenFrames = HiddenWindowFrameStore()
-    private var focusHistory = WorkspaceFocusHistory()
 
     init(workspaces: WorkspaceConfig = WorkspaceConfig(names: ["1", "2", "3"])) {
         self.catalog = WorkspaceCatalog(workspaces: workspaces)
@@ -66,7 +65,6 @@ struct WorkspaceState {
 
     mutating func applyWorkspaces(_ workspaces: WorkspaceConfig) {
         let referencedWorkspaces = memberships.referencedWorkspaces
-            .union(focusHistory.referencedWorkspaces)
             .union([activeWorkspace])
         catalog.apply(workspaces, keeping: referencedWorkspaces)
     }
@@ -77,12 +75,10 @@ struct WorkspaceState {
 
     mutating func assign(_ id: WindowID, to workspace: String) {
         memberships.assign(id, to: workspace)
-        focusHistory.record(id, in: workspace)
     }
 
     mutating func unassign(_ id: WindowID) {
         memberships.unassign(id)
-        focusHistory.remove(id)
     }
 
     mutating func capture(_ ids: [WindowID], into workspace: String) {
@@ -99,15 +95,11 @@ struct WorkspaceState {
     }
 
     mutating func recordFocus(_ id: WindowID, in workspace: String) {
-        focusHistory.record(id, in: workspace)
-    }
-
-    mutating func clearFocus(_ id: WindowID, in workspace: String) {
-        focusHistory.clear(id, in: workspace)
+        memberships.recordFocus(id, in: workspace)
     }
 
     func focusTarget(for workspace: String, fallback: WindowID?) -> WindowID? {
-        focusHistory.target(for: workspace, fallback: fallback)
+        windowIDs(in: workspace).first ?? fallback
     }
 
     func nextWorkspace(after workspace: String) -> String {
@@ -122,17 +114,20 @@ struct WorkspaceState {
         memberships.windowIDs(in: workspace)
     }
 
+    func windowIDsByMostRecentFocus(in workspace: String, currentFocused: WindowID? = nil) -> [WindowID] {
+        memberships.windowIDs(in: workspace, currentFocused: currentFocused)
+    }
+
     func nextWindow(in workspace: String, after id: WindowID?) -> WindowID? {
-        cycledValue(in: windowIDs(in: workspace), after: id, direction: .forward)
+        cycledValue(in: windowIDsByMostRecentFocus(in: workspace), after: id, direction: .forward)
     }
 
     func previousWindow(in workspace: String, before id: WindowID?) -> WindowID? {
-        cycledValue(in: windowIDs(in: workspace), after: id, direction: .backward)
+        cycledValue(in: windowIDsByMostRecentFocus(in: workspace), after: id, direction: .backward)
     }
 
     private mutating func removeWindow(_ id: WindowID) {
         memberships.remove(id)
         hiddenFrames.clear(id)
-        focusHistory.remove(id)
     }
 }

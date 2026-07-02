@@ -24,7 +24,7 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.membership(for: 200), "3")
     }
 
-    func testRemovedWindowsArePrunedFromMembershipHiddenStateAndFocusHistory() {
+    func testRemovedWindowsArePrunedFromMembershipHiddenStateAndMRUOrder() {
         var state = WorkspaceState()
         _ = state.sync(aliveWindowIDs: [100, 200])
         state.assign(200, to: "2")
@@ -113,5 +113,17 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.nextWindow(in: "2", after: 300), 100)
         XCTAssertEqual(state.previousWindow(in: "2", before: 100), 300)
         XCTAssertNil(state.nextWindow(in: "9", after: nil))
+    }
+
+    func testWindowOrderUsesMostRecentFocusWithFocusedOverride() {
+        var state = WorkspaceState()
+        state.assign(100, to: "2")
+        state.assign(200, to: "2")
+        state.assign(300, to: "2")
+        state.recordFocus(100, in: "2")
+
+        XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2"), [100, 300, 200])
+        XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2", currentFocused: 200), [200, 100, 300])
+        XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2", currentFocused: 999), [100, 300, 200])
     }
 }

@@ -419,6 +419,23 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(result, .noWindowsInWorkspace("2"))
     }
 
+    func testWindowIDsByMostRecentFocusPutsFocusedWindowFirst() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two"),
+            .window(id: 300, title: "Three"),
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "1")
+        try controller.assignWindow(300, to: "1")
+        windowSystem.focusedWindow = 100
+
+        XCTAssertEqual(controller.windowIDsByMostRecentFocus(in: "1"), [100, 300, 200])
+    }
+
     func testMoveFocusedWindowToInactiveWorkspaceOnlyHidesMovedWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
