@@ -210,6 +210,20 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
     }
 
+    func testWorkspaceFrameUsesOriginalFrameForHiddenWindow() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", frame: .frame(x: 40, y: 50, width: 300, height: 200)),
+        ])
+        let controller = makeController(windowSystem)
+        let originalFrame = try XCTUnwrap(windowSystem.frames[100])
+
+        _ = controller.listWindows()
+        try controller.hideWindow(100)
+
+        XCTAssertEqual(windowSystem.frames[100]?.origin, hidePoint)
+        XCTAssertEqual(controller.workspaceFrame(for: 100), originalFrame)
+    }
+
     func testAssigningWindowToInactiveWorkspaceHidesItImmediately() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),

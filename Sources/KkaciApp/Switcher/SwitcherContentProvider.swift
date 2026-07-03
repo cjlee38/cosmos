@@ -19,7 +19,12 @@ final class SwitcherContentProvider {
             .filter { controller.membership(for: $0.id) == workspace && !orderedIDSet.contains($0.id) }
             .sorted { $0.id < $1.id }
 
-        return (orderedWindows + remainingWindows).map(previewProvider.makeItem)
+        return (orderedWindows + remainingWindows).map { window in
+            previewProvider.makeItem(
+                for: window,
+                frame: controller.workspaceFrame(for: window.id)
+            )
+        }
     }
 
     func workspaceGroups(from windows: [WindowSnapshot]) -> [WorkspaceSwitcherGroup] {

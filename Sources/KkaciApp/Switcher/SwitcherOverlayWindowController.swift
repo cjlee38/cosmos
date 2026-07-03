@@ -42,7 +42,6 @@ final class SwitcherOverlayWindowController: NSWindowController {
         let listView = viewFactory.makeWindowList(
             items: items,
             selectedIndex: selectedIndex,
-            compact: false,
             availableFrame: screenFrame,
             onHover: onHover,
             onClick: onClick
@@ -66,7 +65,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
         windowListView = nil
         workspaceListView = listView
         setContent(
-            title: "Workspaces",
+            title: nil,
             content: listView
         )
         showOverlay(in: screenFrame)

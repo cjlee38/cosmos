@@ -101,6 +101,10 @@ public final class WorkspaceController {
         state.isHidden(id)
     }
 
+    public func workspaceFrame(for id: WindowID) -> WindowFrame? {
+        state.hiddenFrame(for: id) ?? windowStore.snapshot(for: id)?.frame
+    }
+
     public func focusedWindowID() -> WindowID? {
         windowSystem.focusedWindowID()
     }

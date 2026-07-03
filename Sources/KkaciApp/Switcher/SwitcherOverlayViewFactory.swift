@@ -47,12 +47,11 @@ final class SwitcherOverlayViewFactory {
     func makeWindowList(
         items: [WindowSwitcherItem],
         selectedIndex: Int,
-        compact: Bool,
         availableFrame: NSRect,
         onHover: ((WindowID) -> Void)? = nil,
         onClick: ((WindowID) -> Void)? = nil
     ) -> WindowSwitcherListView {
-        let metrics = tileMetrics(count: items.count, compact: compact, availableFrame: availableFrame)
+        let metrics = tileMetrics(count: items.count, availableFrame: availableFrame)
         let frame = NSRect(x: 0, y: 0, width: metrics.contentWidth, height: metrics.contentHeight)
         let listView = WindowSwitcherListView(frame: frame)
 
@@ -84,105 +83,25 @@ final class SwitcherOverlayViewFactory {
         selectedIndex: Int,
         availableFrame: NSRect
     ) -> WorkspaceSwitcherListView {
-        let groupWidth = min(260, max(210, availableFrame.width * 0.24))
-        let maxContentWidth = max(1, availableFrame.width * 0.86)
-        let spacing: CGFloat = 12
-        let columns = max(1, min(groups.count, Int((maxContentWidth + spacing) / (groupWidth + spacing))))
-        let rows = max(1, Int(ceil(Double(max(groups.count, 1)) / Double(columns))))
-        var renderedGroups: [(view: NSView, tileViewsByID: [WindowID: [WindowSwitcherTileView]])] = []
-        var rowHeights = Array(repeating: CGFloat(0), count: rows)
-
-        for (index, group) in groups.enumerated() {
-            let rendered = makeWorkspaceGroup(
-                group,
-                isSelected: index == selectedIndex,
-                width: groupWidth,
-                availableFrame: availableFrame
-            )
-            renderedGroups.append(rendered)
-            rowHeights[index / columns] = max(rowHeights[index / columns], rendered.view.frame.height)
-        }
-
-        let contentWidth = CGFloat(columns) * groupWidth + CGFloat(max(columns - 1, 0)) * spacing
-        let contentHeight = rowHeights.reduce(0, +) + CGFloat(max(rows - 1, 0)) * spacing
-        let listView = WorkspaceSwitcherListView(frame: NSRect(x: 0, y: 0, width: contentWidth, height: contentHeight))
-
-        var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
-        for (index, rendered) in renderedGroups.enumerated() {
-            let row = index / columns
-            let column = index % columns
-            let y = contentHeight
-                - rowHeights.prefix(row + 1).reduce(0, +)
-                - CGFloat(row) * spacing
-            rendered.view.frame.origin = NSPoint(
-                x: CGFloat(column) * (groupWidth + spacing),
-                y: y
-            )
-            mergeTileViews(rendered.tileViewsByID, into: &tileViewsByID)
-            listView.addSubview(rendered.view)
-        }
-
-        listView.setTileViews(tileViewsByID)
-        return listView
+        WorkspaceSwitcherListView(
+            groups: groups,
+            selectedIndex: selectedIndex,
+            availableFrame: availableFrame
+        )
     }
 
-    private func makeWorkspaceGroup(
-        _ group: WorkspaceSwitcherGroup,
-        isSelected: Bool,
-        width: CGFloat,
-        availableFrame: NSRect
-    ) -> (view: NSView, tileViewsByID: [WindowID: [WindowSwitcherTileView]]) {
-        let padding: CGFloat = 12
-        let titleHeight: CGFloat = 20
-        let title = label(
-            "Workspace \(group.name)",
-            font: .systemFont(ofSize: 14, weight: .semibold),
-            color: .white
-        )
-        title.frame = NSRect(x: padding, y: 0, width: width - padding * 2, height: titleHeight)
-
-        let windowListFrame = NSRect(x: 0, y: 0, width: width - padding * 2, height: availableFrame.height)
-        let windows = makeWindowList(
-            items: group.windows,
-            selectedIndex: -1,
-            compact: true,
-            availableFrame: windowListFrame
-        )
-
-        let groupHeight = padding + titleHeight + 10 + windows.frame.height + padding
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: groupHeight))
-        container.wantsLayer = true
-        container.layer?.cornerRadius = 8
-        container.layer?.borderWidth = isSelected ? 2 : 1
-        container.layer?.borderColor = isSelected
-            ? NSColor.controlAccentColor.cgColor
-            : NSColor.white.withAlphaComponent(0.18).cgColor
-        container.layer?.backgroundColor = isSelected
-            ? NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
-            : NSColor.black.withAlphaComponent(0.22).cgColor
-
-        windows.frame.origin = NSPoint(x: padding, y: padding)
-        title.frame.origin.y = padding + windows.frame.height + 10
-        container.addSubview(windows)
-        container.addSubview(title)
-
-        return (container, windows.tileViewsByID)
-    }
-
-    private func tileMetrics(count: Int, compact: Bool, availableFrame: NSRect) -> WindowTileMetrics {
-        let spacing: CGFloat = compact ? 8 : 10
-        let targetWidth = targetTileWidth(count: count, compact: compact)
-        let minWidth: CGFloat = compact ? 82 : 104
-        let maxContentWidth = max(minWidth, availableFrame.width * (compact ? 1 : 0.86))
+    private func tileMetrics(count: Int, availableFrame: NSRect) -> WindowTileMetrics {
+        let spacing: CGFloat = 10
+        let targetWidth = targetTileWidth(count: count)
+        let minWidth: CGFloat = 104
+        let maxContentWidth = max(minWidth, availableFrame.width * 0.86)
         let itemCount = max(count, 1)
         let maxColumns = max(1, Int((maxContentWidth + spacing) / (minWidth + spacing)))
         let columns = max(1, min(itemCount, maxColumns))
         let widthThatFits = (maxContentWidth - CGFloat(max(columns - 1, 0)) * spacing) / CGFloat(columns)
         let tileWidth = min(targetWidth, max(minWidth, floor(widthThatFits)))
         let rows = Int(ceil(Double(itemCount) / Double(columns)))
-        let previewHeight = compact
-            ? max(48, min(64, floor(tileWidth * 0.62)))
-            : max(68, min(174, floor(tileWidth * 0.62)))
+        let previewHeight = max(68, min(174, floor(tileWidth * 0.62)))
         let tileHeight = previewHeight + (tileWidth < 120 ? 50 : 57)
         let contentWidth = CGFloat(columns) * tileWidth + CGFloat(max(columns - 1, 0)) * spacing
         let contentHeight = CGFloat(rows) * tileHeight + CGFloat(max(rows - 1, 0)) * spacing
@@ -198,11 +117,7 @@ final class SwitcherOverlayViewFactory {
         )
     }
 
-    private func targetTileWidth(count: Int, compact: Bool) -> CGFloat {
-        if compact {
-            return 104
-        }
-
+    private func targetTileWidth(count: Int) -> CGFloat {
         switch count {
         case ...1:
             return 280
@@ -226,15 +141,6 @@ final class SwitcherOverlayViewFactory {
                 - CGFloat(row + 1) * metrics.height
                 - CGFloat(row) * metrics.spacing
         )
-    }
-
-    private func mergeTileViews(
-        _ source: [WindowID: [WindowSwitcherTileView]],
-        into destination: inout [WindowID: [WindowSwitcherTileView]]
-    ) {
-        for (id, views) in source {
-            destination[id, default: []].append(contentsOf: views)
-        }
     }
 
     private func label(_ text: String, font: NSFont, color: NSColor) -> NSTextField {
@@ -273,20 +179,6 @@ final class WindowSwitcherListView: NSView {
     func updateSelection(selectedID: WindowID) {
         for (id, tiles) in tileViewsByID {
             tiles.forEach { $0.updateSelection(id == selectedID) }
-        }
-    }
-}
-
-final class WorkspaceSwitcherListView: NSView {
-    private var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
-
-    func setTileViews(_ tileViewsByID: [WindowID: [WindowSwitcherTileView]]) {
-        self.tileViewsByID = tileViewsByID
-    }
-
-    func updatePreviews(groups: [WorkspaceSwitcherGroup]) {
-        for item in groups.flatMap(\.windows) {
-            tileViewsByID[item.id]?.forEach { $0.updatePreview(item) }
         }
     }
 }

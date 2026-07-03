@@ -10,6 +10,7 @@ struct WindowSwitcherItem {
     let id: WindowID
     let appName: String
     let title: String
+    let frame: WindowFrame?
     let preview: NSImage?
     let icon: NSImage?
 
