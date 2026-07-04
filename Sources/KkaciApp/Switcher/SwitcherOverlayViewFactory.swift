@@ -81,12 +81,16 @@ final class SwitcherOverlayViewFactory {
     func makeWorkspaceList(
         groups: [WorkspaceSwitcherGroup],
         selectedIndex: Int,
-        availableFrame: NSRect
+        availableFrame: NSRect,
+        onHover: @escaping (String) -> Void,
+        onClick: @escaping (String) -> Void
     ) -> WorkspaceSwitcherListView {
         WorkspaceSwitcherListView(
             groups: groups,
             selectedIndex: selectedIndex,
-            availableFrame: availableFrame
+            availableFrame: availableFrame,
+            onHover: onHover,
+            onClick: onClick
         )
     }
 

@@ -4,10 +4,16 @@ import KkaciCore
 final class SwitcherContentProvider {
     private let controller: WorkspaceController
     private let previewProvider: WindowPreviewProvider
+    private let workspaceThumbnailCache: WorkspaceThumbnailCache
 
-    init(controller: WorkspaceController, thumbnailCache: WindowThumbnailCache) {
+    init(
+        controller: WorkspaceController,
+        windowThumbnailCache: WindowThumbnailCache,
+        workspaceThumbnailCache: WorkspaceThumbnailCache
+    ) {
         self.controller = controller
-        self.previewProvider = WindowPreviewProvider(thumbnailCache: thumbnailCache)
+        self.previewProvider = WindowPreviewProvider(thumbnailCache: windowThumbnailCache)
+        self.workspaceThumbnailCache = workspaceThumbnailCache
     }
 
     func windowItems(in workspace: String, from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
@@ -31,7 +37,8 @@ final class SwitcherContentProvider {
         controller.workspaces.map { workspace in
             WorkspaceSwitcherGroup(
                 name: workspace,
-                windows: windowItems(in: workspace, from: windows)
+                windows: workspacePreviewItems(in: workspace, from: windows),
+                preview: workspaceThumbnailCache.thumbnail(for: workspace)
             )
         }
     }
@@ -49,6 +56,17 @@ final class SwitcherContentProvider {
                 && !$0.isMinimized
                 && $0.frame != nil
         }?.frame
+    }
+
+    private func workspacePreviewItems(in workspace: String, from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
+        windows
+            .filter { controller.membership(for: $0.id) == workspace && !$0.isMinimized }
+            .map { window in
+                previewProvider.makeItem(
+                    for: window,
+                    frame: controller.workspaceFrame(for: window.id)
+                )
+            }
     }
 
 }

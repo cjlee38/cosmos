@@ -12,8 +12,9 @@ final class DebugStatusRenderer {
     }
 
     func render() -> String {
-        let result = controller.currentWindows()
+        let result = controller.refreshWindows()
         let focused = controller.focusedWindowID()
+        let cgWindowOrder = CGWindowOrderSnapshot()
 
         var lines: [String] = [
             "kkaci debug status",
@@ -45,7 +46,8 @@ final class DebugStatusRenderer {
                 let minimized = window.isMinimized ? "minimized" : "normal"
                 let title = window.title.isEmpty ? "(untitled)" : window.title
                 let frame = window.frame.map(formatFrame) ?? "frame=?"
-                lines.append("\(marker) id=\(window.id) ws=\(workspace) \(hidden) \(minimized) pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)")
+                let cgOrder = cgWindowOrder.format(window.id)
+                lines.append("\(marker) id=\(window.id) \(cgOrder) ws=\(workspace) \(hidden) \(minimized) pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)")
             }
         }
 
@@ -58,5 +60,41 @@ final class DebugStatusRenderer {
 
     private func format(_ value: CGFloat) -> String {
         String(format: "%.0f", Double(value))
+    }
+}
+
+private struct CGWindowOrderSnapshot {
+    private let allIndexByID: [WindowID: Int]
+    private let screenIndexByID: [WindowID: Int]
+
+    init() {
+        self.allIndexByID = Self.indexByWindowID(options: [.optionAll, .excludeDesktopElements])
+        self.screenIndexByID = Self.indexByWindowID(options: [.optionOnScreenOnly, .excludeDesktopElements])
+    }
+
+    func format(_ id: WindowID) -> String {
+        "cgAll=\(format(allIndexByID[id])) cgScreen=\(format(screenIndexByID[id]))"
+    }
+
+    private func format(_ index: Int?) -> String {
+        index.map(String.init) ?? "-"
+    }
+
+    private static func indexByWindowID(options: CGWindowListOption) -> [WindowID: Int] {
+        guard let rawList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return [:]
+        }
+
+        var indexByID: [WindowID: Int] = [:]
+        for (index, info) in rawList.enumerated() {
+            guard (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  let number = info[kCGWindowNumber as String] as? NSNumber
+            else {
+                continue
+            }
+
+            indexByID[WindowID(number.uint32Value)] = index
+        }
+        return indexByID
     }
 }

@@ -80,8 +80,12 @@ public final class WorkspaceController {
         self.state = WorkspaceState(workspaces: configuration.currentConfig.workspaces)
     }
 
-    func listWindows() -> WindowListResult {
+    public func refreshWindows() -> WindowListResult {
         syncWindows()
+    }
+
+    func listWindows() -> WindowListResult {
+        refreshWindows()
     }
 
     public func currentWindows() -> WindowListResult {

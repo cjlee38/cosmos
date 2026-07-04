@@ -50,11 +50,7 @@ final class AXApplicationObserverRegistry {
 
         let context = Unmanaged.passUnretained(self).toOpaque()
         var didRegisterAnyNotification = false
-        for notification in [
-            kAXFocusedWindowChangedNotification,
-            kAXWindowCreatedNotification,
-            kAXUIElementDestroyedNotification,
-        ] {
+        for notification in Self.observedNotifications {
             let error = AXObserverAddNotification(
                 observer,
                 appElement,
@@ -98,4 +94,15 @@ final class AXApplicationObserverRegistry {
         }
         observedApps.removeAll()
     }
+
+    private static let observedNotifications = [
+        kAXFocusedWindowChangedNotification,
+        kAXWindowCreatedNotification,
+        kAXUIElementDestroyedNotification,
+        kAXWindowMovedNotification,
+        kAXWindowResizedNotification,
+        kAXWindowMiniaturizedNotification,
+        kAXWindowDeminiaturizedNotification,
+        kAXTitleChangedNotification,
+    ]
 }

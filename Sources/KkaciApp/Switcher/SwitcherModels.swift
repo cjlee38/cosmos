@@ -22,4 +22,5 @@ struct WindowSwitcherItem {
 struct WorkspaceSwitcherGroup {
     let name: String
     let windows: [WindowSwitcherItem]
+    let preview: NSImage?
 }

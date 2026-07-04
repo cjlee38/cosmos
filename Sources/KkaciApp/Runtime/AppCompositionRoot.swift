@@ -15,7 +15,8 @@ struct AppCompositionRoot {
         )
         let thumbnailRefresher = WindowThumbnailRefresher(
             controller: controller,
-            thumbnailCache: WindowThumbnailCache()
+            thumbnailCache: WindowThumbnailCache(),
+            workspaceThumbnailCache: WorkspaceThumbnailCache()
         )
         let keyboardShortcutManager = KeyboardShortcutManager()
 

@@ -13,11 +13,9 @@ public final class WindowRegistry: WindowSystem {
     public func refresh() -> [WindowSnapshot] {
         let handles = axClient.enumerateWindows()
         handlesByID = Dictionary(uniqueKeysWithValues: handles.map { ($0.id, $0) })
-        return handles.map(axClient.snapshot).sorted { lhs, rhs in
-            if lhs.app.name == rhs.app.name {
-                return lhs.id < rhs.id
-            }
-            return lhs.app.name.localizedCaseInsensitiveCompare(rhs.app.name) == .orderedAscending
+        let frontToBackIndex = CGWindowStackOrder.frontToBackIndexByWindowID()
+        return handles.map(axClient.snapshot).sorted {
+            Self.sortByFrontToBackOrder($0, $1, frontToBackIndex: frontToBackIndex)
         }
     }
 
@@ -56,5 +54,55 @@ public final class WindowRegistry: WindowSystem {
             return
         }
         axClient.focus(handle)
+    }
+
+    private static func sortByFrontToBackOrder(
+        _ lhs: WindowSnapshot,
+        _ rhs: WindowSnapshot,
+        frontToBackIndex: [WindowID: Int]
+    ) -> Bool {
+        switch (frontToBackIndex[lhs.id], frontToBackIndex[rhs.id]) {
+        case (let lhsIndex?, let rhsIndex?):
+            if lhsIndex != rhsIndex {
+                return lhsIndex < rhsIndex
+            }
+            return lhs.id < rhs.id
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            return fallbackWindowOrder(lhs, rhs)
+        }
+    }
+
+    private static func fallbackWindowOrder(_ lhs: WindowSnapshot, _ rhs: WindowSnapshot) -> Bool {
+        if lhs.app.name == rhs.app.name {
+            return lhs.id < rhs.id
+        }
+        return lhs.app.name.localizedCaseInsensitiveCompare(rhs.app.name) == .orderedAscending
+    }
+}
+
+private enum CGWindowStackOrder {
+    static func frontToBackIndexByWindowID() -> [WindowID: Int] {
+        guard let rawList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return [:]
+        }
+
+        var indexByID: [WindowID: Int] = [:]
+        for (index, info) in rawList.enumerated() {
+            guard (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  let number = info[kCGWindowNumber as String] as? NSNumber
+            else {
+                continue
+            }
+
+            indexByID[WindowID(number.uint32Value)] = index
+        }
+        return indexByID
     }
 }

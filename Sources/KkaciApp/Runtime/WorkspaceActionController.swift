@@ -86,7 +86,7 @@ final class WorkspaceActionController {
             if result.workspace != controller.activeWorkspace {
                 suppressedFocusedWindowID = result.windowID
             }
-            thumbnailRefresher.refreshManagedThumbnails()
+            refreshThumbnails()
             eventLog.record("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
             eventLog.record("Error: \(error)")
@@ -94,7 +94,7 @@ final class WorkspaceActionController {
     }
 
     func createWorkspace(named workspace: String) {
-        perform("Created workspace \(workspace)", refreshThumbnails: false) {
+        perform("Created workspace \(workspace)", shouldRefreshThumbnails: false) {
             _ = try controller.createWorkspace(named: workspace)
         }
     }
@@ -112,10 +112,10 @@ final class WorkspaceActionController {
         do {
             switch try controller.syncWorkspaceToFocusedWindow() {
             case .switched(let windowID, let workspace):
-                thumbnailRefresher.refreshManagedThumbnails()
+                refreshThumbnails()
                 eventLog.record("Switched to workspace \(workspace) for \(windowID)")
             case .alreadyActive(_, _), .noFocusedWindow, .unmanagedWindow(_):
-                thumbnailRefresher.refreshManagedThumbnails()
+                refreshThumbnails()
                 refreshSurfaces()
             }
         } catch {
@@ -126,7 +126,7 @@ final class WorkspaceActionController {
     func applyExternalWindowSetChange() {
         do {
             _ = try controller.applyExternalWindowSetChange()
-            thumbnailRefresher.refreshManagedThumbnails()
+            refreshThumbnails()
             refreshSurfaces()
         } catch {
             eventLog.record("Window update failed: \(error)")
@@ -135,19 +135,19 @@ final class WorkspaceActionController {
 
     func restoreAllHiddenWindows() {
         let result = controller.restoreAllHiddenWindows()
-        thumbnailRefresher.refreshManagedThumbnails()
+        refreshThumbnails()
         eventLog.record("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
     }
 
     private func perform(
         _ successMessage: String,
-        refreshThumbnails: Bool = true,
+        shouldRefreshThumbnails: Bool = true,
         action: () throws -> Void
     ) {
         do {
             try action()
-            if refreshThumbnails {
-                thumbnailRefresher.refreshManagedThumbnails()
+            if shouldRefreshThumbnails {
+                refreshThumbnails()
             }
             eventLog.record(successMessage)
         } catch {
@@ -162,6 +162,10 @@ final class WorkspaceActionController {
         case .noWindowsInWorkspace(let workspace):
             eventLog.record("No windows in workspace \(workspace)")
         }
+    }
+
+    private func refreshThumbnails() {
+        thumbnailRefresher.refreshAllThumbnails()
     }
 
 }

@@ -25,7 +25,8 @@ final class SwitcherCoordinator {
         self.controller = controller
         self.contentProvider = SwitcherContentProvider(
             controller: controller,
-            thumbnailCache: thumbnailRefresher.thumbnailCache
+            windowThumbnailCache: thumbnailRefresher.thumbnailCache,
+            workspaceThumbnailCache: thumbnailRefresher.workspaceThumbnailCache
         )
         self.thumbnailRefresher = thumbnailRefresher
         self.eventLog = eventLog
@@ -57,8 +58,7 @@ final class SwitcherCoordinator {
                 count: groups.count,
                 direction: direction
             )
-            showWorkspaces(groups, selectedIndex: nextIndex, anchorFrame: anchorFrame)
-            refreshManagedThumbnails()
+            selectWorkspace(at: nextIndex, groups: groups, anchorFrame: anchorFrame)
         default:
             startWorkspaceSession(direction: direction)
         }
@@ -107,7 +107,6 @@ final class SwitcherCoordinator {
             direction: direction
         )
         showWorkspaces(groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
-        refreshManagedThumbnails()
     }
 
     private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
@@ -129,7 +128,17 @@ final class SwitcherCoordinator {
     private func showWorkspaces(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
         session = .workspaces(groups: groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show workspaces count=\(groups.count) selected=\(selectedIndex)")
-        overlay.showWorkspaceSwitcher(groups: groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
+        overlay.showWorkspaceSwitcher(
+            groups: groups,
+            selectedIndex: selectedIndex,
+            anchorFrame: anchorFrame,
+            onHover: { [weak self] name in
+                _ = self?.selectWorkspace(name: name)
+            },
+            onClick: { [weak self] name in
+                self?.commitWorkspace(name: name)
+            }
+        )
     }
 
     func commitWindowSelection() {
@@ -149,7 +158,7 @@ final class SwitcherCoordinator {
         do {
             try controller.focusWindow(item.id)
             eventLog.record("Focused \(item.id)")
-            refreshManagedThumbnails(priorityIDs: [item.id])
+            refreshSceneThumbnails(priorityIDs: [item.id])
             refreshStatus()
         } catch {
             eventLog.record("Window switch failed: \(error)")
@@ -161,19 +170,47 @@ final class SwitcherCoordinator {
             return
         }
 
-        session = nil
-        overlay.hideOverlay()
-
         guard groups.indices.contains(selectedIndex) else {
             return
         }
 
-        let workspace = groups[selectedIndex].name
-        log("commit workspace=\(workspace) selected=\(selectedIndex)")
+        commitWorkspace(name: groups[selectedIndex].name)
+    }
+
+    @discardableResult
+    private func selectWorkspace(name: String) -> Bool {
+        guard case .workspaces(let groups, _, let anchorFrame) = session,
+              let index = groups.firstIndex(where: { $0.name == name })
+        else {
+            return false
+        }
+
+        selectWorkspace(at: index, groups: groups, anchorFrame: anchorFrame)
+        return true
+    }
+
+    private func selectWorkspace(
+        at index: Int,
+        groups: [WorkspaceSwitcherGroup],
+        anchorFrame: WindowFrame?
+    ) {
+        guard groups.indices.contains(index) else {
+            return
+        }
+
+        session = .workspaces(groups: groups, selectedIndex: index, anchorFrame: anchorFrame)
+        overlay.updateWorkspaceSelection(selectedName: groups[index].name)
+    }
+
+    private func commitWorkspace(name: String) {
+        session = nil
+        overlay.hideOverlay()
+
+        log("commit workspace=\(name)")
         do {
-            _ = try controller.switchWorkspace(to: workspace)
-            eventLog.record("Switched to workspace \(workspace)")
-            refreshManagedThumbnails()
+            _ = try controller.switchWorkspace(to: name)
+            eventLog.record("Switched to workspace \(name)")
+            refreshSceneThumbnails()
             refreshStatus()
         } catch {
             eventLog.record("Workspace switch failed: \(error)")
@@ -216,6 +253,15 @@ final class SwitcherCoordinator {
 
     private func refreshManagedThumbnails(priorityIDs: [WindowID] = []) {
         thumbnailRefresher.refreshManagedThumbnails(
+            priorityIDs: priorityIDs,
+            onThumbnailUpdated: { [weak self] _ in
+                self?.scheduleThumbnailViewUpdate()
+            }
+        )
+    }
+
+    private func refreshSceneThumbnails(priorityIDs: [WindowID] = []) {
+        thumbnailRefresher.refreshAllThumbnails(
             priorityIDs: priorityIDs,
             onThumbnailUpdated: { [weak self] _ in
                 self?.scheduleThumbnailViewUpdate()

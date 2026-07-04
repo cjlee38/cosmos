@@ -77,7 +77,7 @@ final class AppRuntime {
     private func reloadConfig() {
         do {
             try configRuntime.reload(actions: statusMenuController)
-            thumbnailRefresher.refreshManagedThumbnails()
+            thumbnailRefresher.refreshAllThumbnails()
             eventLog.record("Config reloaded")
         } catch {
             eventLog.record("Config reload failed; keeping previous config: \(error)")
@@ -114,7 +114,7 @@ final class AppRuntime {
         do {
             let bootstrapResult = try controller.bootstrapWindowState(defaultWorkspace: "1")
             startWindowEventMonitor()
-            thumbnailRefresher.refreshManagedThumbnails()
+            thumbnailRefresher.refreshAllThumbnails()
             eventLog.record(bootstrapMessage(for: bootstrapResult.hiddenRecords))
             return true
         } catch {
