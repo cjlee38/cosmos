@@ -31,6 +31,10 @@ final class SwitcherOverlayWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    var isOverlayVisible: Bool {
+        window?.isVisible == true
+    }
+
     func showWindowSwitcher(
         items: [WindowSwitcherItem],
         selectedIndex: Int,

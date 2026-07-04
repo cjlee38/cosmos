@@ -32,6 +32,7 @@ private enum WorkspaceThumbnailRenderer {
         if positionedWindows.isEmpty {
             drawEmptyState(in: NSRect(origin: .zero, size: size))
         } else {
+            // TODO: If rendering cost becomes noticeable, consider front-to-back occlusion culling.
             for (item, frame) in positionedWindows.reversed() {
                 drawWindow(item, frame: frame, desktopBounds: desktopBounds, imageSize: size)
             }
@@ -47,12 +48,28 @@ private enum WorkspaceThumbnailRenderer {
         desktopBounds: CGRect,
         imageSize: NSSize
     ) {
-        let rect = previewFrame(for: frame, desktopBounds: desktopBounds, imageSize: imageSize)
+        let windowRect = frame.rect
+        let visibleRect = windowRect.intersection(desktopBounds)
+        guard !visibleRect.isNull, visibleRect.width > 0, visibleRect.height > 0 else {
+            return
+        }
+
+        let rect = previewFrame(for: visibleRect, desktopBounds: desktopBounds, imageSize: imageSize)
+        guard rect.width >= 1, rect.height >= 1 else {
+            return
+        }
+
+        let radius = min(8, rect.width / 6, rect.height / 6)
         NSColor.black.withAlphaComponent(0.50).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).fill()
+        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
 
         if let preview = item.preview {
-            preview.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            preview.draw(
+                in: rect,
+                from: sourceRect(for: visibleRect, in: windowRect, imageSize: preview.size),
+                operation: .sourceOver,
+                fraction: 1.0
+            )
         } else if let icon = item.icon {
             let iconRect = rect.insetBy(dx: rect.width * 0.30, dy: rect.height * 0.30)
             icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
@@ -61,13 +78,13 @@ private enum WorkspaceThumbnailRenderer {
         }
 
         NSColor.white.withAlphaComponent(0.18).setStroke()
-        let border = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
+        let border = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
         border.lineWidth = 1
         border.stroke()
     }
 
     private static func previewFrame(
-        for frame: WindowFrame,
+        for visibleRect: CGRect,
         desktopBounds: CGRect,
         imageSize: NSSize
     ) -> NSRect {
@@ -80,15 +97,24 @@ private enum WorkspaceThumbnailRenderer {
             x: drawingBounds.midX - usedSize.width / 2,
             y: drawingBounds.midY - usedSize.height / 2
         )
-        let size = CGSize(
-            width: max(28, frame.size.width * scale),
-            height: max(20, frame.size.height * scale)
-        )
-        let x = origin.x + (frame.origin.x - desktopBounds.minX) * scale
-        let yFromTop = (frame.origin.y - desktopBounds.minY) * scale
+        let size = CGSize(width: visibleRect.width * scale, height: visibleRect.height * scale)
+        let x = origin.x + (visibleRect.minX - desktopBounds.minX) * scale
+        let yFromTop = (visibleRect.minY - desktopBounds.minY) * scale
         let y = origin.y + usedSize.height - yFromTop - size.height
 
         return NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    private static func sourceRect(for visibleRect: CGRect, in windowRect: CGRect, imageSize: NSSize) -> NSRect {
+        let widthScale = imageSize.width / max(windowRect.width, 1)
+        let heightScale = imageSize.height / max(windowRect.height, 1)
+        let width = visibleRect.width * widthScale
+        let height = visibleRect.height * heightScale
+        let x = (visibleRect.minX - windowRect.minX) * widthScale
+        let yFromTop = (visibleRect.minY - windowRect.minY) * heightScale
+        let y = imageSize.height - yFromTop - height
+
+        return NSRect(x: x, y: y, width: width, height: height)
     }
 
     private static func desktopBounds(for group: WorkspaceSwitcherGroup) -> CGRect {

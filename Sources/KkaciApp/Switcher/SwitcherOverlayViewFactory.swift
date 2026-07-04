@@ -54,6 +54,7 @@ final class SwitcherOverlayViewFactory {
         let metrics = tileMetrics(count: items.count, availableFrame: availableFrame)
         let frame = NSRect(x: 0, y: 0, width: metrics.contentWidth, height: metrics.contentHeight)
         let listView = WindowSwitcherListView(frame: frame)
+        let hoverGate = SwitcherHoverGate()
 
         if items.isEmpty {
             let empty = label("No windows", font: .systemFont(ofSize: 15), color: .secondaryLabelColor)
@@ -68,6 +69,7 @@ final class SwitcherOverlayViewFactory {
                 item: item,
                 isSelected: index == selectedIndex,
                 metrics: metrics,
+                hoverGate: hoverGate,
                 onHover: onHover,
                 onClick: onClick
             )
@@ -166,6 +168,24 @@ private struct WindowTileMetrics {
     let contentHeight: CGFloat
 }
 
+final class SwitcherHoverGate {
+    private let initialLocation = NSEvent.mouseLocation
+    private var isEnabled = false
+
+    func allowHoverIfPointerMoved() -> Bool {
+        if isEnabled {
+            return true
+        }
+
+        let location = NSEvent.mouseLocation
+        if abs(location.x - initialLocation.x) >= 1 || abs(location.y - initialLocation.y) >= 1 {
+            isEnabled = true
+        }
+
+        return isEnabled
+    }
+}
+
 final class WindowSwitcherListView: NSView {
     private(set) var tileViewsByID: [WindowID: [WindowSwitcherTileView]] = [:]
 
@@ -189,6 +209,7 @@ final class WindowSwitcherListView: NSView {
 
 final class WindowSwitcherTileView: NSView {
     private let id: WindowID
+    private let hoverGate: SwitcherHoverGate
     private let onHover: ((WindowID) -> Void)?
     private let onClick: ((WindowID) -> Void)?
     private let appIconView = NSImageView()
@@ -200,10 +221,12 @@ final class WindowSwitcherTileView: NSView {
         item: WindowSwitcherItem,
         isSelected: Bool,
         metrics: WindowTileMetrics,
+        hoverGate: SwitcherHoverGate,
         onHover: ((WindowID) -> Void)?,
         onClick: ((WindowID) -> Void)?
     ) {
         self.id = item.id
+        self.hoverGate = hoverGate
         self.onHover = onHover
         self.onClick = onClick
         super.init(frame: NSRect(x: 0, y: 0, width: metrics.width, height: metrics.height))
@@ -225,13 +248,17 @@ final class WindowSwitcherTileView: NSView {
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(
             rect: .zero,
-            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
             owner: self
         ))
     }
 
     override func mouseEntered(with event: NSEvent) {
-        onHover?(id)
+        hover()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        hover()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -258,6 +285,14 @@ final class WindowSwitcherTileView: NSView {
         layer?.backgroundColor = isSelected
             ? NSColor.controlAccentColor.withAlphaComponent(0.22).cgColor
             : NSColor.black.withAlphaComponent(0.22).cgColor
+    }
+
+    private func hover() {
+        guard hoverGate.allowHoverIfPointerMoved() else {
+            return
+        }
+
+        onHover?(id)
     }
 
     private func setup(item: WindowSwitcherItem, metrics: WindowTileMetrics) {

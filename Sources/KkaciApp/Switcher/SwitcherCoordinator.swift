@@ -87,7 +87,7 @@ final class SwitcherCoordinator {
             in: items.map(\.id),
             direction: direction
         )
-        showWindows(items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
+        beginWindowSession(items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         refreshManagedThumbnails(priorityIDs: selectedWindowIDs(items: items, selectedIndex: selectedIndex))
     }
 
@@ -106,39 +106,19 @@ final class SwitcherCoordinator {
             in: groups.map(\.name),
             direction: direction
         )
-        showWorkspaces(groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
+        beginWorkspaceSession(groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
     }
 
-    private func showWindows(_ items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
+    private func beginWindowSession(_ items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?) {
         session = .windows(items: items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show windows count=\(items.count) selected=\(selectedIndex)")
-        overlay.showWindowSwitcher(
-            items: items,
-            selectedIndex: selectedIndex,
-            anchorFrame: anchorFrame,
-            onHover: { [weak self] id in
-                _ = self?.selectWindow(id: id)
-            },
-            onClick: { [weak self] id in
-                self?.commitWindow(id: id)
-            }
-        )
+        presentCurrentSession()
     }
 
-    private func showWorkspaces(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
+    private func beginWorkspaceSession(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
         session = .workspaces(groups: groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show workspaces count=\(groups.count) selected=\(selectedIndex)")
-        overlay.showWorkspaceSwitcher(
-            groups: groups,
-            selectedIndex: selectedIndex,
-            anchorFrame: anchorFrame,
-            onHover: { [weak self] name in
-                _ = self?.selectWorkspace(name: name)
-            },
-            onClick: { [weak self] name in
-                self?.commitWorkspace(name: name)
-            }
-        )
+        presentCurrentSession()
     }
 
     func commitWindowSelection() {
@@ -199,7 +179,11 @@ final class SwitcherCoordinator {
         }
 
         session = .workspaces(groups: groups, selectedIndex: index, anchorFrame: anchorFrame)
-        overlay.updateWorkspaceSelection(selectedName: groups[index].name)
+        if overlay.isOverlayVisible {
+            overlay.updateWorkspaceSelection(selectedName: groups[index].name)
+        } else {
+            presentCurrentSession()
+        }
     }
 
     private func commitWorkspace(name: String) {
@@ -240,7 +224,42 @@ final class SwitcherCoordinator {
         }
 
         session = .windows(items: items, selectedIndex: index, anchorFrame: anchorFrame)
-        overlay.updateWindowSelection(selectedID: items[index].id)
+        if overlay.isOverlayVisible {
+            overlay.updateWindowSelection(selectedID: items[index].id)
+        } else {
+            presentCurrentSession()
+        }
+    }
+
+    private func presentCurrentSession() {
+        switch session {
+        case .windows(let items, let selectedIndex, let anchorFrame):
+            overlay.showWindowSwitcher(
+                items: items,
+                selectedIndex: selectedIndex,
+                anchorFrame: anchorFrame,
+                onHover: { [weak self] id in
+                    _ = self?.selectWindow(id: id)
+                },
+                onClick: { [weak self] id in
+                    self?.commitWindow(id: id)
+                }
+            )
+        case .workspaces(let groups, let selectedIndex, let anchorFrame):
+            overlay.showWorkspaceSwitcher(
+                groups: groups,
+                selectedIndex: selectedIndex,
+                anchorFrame: anchorFrame,
+                onHover: { [weak self] name in
+                    _ = self?.selectWorkspace(name: name)
+                },
+                onClick: { [weak self] name in
+                    self?.commitWorkspace(name: name)
+                }
+            )
+        case nil:
+            return
+        }
     }
 
     private func commitWindow(id: WindowID) {

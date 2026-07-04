@@ -56,6 +56,7 @@ final class WorkspaceSwitcherListView: NSView {
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) {
+        let hoverGate = SwitcherHoverGate()
         for (index, group) in groups.enumerated() {
             let row = index / layout.columns
             let column = index % layout.columns
@@ -64,6 +65,7 @@ final class WorkspaceSwitcherListView: NSView {
                 group: group,
                 isSelected: index == selectedIndex,
                 cardSize: layout.cardSize,
+                hoverGate: hoverGate,
                 onHover: onHover,
                 onClick: onClick
             )
@@ -139,6 +141,7 @@ private struct WorkspaceOverviewLayout {
 
 private final class WorkspacePreviewCardView: NSView {
     private let name: String
+    private let hoverGate: SwitcherHoverGate
     private let onHover: (String) -> Void
     private let onClick: (String) -> Void
     private let subtitleLabel = NSTextField(labelWithString: "")
@@ -149,10 +152,12 @@ private final class WorkspacePreviewCardView: NSView {
         group: WorkspaceSwitcherGroup,
         isSelected: Bool,
         cardSize: NSSize,
+        hoverGate: SwitcherHoverGate,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) {
         self.name = group.name
+        self.hoverGate = hoverGate
         self.onHover = onHover
         self.onClick = onClick
         super.init(frame: NSRect(origin: .zero, size: cardSize))
@@ -178,13 +183,17 @@ private final class WorkspacePreviewCardView: NSView {
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(
             rect: .zero,
-            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
             owner: self
         ))
     }
 
     override func mouseEntered(with event: NSEvent) {
-        onHover(name)
+        hover()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        hover()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -197,6 +206,14 @@ private final class WorkspacePreviewCardView: NSView {
 
     override func otherMouseDown(with event: NSEvent) {
         onClick(name)
+    }
+
+    private func hover() {
+        guard hoverGate.allowHoverIfPointerMoved() else {
+            return
+        }
+
+        onHover(name)
     }
 
     func update(group: WorkspaceSwitcherGroup) {
