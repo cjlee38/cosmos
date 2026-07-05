@@ -30,6 +30,17 @@ public struct WorkspaceConfig: Codable, Equatable {
         return WorkspaceConfig(names: names + [name], monitorSlotsByName: monitorSlotsByName)
     }
 
+    public func assigningWorkspace(_ workspace: String, toMonitorSlot monitorSlot: MonitorSlot) -> WorkspaceConfig {
+        let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard names.contains(workspace), monitorSlot >= 1 else {
+            return self
+        }
+
+        var monitorSlotsByName = monitorSlotsByName
+        monitorSlotsByName[workspace] = monitorSlot
+        return WorkspaceConfig(names: names, monitorSlotsByName: monitorSlotsByName)
+    }
+
     public func monitorSlot(for workspace: String) -> MonitorSlot {
         monitorSlotsByName[workspace] ?? 1
     }
@@ -95,6 +106,13 @@ public struct KkaciConfig: Codable, Equatable {
     public func addingWorkspace(named name: String, monitorSlot: MonitorSlot = 1) -> KkaciConfig {
         KkaciConfig(
             workspaces: workspaces.addingWorkspace(named: name, monitorSlot: monitorSlot),
+            bindings: bindings
+        )
+    }
+
+    public func assigningWorkspace(_ workspace: String, toMonitorSlot monitorSlot: MonitorSlot) -> KkaciConfig {
+        KkaciConfig(
+            workspaces: workspaces.assigningWorkspace(workspace, toMonitorSlot: monitorSlot),
             bindings: bindings
         )
     }

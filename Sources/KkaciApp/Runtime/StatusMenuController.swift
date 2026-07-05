@@ -8,6 +8,7 @@ final class StatusMenuController: NSObject {
     private let reloadConfigHandler: () -> Void
     private let requestAccessibilityPermissionHandler: () -> Bool
     private let settingsSnapshotProvider: () -> SettingsSnapshot
+    private let updateWorkspaceMonitorHandler: (String, MonitorSlot) -> Void
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
     private let permissionItem = NSMenuItem()
@@ -34,7 +35,8 @@ final class StatusMenuController: NSObject {
         eventLog: RuntimeEventLog,
         reloadConfigHandler: @escaping () -> Void,
         requestAccessibilityPermissionHandler: @escaping () -> Bool,
-        settingsSnapshotProvider: @escaping () -> SettingsSnapshot
+        settingsSnapshotProvider: @escaping () -> SettingsSnapshot,
+        updateWorkspaceMonitorHandler: @escaping (String, MonitorSlot) -> Void
     ) {
         self.controller = controller
         self.thumbnailRefresher = thumbnailRefresher
@@ -42,6 +44,7 @@ final class StatusMenuController: NSObject {
         self.reloadConfigHandler = reloadConfigHandler
         self.requestAccessibilityPermissionHandler = requestAccessibilityPermissionHandler
         self.settingsSnapshotProvider = settingsSnapshotProvider
+        self.updateWorkspaceMonitorHandler = updateWorkspaceMonitorHandler
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         self.eventLog.onChange = { [weak self] in
@@ -64,7 +67,10 @@ final class StatusMenuController: NSObject {
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(
                 settingsSnapshotProvider: settingsSnapshotProvider,
-                reloadConfigHandler: reloadConfigHandler
+                reloadConfigHandler: reloadConfigHandler,
+                updateWorkspaceMonitorHandler: { [weak self] workspace, monitorSlot in
+                    self?.updateWorkspaceMonitorHandler(workspace, monitorSlot)
+                }
             )
         }
         settingsWindowController?.show()

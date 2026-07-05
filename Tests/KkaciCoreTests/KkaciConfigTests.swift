@@ -22,6 +22,19 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertEqual(updated.bindings, [binding])
     }
 
+    func testAssigningWorkspaceMonitorPreservesHotKeyBindings() {
+        let binding = HotKeyBinding(key: "option+1", command: "workspace", workspace: "1")
+        let config = KkaciConfig(
+            workspaces: WorkspaceConfig(names: ["1", "2"]),
+            bindings: [binding]
+        )
+
+        let updated = config.assigningWorkspace("2", toMonitorSlot: 3)
+
+        XCTAssertEqual(updated.workspaces.monitorSlot(for: "2"), 3)
+        XCTAssertEqual(updated.bindings, [binding])
+    }
+
     func testWorkspaceConfigNormalizesMonitorSlots() {
         let config = WorkspaceConfig(
             names: ["1", "chat"],

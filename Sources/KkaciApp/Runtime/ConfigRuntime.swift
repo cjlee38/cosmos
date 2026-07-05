@@ -32,6 +32,12 @@ final class ConfigRuntime {
         try controller.applyConfig(loadedConfig, enablePersistence: true)
     }
 
+    func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws {
+        let updatedConfig = controller.currentConfig.assigningWorkspace(workspace, toMonitorSlot: monitorSlot)
+        try configStore.save(updatedConfig)
+        try controller.applyConfig(updatedConfig, enablePersistence: true)
+    }
+
     private func installShortcuts(
         for bindings: [HotKeyBinding],
         actions: any KeyboardShortcutActionHandling

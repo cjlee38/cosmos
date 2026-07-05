@@ -22,6 +22,9 @@ final class AppRuntime {
         },
         settingsSnapshotProvider: { [unowned self] in
             settingsSnapshot()
+        },
+        updateWorkspaceMonitorHandler: { [unowned self] workspace, monitorSlot in
+            updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
         }
     )
 
@@ -84,6 +87,16 @@ final class AppRuntime {
         }
     }
 
+    private func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) {
+        do {
+            try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+            thumbnailRefresher.refreshAllThumbnails()
+            eventLog.record("Workspace \(workspace) uses monitor \(monitorSlot)")
+        } catch {
+            eventLog.record("Workspace monitor update failed: \(error)")
+        }
+    }
+
     private func requestAccessibilityPermissionFromMenu() -> Bool {
         let isGranted = permissionController.requestFromUser()
         if isGranted {
@@ -138,6 +151,7 @@ final class AppRuntime {
             activeWorkspace: controller.activeWorkspace,
             activeWorkspaces: controller.activeWorkspaces,
             runtimeWorkspaces: controller.workspaces,
+            monitorSlots: controller.monitorSlots,
             monitorSlotsByWorkspace: Dictionary(uniqueKeysWithValues: controller.workspaces.map { workspace in
                 (workspace, controller.monitorSlot(for: workspace))
             })

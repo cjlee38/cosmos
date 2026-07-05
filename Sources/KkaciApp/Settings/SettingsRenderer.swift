@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 struct SettingsRenderer {
@@ -8,6 +9,18 @@ struct SettingsRenderer {
             "config: \(snapshot.configURL?.path ?? "(not file-backed)")",
             "active workspace: \(snapshot.activeWorkspace)",
             "active workspaces: \(snapshot.activeWorkspaces.joined(separator: ", "))",
+            "",
+            "monitors:",
+        ]
+
+        for monitor in snapshot.monitorSlots {
+            let main = monitor.display.isMain ? " main" : ""
+            lines.append(
+                "  \(monitor.slot)\(main) display=\(monitor.display.id) frame=\(format(monitor.display.frame)) usable=\(format(monitor.display.visibleFrame))"
+            )
+        }
+
+        lines += [
             "",
             "runtime workspaces:",
         ]
@@ -39,5 +52,13 @@ struct SettingsRenderer {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    private func format(_ rect: CGRect) -> String {
+        "x=\(format(rect.origin.x)) y=\(format(rect.origin.y)) w=\(format(rect.size.width)) h=\(format(rect.size.height))"
+    }
+
+    private func format(_ value: CGFloat) -> String {
+        String(format: "%.0f", Double(value))
     }
 }

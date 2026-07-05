@@ -7,5 +7,6 @@ struct SettingsSnapshot {
     let activeWorkspace: String
     let activeWorkspaces: [String]
     let runtimeWorkspaces: [String]
+    let monitorSlots: [MonitorSlotSnapshot]
     let monitorSlotsByWorkspace: [String: MonitorSlot]
 }
