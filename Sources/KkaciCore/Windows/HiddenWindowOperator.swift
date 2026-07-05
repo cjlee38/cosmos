@@ -3,15 +3,18 @@ import Foundation
 final class HiddenWindowOperator {
     private let windowSystem: any WindowSystem
     private let displayProvider: any HidePointProviding
+    private let restorableFrameResolver: RestorableFrameResolver
     private let windowStore: WindowRuntimeStore
 
     init(
         windowSystem: any WindowSystem,
         displayProvider: any HidePointProviding,
+        restorableFrameResolver: RestorableFrameResolver,
         windowStore: WindowRuntimeStore
     ) {
         self.windowSystem = windowSystem
         self.displayProvider = displayProvider
+        self.restorableFrameResolver = restorableFrameResolver
         self.windowStore = windowStore
     }
 
@@ -61,12 +64,18 @@ final class HiddenWindowOperator {
 
         guard let frame = state.hiddenFrame(for: id) else {
             if let preferredFrame {
-                try windowSystem.setFrameIfSizeChanged(preferredFrame, for: id)
+                try windowSystem.setFrameIfSizeChanged(
+                    restorableFrameResolver.frameForRestore(preferredFrame),
+                    for: id
+                )
             }
             return .alreadyVisible
         }
 
-        try windowSystem.setFrameIfSizeChanged(preferredFrame ?? frame, for: id)
+        try windowSystem.setFrameIfSizeChanged(
+            restorableFrameResolver.frameForRestore(preferredFrame ?? frame),
+            for: id
+        )
         state.clearHiddenFrame(for: id)
         windowStore.removeHiddenRecord(for: id)
         return .restored
@@ -77,7 +86,10 @@ final class HiddenWindowOperator {
             guard let frame = state.hiddenFrame(for: id), windowSystem.contains(id) else {
                 continue
             }
-            try? windowSystem.setFrameIfSizeChanged(frame, for: id)
+            try? windowSystem.setFrameIfSizeChanged(
+                restorableFrameResolver.frameForRestore(frame),
+                for: id
+            )
         }
         windowStore.flushHiddenRecordWrites()
     }

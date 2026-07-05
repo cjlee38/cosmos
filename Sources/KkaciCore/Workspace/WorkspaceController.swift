@@ -55,9 +55,11 @@ public final class WorkspaceController {
             windowStore: windowStore,
             monitorSlotResolver: monitorSlotResolver
         )
+        let restorableFrameResolver = RestorableFrameResolver(displayProvider: displayProvider)
         let hiddenWindowOperator = HiddenWindowOperator(
             windowSystem: windowSystem,
             displayProvider: displayProvider,
+            restorableFrameResolver: restorableFrameResolver,
             windowStore: windowStore
         )
         self.hiddenWindowOperator = hiddenWindowOperator
@@ -68,7 +70,8 @@ public final class WorkspaceController {
         self.startupHiddenWindowRecordApplier = StartupHiddenWindowRecordApplier(
             windowSystem: windowSystem,
             windowStore: windowStore,
-            configuration: configuration
+            configuration: configuration,
+            restorableFrameResolver: restorableFrameResolver
         )
         self.navigationCoordinator = WorkspaceNavigationCoordinator(
             windowSystem: windowSystem,

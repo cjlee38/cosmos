@@ -4,15 +4,18 @@ final class StartupHiddenWindowRecordApplier {
     private let windowSystem: any WindowSystem
     private let windowStore: WindowRuntimeStore
     private let configuration: WorkspaceConfigurationRuntime
+    private let restorableFrameResolver: RestorableFrameResolver
 
     init(
         windowSystem: any WindowSystem,
         windowStore: WindowRuntimeStore,
-        configuration: WorkspaceConfigurationRuntime
+        configuration: WorkspaceConfigurationRuntime,
+        restorableFrameResolver: RestorableFrameResolver
     ) {
         self.windowSystem = windowSystem
         self.windowStore = windowStore
         self.configuration = configuration
+        self.restorableFrameResolver = restorableFrameResolver
     }
 
     func loadRecords() throws -> [HiddenWindowRecord] {
@@ -39,7 +42,10 @@ final class StartupHiddenWindowRecordApplier {
 
             let workspace = try configuration.ensureWorkspace(targetWorkspace, state: &state)
             if action.shouldRestore {
-                try windowSystem.setFrameIfSizeChanged(record.originalFrame, for: record.windowID)
+                try windowSystem.setFrameIfSizeChanged(
+                    restorableFrameResolver.frameForRestore(record.originalFrame),
+                    for: record.windowID
+                )
                 restored.append(record.windowID)
             }
 

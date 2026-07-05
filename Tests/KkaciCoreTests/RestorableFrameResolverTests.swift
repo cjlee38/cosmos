@@ -1,0 +1,41 @@
+import CoreGraphics
+@testable import KkaciCore
+import XCTest
+
+final class RestorableFrameResolverTests: XCTestCase {
+    func testKeepsFrameWhenCenterIsOnCurrentDisplay() {
+        let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider())
+        let frame = WindowFrame.frame(x: 100, y: 120, width: 300, height: 240)
+
+        XCTAssertEqual(resolver.frameForRestore(frame), frame)
+    }
+
+    func testClampsFrameWhenCenterIsOutsideCurrentDisplays() {
+        let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider())
+        let frame = WindowFrame.frame(x: 1_400, y: 120, width: 300, height: 240)
+
+        XCTAssertEqual(
+            resolver.frameForRestore(frame),
+            WindowFrame.frame(x: 700, y: 120, width: 300, height: 240)
+        )
+    }
+
+    func testClampsCornerHiddenFrameIntoVisibleArea() {
+        let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider(
+            snapshots: [
+                DisplaySnapshot(
+                    id: 1,
+                    frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000),
+                    visibleFrame: CGRect(x: 0, y: 40, width: 1_000, height: 900),
+                    isMain: true
+                ),
+            ]
+        ))
+        let frame = WindowFrame.frame(x: 999, y: 999, width: 1_000, height: 1_000)
+
+        XCTAssertEqual(
+            resolver.frameForRestore(frame),
+            WindowFrame.frame(x: 0, y: 40, width: 1_000, height: 1_000)
+        )
+    }
+}

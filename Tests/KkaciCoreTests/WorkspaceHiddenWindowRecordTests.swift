@@ -222,6 +222,25 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         XCTAssertEqual(recordStore.records.map(\.windowID), [100])
     }
 
+    func testShutdownRestoreUsesCurrentDisplayWhenHiddenFrameIsOffscreen() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 1_400, y: 120, width: 300, height: 240)),
+        ])
+        let recordStore = InMemoryHiddenWindowRecordStore()
+        let controller = makeController(windowSystem, recordStore: recordStore)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "2")
+
+        controller.restoreHiddenWindowsForShutdown()
+
+        XCTAssertEqual(
+            windowSystem.frames[100],
+            .frame(x: 700, y: 120, width: 300, height: 240)
+        )
+        XCTAssertEqual(recordStore.records.map(\.windowID), [100])
+    }
+
     func testStartupRecordsRestoreCornerWindowAndReassignWorkspace() throws {
         let originalFrame = WindowFrame.frame(x: 120, y: 140)
         let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
@@ -238,6 +257,25 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         XCTAssertTrue(result.ignored.isEmpty)
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertTrue(recordStore.records.isEmpty)
+    }
+
+    func testStartupRecordsRestoreOffscreenOriginalFrameInsideCurrentDisplay() throws {
+        let originalFrame = WindowFrame.frame(x: 1_400, y: 120, width: 300, height: 240)
+        let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y, width: 300, height: 240)),
+        ])
+        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
+        let controller = makeController(windowSystem, recordStore: recordStore)
+
+        let result = try controller.applyHiddenWindowRecordsAtStartup()
+
+        XCTAssertEqual(result.restored, [100])
+        XCTAssertEqual(
+            windowSystem.frames[100],
+            .frame(x: 700, y: 120, width: 300, height: 240)
+        )
         XCTAssertTrue(recordStore.records.isEmpty)
     }
 
@@ -326,12 +364,13 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     private func makeController(
         _ windowSystem: FakeWindowSystem,
+        displayProvider: FakeDisplayProvider? = nil,
         configStore: (any KkaciConfigStore)? = nil,
         recordStore: (any HiddenWindowRecordStore)? = nil
     ) -> WorkspaceController {
         WorkspaceController(
             windowSystem: windowSystem,
-            displayProvider: FakeDisplayProvider(point: hidePoint),
+            displayProvider: displayProvider ?? FakeDisplayProvider(point: hidePoint),
             configStore: configStore,
             recordStore: recordStore
         )

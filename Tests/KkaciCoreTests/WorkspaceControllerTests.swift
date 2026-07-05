@@ -160,6 +160,23 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.focusedIDs, [100])
     }
 
+    func testRestoreHiddenWindowUsesCurrentDisplayWhenOriginalFrameIsOffscreen() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", frame: .frame(x: 1_400, y: 120, width: 300, height: 240)),
+        ])
+        let controller = makeController(windowSystem, displayProvider: FakeDisplayProvider(point: hidePoint))
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "2")
+
+        _ = try controller.switchWorkspace(to: "2")
+
+        XCTAssertEqual(
+            windowSystem.frames[100],
+            .frame(x: 700, y: 120, width: 300, height: 240)
+        )
+    }
+
     func testFocusWindowFocusesActiveWorkspaceWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
