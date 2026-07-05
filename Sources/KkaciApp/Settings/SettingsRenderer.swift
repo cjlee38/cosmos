@@ -7,19 +7,21 @@ struct SettingsRenderer {
             "kkaci settings",
             "config: \(snapshot.configURL?.path ?? "(not file-backed)")",
             "active workspace: \(snapshot.activeWorkspace)",
+            "active workspaces: \(snapshot.activeWorkspaces.joined(separator: ", "))",
             "",
             "runtime workspaces:",
         ]
 
         for workspace in snapshot.runtimeWorkspaces {
-            let marker = workspace == snapshot.activeWorkspace ? "*" : " "
-            lines.append("  \(marker) \(workspace)")
+            let marker = snapshot.activeWorkspaces.contains(workspace) ? "*" : " "
+            let monitor = snapshot.monitorSlotsByWorkspace[workspace] ?? config.workspaces.monitorSlot(for: workspace)
+            lines.append("  \(marker) \(workspace) monitor=\(monitor)")
         }
 
         lines.append("")
         lines.append("config workspaces:")
         for workspace in config.workspaces.names {
-            lines.append("  - \(workspace)")
+            lines.append("  - \(workspace) monitor=\(config.workspaces.monitorSlot(for: workspace))")
         }
 
         lines.append("")

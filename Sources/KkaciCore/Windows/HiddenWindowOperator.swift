@@ -15,12 +15,17 @@ final class HiddenWindowOperator {
         self.windowStore = windowStore
     }
 
-    func hide(_ id: WindowID, state: inout WorkspaceState, activeWorkspace: String) throws {
+    func hide(
+        _ id: WindowID,
+        state: inout WorkspaceState,
+        activeWorkspace: String,
+        preferredFrame: WindowFrame? = nil
+    ) throws {
         guard windowSystem.contains(id) else {
             throw WorkspaceError.windowNotFound(id)
         }
 
-        let frame = try currentOrStoredFrame(for: id, state: state)
+        let frame = try preferredFrame ?? currentOrStoredFrame(for: id, state: state)
         let wasAlreadyHidden = state.isHidden(id)
         state.storeHiddenFrameIfNeeded(frame, for: id)
 
@@ -43,7 +48,11 @@ final class HiddenWindowOperator {
         }
     }
 
-    func restore(_ id: WindowID, state: inout WorkspaceState) throws -> RestoreResult {
+    func restore(
+        _ id: WindowID,
+        state: inout WorkspaceState,
+        preferredFrame: WindowFrame? = nil
+    ) throws -> RestoreResult {
         guard windowSystem.contains(id) else {
             state.clearHiddenFrame(for: id)
             windowStore.removeAllHiddenRecords(for: id)
@@ -51,10 +60,13 @@ final class HiddenWindowOperator {
         }
 
         guard let frame = state.hiddenFrame(for: id) else {
+            if let preferredFrame {
+                try windowSystem.setFrameIfSizeChanged(preferredFrame, for: id)
+            }
             return .alreadyVisible
         }
 
-        try windowSystem.setPosition(frame.origin, for: id)
+        try windowSystem.setFrameIfSizeChanged(preferredFrame ?? frame, for: id)
         state.clearHiddenFrame(for: id)
         windowStore.removeHiddenRecord(for: id)
         return .restored
@@ -65,7 +77,7 @@ final class HiddenWindowOperator {
             guard let frame = state.hiddenFrame(for: id), windowSystem.contains(id) else {
                 continue
             }
-            try? windowSystem.setPosition(frame.origin, for: id)
+            try? windowSystem.setFrameIfSizeChanged(frame, for: id)
         }
         windowStore.flushHiddenRecordWrites()
     }

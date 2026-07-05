@@ -14,20 +14,30 @@ final class WorkspaceVisibilityCoordinator {
         focusActiveWorkspace: Bool = false,
         preferredFocus: WindowID? = nil,
         oldFocusedWindow: WindowID? = nil,
-        strictWindowIDs: Set<WindowID> = []
+        strictWindowIDs: Set<WindowID> = [],
+        preferredFramesByWindowID: [WindowID: WindowFrame] = [:]
     ) throws {
         let activeWorkspace = state.activeWorkspace
+        let visibleWorkspaces = state.activeWorkspaces.isEmpty
+            ? Set([activeWorkspace])
+            : state.activeWorkspaces
         var firstRestored: WindowID?
 
-        for id in state.windowIDs(in: activeWorkspace) {
-            do {
-                _ = try hiddenWindowOperator.restore(id, state: &state)
-            } catch {
-                if strictWindowIDs.contains(id) {
-                    throw error
+        for workspace in visibleWorkspaces.sorted() {
+            for id in state.windowIDs(in: workspace) {
+                do {
+                    _ = try hiddenWindowOperator.restore(
+                        id,
+                        state: &state,
+                        preferredFrame: preferredFramesByWindowID[id]
+                    )
+                } catch {
+                    if strictWindowIDs.contains(id) {
+                        throw error
+                    }
                 }
+                firstRestored = firstRestored ?? id
             }
-            firstRestored = firstRestored ?? id
         }
 
         if focusActiveWorkspace {
@@ -38,9 +48,14 @@ final class WorkspaceVisibilityCoordinator {
             }
         }
 
-        for id in hideOrder(state: state, targetWorkspace: activeWorkspace, oldFocusedWindow: oldFocusedWindow) {
+        for id in hideOrder(state: state, visibleWorkspaces: visibleWorkspaces, oldFocusedWindow: oldFocusedWindow) {
             do {
-                try hiddenWindowOperator.hide(id, state: &state, activeWorkspace: activeWorkspace)
+                try hiddenWindowOperator.hide(
+                    id,
+                    state: &state,
+                    activeWorkspace: activeWorkspace,
+                    preferredFrame: preferredFramesByWindowID[id]
+                )
             } catch {
                 if strictWindowIDs.contains(id) {
                     throw error
@@ -51,11 +66,16 @@ final class WorkspaceVisibilityCoordinator {
 
     private func hideOrder(
         state: WorkspaceState,
-        targetWorkspace: String,
+        visibleWorkspaces: Set<String>,
         oldFocusedWindow: WindowID?
     ) -> [WindowID] {
         var ids = state.assignedWindowIDs
-            .filter { state.membership(for: $0) != targetWorkspace }
+            .filter { id in
+                guard let workspace = state.membership(for: id) else {
+                    return false
+                }
+                return !visibleWorkspaces.contains(workspace)
+            }
             .sorted()
 
         if let oldFocusedWindow, let index = ids.firstIndex(of: oldFocusedWindow) {

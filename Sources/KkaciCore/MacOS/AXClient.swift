@@ -97,6 +97,26 @@ public final class AXClient {
         }
     }
 
+    public func setFrame(_ frame: WindowFrame, for window: AXUIElement) throws {
+        // AX has no atomic frame setter. Resize before and after the move so
+        // cross-display transfers work whether the target display is smaller or larger.
+        try setSize(frame.size, for: window)
+        try setPosition(frame.origin, for: window)
+        try setSize(frame.size, for: window)
+    }
+
+    private func setSize(_ size: CGSize, for window: AXUIElement) throws {
+        var mutableSize = size
+        guard let value = AXValueCreate(.cgSize, &mutableSize) else {
+            throw AXClientError.attributeUnavailable(kAXSizeAttribute)
+        }
+
+        let error = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value)
+        guard error == .success else {
+            throw AXClientError.setAttributeFailed(kAXSizeAttribute, error)
+        }
+    }
+
     public func focus(_ handle: WindowHandle) {
         AXUIElementSetAttributeValue(handle.axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(handle.axWindow, kAXRaiseAction as CFString)

@@ -17,7 +17,7 @@ final class WorkspaceNavigationCoordinator {
 
     func switchWorkspace(to workspace: String, state: inout WorkspaceState) throws {
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
-        let previousWorkspace = state.activeWorkspace
+        let previousActivation = state.activationSnapshot
         let oldFocusedWindow = focusedWindowInActiveWorkspace(state: state)
             ?? state.focusTarget(for: state.activeWorkspace, fallback: nil)
 
@@ -30,7 +30,7 @@ final class WorkspaceNavigationCoordinator {
                 strictWindowIDs: Set(state.windowIDs(in: workspace))
             )
         } catch {
-            state.activate(previousWorkspace)
+            state.restoreActivationSnapshot(previousActivation)
             try? visibilityCoordinator.applyActiveWorkspace(state: &state)
             throw error
         }
@@ -47,12 +47,13 @@ final class WorkspaceNavigationCoordinator {
             return .unmanagedWindow(id)
         }
 
-        guard workspace != state.activeWorkspace else {
+        let monitorSlot = state.monitorSlot(for: workspace)
+        guard workspace != state.activeWorkspace(on: monitorSlot) else {
             state.recordFocus(id, in: workspace)
             return .alreadyActive(windowID: id, workspace: workspace)
         }
 
-        let previousWorkspace = state.activeWorkspace
+        let previousActivation = state.activationSnapshot
         state.recordFocus(id, in: workspace)
         state.activate(workspace)
         do {
@@ -64,7 +65,7 @@ final class WorkspaceNavigationCoordinator {
                 strictWindowIDs: [id]
             )
         } catch {
-            state.activate(previousWorkspace)
+            state.restoreActivationSnapshot(previousActivation)
             try? visibilityCoordinator.applyActiveWorkspace(state: &state)
             throw error
         }

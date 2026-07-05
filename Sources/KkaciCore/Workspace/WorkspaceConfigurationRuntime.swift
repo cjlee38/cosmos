@@ -21,7 +21,11 @@ final class WorkspaceConfigurationRuntime {
         config
     }
 
-    func ensureWorkspace(_ workspace: String, state: inout WorkspaceState) throws -> String {
+    func ensureWorkspace(
+        _ workspace: String,
+        state: inout WorkspaceState,
+        monitorSlot: MonitorSlot? = nil
+    ) throws -> String {
         let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !workspace.isEmpty else {
             throw WorkspaceError.invalidWorkspaceName(workspace)
@@ -31,13 +35,14 @@ final class WorkspaceConfigurationRuntime {
             return workspace
         }
 
-        let nextConfig = config.addingWorkspace(named: workspace)
+        let monitorSlot = monitorSlot ?? state.monitorSlot(for: state.activeWorkspace)
+        let nextConfig = config.addingWorkspace(named: workspace, monitorSlot: monitorSlot)
         if isPersistenceEnabled {
             try configStore?.save(nextConfig)
         }
 
         config = nextConfig
-        state.addWorkspace(workspace)
+        state.addWorkspace(workspace, monitorSlot: monitorSlot)
         return workspace
     }
 
@@ -49,7 +54,7 @@ final class WorkspaceConfigurationRuntime {
         isPersistenceEnabled = configStore != nil && enablePersistence
         state.applyWorkspaces(config.workspaces)
         self.config = KkaciConfig(
-            workspaces: WorkspaceConfig(names: state.workspaces),
+            workspaces: state.workspaceConfig,
             bindings: config.bindings
         )
     }

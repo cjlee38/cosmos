@@ -2,8 +2,9 @@ import Foundation
 
 public struct WorkspaceConfig: Codable, Equatable {
     public let names: [String]
+    public let monitorSlotsByName: [String: MonitorSlot]
 
-    public init(names: [String]) {
+    public init(names: [String], monitorSlotsByName: [String: MonitorSlot] = [:]) {
         let normalized = names
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -13,11 +14,44 @@ public struct WorkspaceConfig: Codable, Equatable {
                 }
             }
 
-        self.names = normalized.isEmpty ? ["1", "2", "3"] : normalized
+        let names = normalized.isEmpty ? ["1", "2", "3"] : normalized
+        self.names = names
+        self.monitorSlotsByName = monitorSlotsByName.reduce(into: [:]) { result, entry in
+            let name = entry.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            if names.contains(name), entry.value >= 1 {
+                result[name] = entry.value
+            }
+        }
     }
 
-    public func addingWorkspace(named name: String) -> WorkspaceConfig {
-        WorkspaceConfig(names: names + [name])
+    public func addingWorkspace(named name: String, monitorSlot: MonitorSlot = 1) -> WorkspaceConfig {
+        var monitorSlotsByName = monitorSlotsByName
+        monitorSlotsByName[name] = monitorSlot
+        return WorkspaceConfig(names: names + [name], monitorSlotsByName: monitorSlotsByName)
+    }
+
+    public func monitorSlot(for workspace: String) -> MonitorSlot {
+        monitorSlotsByName[workspace] ?? 1
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case names
+        case monitorSlotsByName = "monitors"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let names = try container.decodeIfPresent([String].self, forKey: .names) ?? ["1", "2", "3"]
+        let monitorSlotsByName = try container.decodeIfPresent([String: MonitorSlot].self, forKey: .monitorSlotsByName) ?? [:]
+        self.init(names: names, monitorSlotsByName: monitorSlotsByName)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(names, forKey: .names)
+        if !monitorSlotsByName.isEmpty {
+            try container.encode(monitorSlotsByName, forKey: .monitorSlotsByName)
+        }
     }
 }
 
@@ -58,9 +92,9 @@ public struct KkaciConfig: Codable, Equatable {
         self.bindings = bindings
     }
 
-    public func addingWorkspace(named name: String) -> KkaciConfig {
+    public func addingWorkspace(named name: String, monitorSlot: MonitorSlot = 1) -> KkaciConfig {
         KkaciConfig(
-            workspaces: workspaces.addingWorkspace(named: name),
+            workspaces: workspaces.addingWorkspace(named: name, monitorSlot: monitorSlot),
             bindings: bindings
         )
     }

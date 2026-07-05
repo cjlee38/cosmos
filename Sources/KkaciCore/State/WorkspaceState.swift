@@ -22,11 +22,38 @@ struct WorkspaceState {
         catalog.workspaces
     }
 
-    mutating func sync(aliveWindowIDs: Set<WindowID>) -> WorkspaceSyncSummary {
+    var workspaceConfig: WorkspaceConfig {
+        catalog.workspaceConfig
+    }
+
+    var activeWorkspaces: Set<String> {
+        catalog.activeWorkspaces
+    }
+
+    mutating func sync(
+        windows: [WindowSnapshot],
+        monitorSlotForFrame: (WindowFrame?) -> MonitorSlot
+    ) -> WorkspaceSyncSummary {
+        let windowsByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+        let aliveWindowIDs = Set(windowsByID.keys)
         let diff = liveWindows.sync(aliveWindowIDs: aliveWindowIDs)
 
         for id in diff.new {
-            memberships.assign(id, to: activeWorkspace)
+            let monitorSlot = monitorSlotForFrame(windowsByID[id]?.frame)
+            memberships.assign(id, to: activeWorkspace(on: monitorSlot))
+        }
+
+        for window in windows where !window.isMinimized && !isHidden(window.id) {
+            guard let workspace = membership(for: window.id),
+                  let frame = window.frame
+            else {
+                continue
+            }
+
+            let currentSlot = monitorSlotForFrame(frame)
+            if monitorSlot(for: workspace) != currentSlot {
+                memberships.assign(window.id, to: activeWorkspace(on: currentSlot))
+            }
         }
 
         for id in diff.removed {
@@ -34,7 +61,10 @@ struct WorkspaceState {
         }
 
         return WorkspaceSyncSummary(
-            autoAssigned: diff.new.map { ($0, activeWorkspace) },
+            autoAssigned: diff.new.map { id in
+                let monitorSlot = monitorSlotForFrame(windowsByID[id]?.frame)
+                return (id, activeWorkspace(on: monitorSlot))
+            },
             removed: diff.removed
         )
     }
@@ -59,18 +89,35 @@ struct WorkspaceState {
         catalog.contains(workspace)
     }
 
-    mutating func addWorkspace(_ workspace: String) {
-        catalog.add(workspace)
+    mutating func addWorkspace(_ workspace: String, monitorSlot: MonitorSlot = 1) {
+        catalog.add(workspace, monitorSlot: monitorSlot)
     }
 
     mutating func applyWorkspaces(_ workspaces: WorkspaceConfig) {
         let referencedWorkspaces = memberships.referencedWorkspaces
+            .union(activeWorkspaces)
             .union([activeWorkspace])
         catalog.apply(workspaces, keeping: referencedWorkspaces)
     }
 
     mutating func activate(_ workspace: String) {
         catalog.activate(workspace)
+    }
+
+    var activationSnapshot: WorkspaceActivationSnapshot {
+        catalog.activationSnapshot
+    }
+
+    mutating func restoreActivationSnapshot(_ snapshot: WorkspaceActivationSnapshot) {
+        catalog.restoreActivationSnapshot(snapshot)
+    }
+
+    func monitorSlot(for workspace: String) -> MonitorSlot {
+        catalog.monitorSlot(for: workspace)
+    }
+
+    func activeWorkspace(on monitorSlot: MonitorSlot) -> String {
+        catalog.activeWorkspace(on: monitorSlot)
     }
 
     mutating func assign(_ id: WindowID, to workspace: String) {
@@ -103,11 +150,11 @@ struct WorkspaceState {
     }
 
     func nextWorkspace(after workspace: String) -> String {
-        catalog.nextWorkspace(after: workspace)
+        catalog.nextWorkspace(after: workspace, on: monitorSlot(for: workspace))
     }
 
     func previousWorkspace(before workspace: String) -> String {
-        catalog.previousWorkspace(before: workspace)
+        catalog.previousWorkspace(before: workspace, on: monitorSlot(for: workspace))
     }
 
     func windowIDs(in workspace: String) -> [WindowID] {

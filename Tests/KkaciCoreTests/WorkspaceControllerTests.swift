@@ -177,6 +177,37 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.focusNextWindow(), .focused(100))
     }
 
+    func testFocusWindowRecordsFocusInTheWindowsWorkspaceWhenAnotherMonitorSlotIsActive() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary One", frame: .frame(x: 1_100, y: 100)),
+            .window(id: 201, title: "Secondary Two", frame: .frame(x: 1_200, y: 100)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "2"],
+                monitorSlotsByName: ["2": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: differentSizedDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "2")
+        try controller.assignWindow(201, to: "2")
+
+        try controller.focusWindow(200)
+
+        XCTAssertEqual(windowSystem.focusedIDs.last, 200)
+        XCTAssertEqual(controller.windowIDsByMostRecentFocus(in: "2"), [200, 201])
+    }
+
     func testFocusWindowRejectsInactiveWorkspaceWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -254,6 +285,99 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(result.workspace, "2")
         XCTAssertEqual(controller.activeWorkspace, "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+    }
+
+    func testSwitchingWorkspaceOnlyAffectsThatWorkspaceMonitorSlot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main One", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1_100, y: 100)),
+            .window(id: 300, title: "Main Two", frame: .frame(x: 200, y: 100)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "2", "3"],
+                monitorSlotsByName: ["2": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "2")
+        try controller.assignWindow(300, to: "3")
+
+        _ = try controller.switchWorkspace(to: "3")
+
+        XCTAssertEqual(controller.activeWorkspace, "3")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertFalse(controller.isHiddenByWorkspace(300))
+        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+        XCTAssertNotEqual(windowSystem.positions[200], hidePoint)
+    }
+
+    func testFailedSwitchRestoresPreviousMonitorSlotActivation() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary One", frame: .frame(x: 1_100, y: 100)),
+            .window(id: 300, title: "Secondary Two", frame: .frame(x: 1_200, y: 100)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "2", "3"],
+                monitorSlotsByName: ["2": 2, "3": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "2")
+        try controller.assignWindow(300, to: "3")
+        windowSystem.setPositionFailures.insert(300)
+
+        XCTAssertThrowsError(try controller.switchWorkspace(to: "3"))
+        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.activeWorkspaces, ["1", "2"])
+    }
+
+    func testBootstrapAssignsVisibleWindowsToTheActiveWorkspaceOnTheirMonitorSlot() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1_100, y: 100)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "2"],
+                monitorSlotsByName: ["2": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        try controller.bootstrapWindowState(defaultWorkspace: "1")
+
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertEqual(controller.membership(for: 200), "2")
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
     }
 
@@ -490,6 +614,98 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 
+    func testMoveFocusedWindowToActiveWorkspaceOnAnotherMonitorMovesItsFrameByRatio() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "a"],
+                monitorSlotsByName: ["a": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: differentSizedDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.moveFocusedWindow(to: "a")
+
+        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "a"))
+        XCTAssertEqual(controller.membership(for: 100), "a")
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: 1_050, y: 50, width: 150, height: 100))
+    }
+
+    func testMoveFocusedWindowToInactiveWorkspaceOnAnotherMonitorRestoresThereLater() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "a", "b"],
+                monitorSlotsByName: ["a": 2, "b": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: differentSizedDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.focusedWindow = 100
+
+        _ = try controller.moveFocusedWindow(to: "b")
+
+        XCTAssertEqual(controller.membership(for: 100), "b")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+
+        _ = try controller.switchWorkspace(to: "b")
+
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: 1_050, y: 50, width: 150, height: 100))
+    }
+
+    func testDraggedVisibleWindowToAnotherMonitorMovesMembershipToActiveWorkspaceThere() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "a"],
+                monitorSlotsByName: ["a": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: differentSizedDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.frames[100] = .frame(x: 1_050, y: 50, width: 150, height: 100)
+
+        try controller.applyExternalWindowSetChange()
+
+        XCTAssertEqual(controller.membership(for: 100), "a")
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+    }
+
     func testMoveFocusedWindowToMissingWorkspaceCreatesAndPersistsIt() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -587,14 +803,35 @@ final class WorkspaceControllerTests: XCTestCase {
 
     private func makeController(
         _ windowSystem: FakeWindowSystem,
+        displayProvider: FakeDisplayProvider? = nil,
         configStore: (any KkaciConfigStore)? = nil,
         isConfigPersistenceEnabled: Bool = true
     ) -> WorkspaceController {
         WorkspaceController(
             windowSystem: windowSystem,
-            displayProvider: FakeDisplayProvider(point: hidePoint),
+            displayProvider: displayProvider ?? FakeDisplayProvider(point: hidePoint),
             configStore: configStore,
             isConfigPersistenceEnabled: isConfigPersistenceEnabled
+        )
+    }
+
+    private func twoDisplayProvider() -> FakeDisplayProvider {
+        FakeDisplayProvider(
+            point: hidePoint,
+            snapshots: [
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), isMain: true),
+                DisplaySnapshot(id: 2, frame: CGRect(x: 1_000, y: 0, width: 1_000, height: 1_000), isMain: false),
+            ]
+        )
+    }
+
+    private func differentSizedDisplayProvider() -> FakeDisplayProvider {
+        FakeDisplayProvider(
+            point: hidePoint,
+            snapshots: [
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), isMain: true),
+                DisplaySnapshot(id: 2, frame: CGRect(x: 1_000, y: 0, width: 500, height: 500), isMain: false),
+            ]
         )
     }
 }

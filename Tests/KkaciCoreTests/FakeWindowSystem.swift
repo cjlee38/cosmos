@@ -10,6 +10,7 @@ final class FakeWindowSystem: WindowSystem {
     enum Operation: Equatable {
         case refresh
         case setPosition(WindowID, CGPoint)
+        case setFrame(WindowID, WindowFrame)
         case focus(WindowID)
     }
 
@@ -78,6 +79,16 @@ final class FakeWindowSystem: WindowSystem {
             frame.origin = point
             frames[id] = frame
         }
+    }
+
+    func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
+        operations.append(.setFrame(id, frame))
+        if setPositionFailures.contains(id) {
+            throw FakeWindowSystemError.setPosition(id)
+        }
+
+        positions[id] = frame.origin
+        frames[id] = frame
     }
 
     func focus(_ id: WindowID) {

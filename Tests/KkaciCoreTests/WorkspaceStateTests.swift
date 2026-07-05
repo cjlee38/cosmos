@@ -6,7 +6,7 @@ final class WorkspaceStateTests: XCTestCase {
     func testInitialSyncUsesCurrentWindowsAsBaseline() {
         var state = WorkspaceState()
 
-        let sync = state.sync(aliveWindowIDs: [100])
+        let sync = state.sync(windows: [.window(id: 100, title: "existing")]) { _ in 1 }
 
         XCTAssertTrue(sync.isEmpty)
         XCTAssertNil(state.membership(for: 100))
@@ -14,24 +14,49 @@ final class WorkspaceStateTests: XCTestCase {
 
     func testNewWindowsAreAutoAssignedToActiveWorkspace() {
         var state = WorkspaceState()
-        _ = state.sync(aliveWindowIDs: [100])
+        _ = state.sync(windows: [.window(id: 100, title: "existing")]) { _ in 1 }
         state.activate("3")
 
-        let sync = state.sync(aliveWindowIDs: [100, 200])
+        let sync = state.sync(windows: [
+            .window(id: 100, title: "existing"),
+            .window(id: 200, title: "new")
+        ]) { _ in 1 }
 
         XCTAssertEqual(sync.autoAssigned.map(\.0), [200])
         XCTAssertEqual(sync.autoAssigned.map(\.1), ["3"])
         XCTAssertEqual(state.membership(for: 200), "3")
     }
 
+    func testNewWindowsAreAutoAssignedToTheActiveWorkspaceOnTheirMonitorSlot() {
+        var state = WorkspaceState(workspaces: WorkspaceConfig(
+            names: ["1", "2"],
+            monitorSlotsByName: ["2": 2]
+        ))
+        _ = state.sync(windows: []) { _ in 1 }
+
+        _ = state.sync(windows: [
+            .window(id: 100, title: "main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "secondary", frame: .frame(x: 1_100, y: 100))
+        ]) { frame in
+            guard let frame else { return 1 }
+            return frame.center.x >= 1_000 ? 2 : 1
+        }
+
+        XCTAssertEqual(state.membership(for: 100), "1")
+        XCTAssertEqual(state.membership(for: 200), "2")
+    }
+
     func testRemovedWindowsArePrunedFromMembershipHiddenStateAndMRUOrder() {
         var state = WorkspaceState()
-        _ = state.sync(aliveWindowIDs: [100, 200])
+        _ = state.sync(windows: [
+            .window(id: 100, title: "first"),
+            .window(id: 200, title: "second")
+        ]) { _ in 1 }
         state.assign(200, to: "2")
         state.storeHiddenFrameIfNeeded(.frame(x: 20, y: 20), for: 200)
         state.recordFocus(200, in: "2")
 
-        let sync = state.sync(aliveWindowIDs: [100])
+        let sync = state.sync(windows: [.window(id: 100, title: "first")]) { _ in 1 }
 
         XCTAssertEqual(sync.removed, [200])
         XCTAssertNil(state.membership(for: 200))
@@ -79,6 +104,19 @@ final class WorkspaceStateTests: XCTestCase {
 
         XCTAssertEqual(state.workspaces, ["1", "2", "3", "scratch"])
         XCTAssertEqual(state.activeWorkspace, "scratch")
+    }
+
+    func testApplyingWorkspacesKeepsActiveWorkspaceMonitorSlotsForRuntimeWorkspaces() {
+        var state = WorkspaceState(workspaces: WorkspaceConfig(
+            names: ["1", "2"],
+            monitorSlotsByName: ["2": 2]
+        ))
+
+        state.applyWorkspaces(WorkspaceConfig(names: ["1", "3"]))
+
+        XCTAssertEqual(state.workspaces, ["1", "3", "2"])
+        XCTAssertEqual(state.monitorSlot(for: "2"), 2)
+        XCTAssertTrue(state.activeWorkspaces.contains("2"))
     }
 
     func testApplyingWorkspacesRemovesUnreferencedRuntimeWorkspaces() {

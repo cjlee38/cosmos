@@ -19,10 +19,20 @@ final class DebugStatusRenderer {
         var lines: [String] = [
             "kkaci debug status",
             "active workspace: \(controller.activeWorkspace)",
+            "active workspaces: \(controller.activeWorkspaces.joined(separator: ", "))",
             "workspaces: \(controller.workspaces.joined(separator: ", "))",
             "latest event: \(eventLog.latestMessage)",
             "",
         ]
+
+        lines.append("monitors:")
+        for monitor in controller.monitorSlots {
+            let frame = format(monitor.display.frame)
+            let main = monitor.display.isMain ? " main" : ""
+            let active = controller.activeWorkspace(on: monitor.slot)
+            lines.append("  slot=\(monitor.slot)\(main) display=\(monitor.display.id) active=\(active) \(frame)")
+        }
+        lines.append("")
 
         if !result.sync.isEmpty {
             lines.append("sync:")
@@ -42,12 +52,13 @@ final class DebugStatusRenderer {
             for window in result.windows {
                 let marker = window.id == focused ? "*" : " "
                 let workspace = controller.membership(for: window.id) ?? "-"
+                let monitor = controller.membership(for: window.id).map { String(controller.monitorSlot(for: $0)) } ?? "-"
                 let hidden = controller.isHiddenByWorkspace(window.id) ? "hidden" : "visible"
                 let minimized = window.isMinimized ? "minimized" : "normal"
                 let title = window.title.isEmpty ? "(untitled)" : window.title
                 let frame = window.frame.map(formatFrame) ?? "frame=?"
                 let cgOrder = cgWindowOrder.format(window.id)
-                lines.append("\(marker) id=\(window.id) \(cgOrder) ws=\(workspace) \(hidden) \(minimized) pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)")
+                lines.append("\(marker) id=\(window.id) \(cgOrder) ws=\(workspace) monitor=\(monitor) \(hidden) \(minimized) pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)")
             }
         }
 
@@ -55,6 +66,10 @@ final class DebugStatusRenderer {
     }
 
     private func formatFrame(_ frame: WindowFrame) -> String {
+        "x=\(format(frame.origin.x)) y=\(format(frame.origin.y)) w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+    }
+
+    private func format(_ frame: CGRect) -> String {
         "x=\(format(frame.origin.x)) y=\(format(frame.origin.y)) w=\(format(frame.size.width)) h=\(format(frame.size.height))"
     }
 

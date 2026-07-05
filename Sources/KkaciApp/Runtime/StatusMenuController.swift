@@ -146,7 +146,7 @@ final class StatusMenuController: NSObject {
 
         for workspace in controller.workspaces {
             let item = NSMenuItem(
-                title: "Workspace \(workspace)",
+                title: workspaceMenuTitle(for: workspace),
                 action: #selector(switchWorkspace(_:)),
                 keyEquivalent: ""
             )
@@ -196,8 +196,13 @@ final class StatusMenuController: NSObject {
         messageItem.title = eventLog.latestMessage
         statusItem.button?.title = "kkaci \(controller.activeWorkspace)"
         for (workspace, item) in workspaceItems {
-            item.state = workspace == controller.activeWorkspace ? .on : .off
+            item.state = controller.isWorkspaceActive(workspace) ? .on : .off
+            item.title = workspaceMenuTitle(for: workspace)
         }
+    }
+
+    private func workspaceMenuTitle(for workspace: String) -> String {
+        "Workspace \(workspace) -> Monitor \(controller.monitorSlot(for: workspace))"
     }
 
     @objc private func addWorkspace() {

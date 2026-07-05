@@ -9,7 +9,7 @@ This first spike verifies the core primitive:
 - move individual windows to a screen corner
 - restore their original frame
 - assign windows to in-memory workspaces
-- auto-assign newly discovered windows to the active workspace
+- auto-assign newly discovered windows to the active workspace on their monitor
 - prune closed/missing windows from in-memory state
 - switch workspaces by hiding/restoring assigned windows
 - cycle configured workspaces and focus windows within the active workspace
@@ -29,7 +29,7 @@ Run the menu bar runtime app with:
 just app
 ```
 
-The menu bar app captures currently visible windows into workspace `1` on launch.
+The menu bar app captures currently visible windows into the active workspace for each window's monitor on launch.
 It also opens a debug status window; use `Show Debug Status` from the menu bar item to reopen it.
 
 Workspace config is stored at:
@@ -43,6 +43,9 @@ If the config does not exist, kkaci creates the default workspaces `1`, `2`, and
 ```toml
 [workspaces]
 names = ["1", "2", "3", "dev"]
+
+[workspaces.monitors]
+dev = 2
 
 [[bindings]]
 key = "ctrl+tab"
@@ -84,6 +87,8 @@ Option+Shift+1/2/3    move focused window to workspace 1/2/3
 
 Use `Reload Config` from the menu bar item after editing `config.toml`.
 If reload fails, kkaci keeps the previous valid config. If the initial load fails, kkaci runs with defaults until a later reload succeeds and avoids overwriting the broken config.
+
+Workspace monitor slots are config-level roles. `monitor 1` is the current macOS main display. Other monitors are ordered by distance from the main display, then by x/y position as deterministic ties. Kkaci does not store physical display IDs in the config.
 
 ## REPL
 

@@ -125,7 +125,7 @@ final class AppRuntime {
 
     private func bootstrapMessage(for recordResult: HiddenWindowRecordStartupApplyResult) -> String {
         guard !recordResult.reassigned.isEmpty || !recordResult.restored.isEmpty else {
-            return "Captured visible windows to workspace 1"
+            return "Captured visible windows to active workspaces"
         }
 
         return "Applied \(recordResult.reassigned.count) records, restored \(recordResult.restored.count)"
@@ -136,7 +136,11 @@ final class AppRuntime {
             config: controller.currentConfig,
             configURL: configRuntime.configURL,
             activeWorkspace: controller.activeWorkspace,
-            runtimeWorkspaces: controller.workspaces
+            activeWorkspaces: controller.activeWorkspaces,
+            runtimeWorkspaces: controller.workspaces,
+            monitorSlotsByWorkspace: Dictionary(uniqueKeysWithValues: controller.workspaces.map { workspace in
+                (workspace, controller.monitorSlot(for: workspace))
+            })
         )
     }
 

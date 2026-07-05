@@ -11,6 +11,7 @@ public final class WorkspaceController {
     private let navigationCoordinator: WorkspaceNavigationCoordinator
     private let assignmentCoordinator: WindowAssignmentCoordinator
     private let emergencyHiddenWindowRestorer: EmergencyHiddenWindowRestorer
+    private let monitorSlotResolver: MonitorSlotResolver
 
     private var state: WorkspaceState
 
@@ -20,6 +21,10 @@ public final class WorkspaceController {
 
     public var workspaces: [String] {
         state.workspaces
+    }
+
+    public var activeWorkspaces: [String] {
+        state.workspaces.filter { state.activeWorkspaces.contains($0) }
     }
 
     public var currentConfig: KkaciConfig {
@@ -32,13 +37,14 @@ public final class WorkspaceController {
 
     public init(
         windowSystem: any WindowSystem,
-        displayProvider: any HidePointProviding,
+        displayProvider: any DisplayProviding,
         configStore: (any KkaciConfigStore)? = nil,
         recordStore: (any HiddenWindowRecordStore)? = nil,
         isConfigPersistenceEnabled: Bool = true
     ) {
         self.windowSystem = windowSystem
         self.windowStore = WindowRuntimeStore(recordStore: recordStore)
+        self.monitorSlotResolver = MonitorSlotResolver(displayProvider: displayProvider)
         let configuration = WorkspaceConfigurationRuntime(
             configStore: configStore,
             isPersistenceEnabled: isConfigPersistenceEnabled
@@ -46,7 +52,8 @@ public final class WorkspaceController {
         self.configuration = configuration
         self.windowSetSynchronizer = WindowSetSynchronizer(
             windowSystem: windowSystem,
-            windowStore: windowStore
+            windowStore: windowStore,
+            monitorSlotResolver: monitorSlotResolver
         )
         let hiddenWindowOperator = HiddenWindowOperator(
             windowSystem: windowSystem,
@@ -71,7 +78,8 @@ public final class WorkspaceController {
         self.assignmentCoordinator = WindowAssignmentCoordinator(
             windowSystem: windowSystem,
             configuration: configuration,
-            visibilityCoordinator: visibilityCoordinator
+            visibilityCoordinator: visibilityCoordinator,
+            monitorSlotResolver: monitorSlotResolver
         )
         self.emergencyHiddenWindowRestorer = EmergencyHiddenWindowRestorer(
             windowStore: windowStore,
@@ -117,6 +125,22 @@ public final class WorkspaceController {
         state.windowIDsByMostRecentFocus(in: workspace, currentFocused: windowSystem.focusedWindowID())
     }
 
+    public func isWorkspaceActive(_ workspace: String) -> Bool {
+        state.activeWorkspaces.contains(workspace)
+    }
+
+    public func monitorSlot(for workspace: String) -> MonitorSlot {
+        state.monitorSlot(for: workspace)
+    }
+
+    public func activeWorkspace(on monitorSlot: MonitorSlot) -> String {
+        state.activeWorkspace(on: monitorSlot)
+    }
+
+    public var monitorSlots: [MonitorSlotSnapshot] {
+        monitorSlotResolver.slots()
+    }
+
     public func assignFocused(to workspace: String) throws -> WindowID {
         _ = syncWindows()
         return try assignmentCoordinator.assignFocused(to: workspace, state: &state)
@@ -142,7 +166,7 @@ public final class WorkspaceController {
     @discardableResult
     public func bootstrapWindowState(defaultWorkspace workspace: String) throws -> WindowBootstrapResult {
         let hiddenRecords = try applyHiddenWindowRecordsAtStartup()
-        let sync = try captureUnassignedVisibleWindows(into: workspace)
+        let sync = try captureInitialVisibleWindows(defaultWorkspace: workspace)
         try applyActiveWorkspaceVisibility()
         return WindowBootstrapResult(hiddenRecords: hiddenRecords, sync: sync)
     }
@@ -202,7 +226,7 @@ public final class WorkspaceController {
 
     @discardableResult
     public func createWorkspace(named workspace: String) throws -> String {
-        try ensureWorkspace(workspace)
+        try ensureWorkspace(workspace, monitorSlot: currentMonitorSlot())
     }
 
     @discardableResult
@@ -231,13 +255,14 @@ public final class WorkspaceController {
             throw WorkspaceError.windowNotFound(id)
         }
 
-        if let workspace = state.membership(for: id), workspace != activeWorkspace {
+        let workspace = state.membership(for: id) ?? activeWorkspace
+        if workspace != state.activeWorkspace(on: state.monitorSlot(for: workspace)) {
             throw WorkspaceError.windowNotInActiveWorkspace(id, workspace)
         }
 
         _ = try hiddenWindowOperator.restore(id, state: &state)
         windowSystem.focus(id)
-        state.recordFocus(id, in: activeWorkspace)
+        state.recordFocus(id, in: workspace)
     }
 
     public func restoreAllHiddenWindows() -> RestoreAllHiddenWindowsResult {
@@ -256,8 +281,29 @@ public final class WorkspaceController {
         return sync
     }
 
-    private func ensureWorkspace(_ workspace: String) throws -> String {
-        try configuration.ensureWorkspace(workspace, state: &state)
+    private func captureInitialVisibleWindows(defaultWorkspace workspace: String) throws -> WorkspaceSyncSummary {
+        let result = syncWindows()
+        try assignmentCoordinator.captureUnassignedVisibleWindowsByMonitor(
+            result.windows,
+            defaultWorkspace: workspace,
+            state: &state
+        ) { frame in
+            monitorSlotResolver.slot(containing: frame)
+        }
+        return result.sync
+    }
+
+    private func ensureWorkspace(_ workspace: String, monitorSlot: MonitorSlot? = nil) throws -> String {
+        try configuration.ensureWorkspace(workspace, state: &state, monitorSlot: monitorSlot)
+    }
+
+    private func currentMonitorSlot() -> MonitorSlot {
+        if let focusedWindowID = windowSystem.focusedWindowID(),
+           let frame = windowSystem.frame(for: focusedWindowID)
+        {
+            return monitorSlotResolver.slot(containing: frame)
+        }
+        return state.monitorSlot(for: activeWorkspace)
     }
 
     private func applyActiveWorkspaceVisibility(
