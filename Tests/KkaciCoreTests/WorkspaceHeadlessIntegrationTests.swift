@@ -35,13 +35,12 @@ class WorkspaceHeadlessIntegrationTestCase: XCTestCase {
 
     func windows(window200Frame: WindowFrame? = nil) -> [WindowSnapshot] {
         [
-            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
+            .window(id: 100, title: "One", pid: 7, appName: "Notes"),
             .window(
                 id: 200,
                 title: "Two",
                 pid: 8,
                 appName: "Chrome",
-                bundleID: "com.google.Chrome",
                 frame: window200Frame
             )
         ]
@@ -79,7 +78,7 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         secondRecordStore.flushPendingWrites()
 
         XCTAssertTrue(startup.restored.isEmpty)
-        XCTAssertEqual(startup.reassigned, [HiddenWindowRecordAssignment(windowID: 200, workspace: "2")])
+        assertReassigned(startup.reassigned, [(200, "2")])
         XCTAssertEqual(secondController.membership(for: 100), "1")
         XCTAssertEqual(secondController.membership(for: 200), "2")
         XCTAssertTrue(secondController.isHiddenByWorkspace(200))
@@ -202,8 +201,7 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
             id: 300,
             title: "New",
             pid: 8,
-            appName: "Chrome",
-            bundleID: "com.google.Chrome"
+            appName: "Chrome"
         )
         windowSystem.windows.append(newWindow)
         windowSystem.frames[300] = try XCTUnwrap(newWindow.frame)
@@ -252,7 +250,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         secondRecordStore.flushPendingWrites()
 
         XCTAssertEqual(secondController.workspaces, ["1", "2", "3", "dev"])
-        XCTAssertEqual(startup.reassigned, [HiddenWindowRecordAssignment(windowID: 200, workspace: "dev")])
+        assertReassigned(startup.reassigned, [(200, "dev")])
         XCTAssertEqual(secondController.membership(for: 200), "dev")
         XCTAssertTrue(secondController.isHiddenByWorkspace(200))
         XCTAssertEqual(try secondRecordStore.loadRecords().map(\.workspace), ["dev"])
@@ -278,7 +276,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
 
         let secondSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes")
+            .window(id: 100, title: "One", pid: 7, appName: "Notes")
         ])
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
@@ -299,8 +297,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
             id: 300,
             title: "Three",
             pid: 9,
-            appName: "Finder",
-            bundleID: "com.apple.finder"
+            appName: "Finder"
         )
         let windowSystem = FakeWindowSystem(windows: windows() + [window300])
         let recordStore = recordStore(in: directory)

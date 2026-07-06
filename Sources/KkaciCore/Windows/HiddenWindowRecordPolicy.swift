@@ -35,9 +35,6 @@ enum HiddenWindowRecordPolicy {
         HiddenWindowRecord(
             windowID: window.id,
             pid: window.app.pid,
-            bundleID: window.app.bundleID,
-            appName: window.app.name,
-            title: window.title,
             workspace: workspace,
             originalFrame: originalFrame,
             hiddenPosition: hiddenPosition

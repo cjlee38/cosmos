@@ -171,9 +171,9 @@ public extension WorkspaceController {
     @discardableResult
     func bootstrapWindowState(defaultWorkspace workspace: String) throws -> WindowBootstrapResult {
         let hiddenRecords = try applyHiddenWindowRecordsAtStartup()
-        let sync = try captureInitialVisibleWindows(defaultWorkspace: workspace)
+        _ = try captureInitialVisibleWindows(defaultWorkspace: workspace)
         try applyActiveWorkspaceVisibility()
-        return WindowBootstrapResult(hiddenRecords: hiddenRecords, sync: sync)
+        return WindowBootstrapResult(hiddenRecords: hiddenRecords)
     }
 
     internal func applyHiddenWindowRecordsAtStartup() throws -> HiddenWindowRecordStartupApplyResult {

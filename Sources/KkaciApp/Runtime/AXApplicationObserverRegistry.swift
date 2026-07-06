@@ -4,7 +4,6 @@ import Foundation
 
 final class AXApplicationObserverRegistry {
     private struct ObservedApp {
-        let appElement: AXUIElement
         let observer: AXObserver
     }
 
@@ -65,7 +64,7 @@ final class AXApplicationObserverRegistry {
         }
 
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
-        observedApps[pid] = ObservedApp(appElement: appElement, observer: observer)
+        observedApps[pid] = ObservedApp(observer: observer)
     }
 
     func canObserve(_ app: NSRunningApplication) -> Bool {

@@ -13,20 +13,20 @@ public struct MonitorSlotSnapshot: Equatable {
     }
 }
 
-public struct MonitorSlotResolver {
+struct MonitorSlotResolver {
     private let displayProvider: any DisplayProviding
 
-    public init(displayProvider: any DisplayProviding) {
+    init(displayProvider: any DisplayProviding) {
         self.displayProvider = displayProvider
     }
 
-    public func slots() -> [MonitorSlotSnapshot] {
+    func slots() -> [MonitorSlotSnapshot] {
         orderedDisplays().enumerated().map { index, display in
             MonitorSlotSnapshot(slot: index + 1, display: display)
         }
     }
 
-    public func slot(containing frame: WindowFrame?) -> MonitorSlot {
+    func slot(containing frame: WindowFrame?) -> MonitorSlot {
         guard let frame else {
             return 1
         }
@@ -34,11 +34,11 @@ public struct MonitorSlotResolver {
         return slot(containing: frame.center)
     }
 
-    public func display(for slot: MonitorSlot) -> DisplaySnapshot? {
+    func display(for slot: MonitorSlot) -> DisplaySnapshot? {
         slots().first { $0.slot == slot }?.display
     }
 
-    public func translatedFrame(_ frame: WindowFrame, to slot: MonitorSlot) -> WindowFrame? {
+    func translatedFrame(_ frame: WindowFrame, to slot: MonitorSlot) -> WindowFrame? {
         guard let source = display(for: self.slot(containing: frame)),
               let target = display(for: slot),
               source.id != target.id

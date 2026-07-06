@@ -6,12 +6,10 @@ public typealias WindowID = CGWindowID
 public struct RunningAppInfo: Equatable {
     public let pid: pid_t
     public let name: String
-    public let bundleID: String?
 
-    public init(pid: pid_t, name: String, bundleID: String?) {
+    public init(pid: pid_t, name: String) {
         self.pid = pid
         self.name = name
-        self.bundleID = bundleID
     }
 }
 

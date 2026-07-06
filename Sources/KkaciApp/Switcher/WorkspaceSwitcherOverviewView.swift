@@ -1,5 +1,4 @@
 import AppKit
-import KkaciCore
 
 final class WorkspaceSwitcherListView: NSView {
     private var cardViewsByName: [String: WorkspacePreviewCardView] = [:]

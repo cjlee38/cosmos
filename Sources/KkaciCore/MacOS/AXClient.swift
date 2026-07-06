@@ -18,12 +18,12 @@ public final class WindowHandle {
     }
 }
 
-public enum AXClientError: Error, CustomStringConvertible {
+enum AXClientError: Error, CustomStringConvertible {
     case accessibilityPermissionMissing
     case attributeUnavailable(String)
     case setAttributeFailed(String, AXError)
 
-    public var description: String {
+    var description: String {
         switch self {
         case .accessibilityPermissionMissing:
             "Accessibility permission is not granted."
@@ -133,8 +133,7 @@ public final class AXClient {
 
         let appInfo = RunningAppInfo(
             pid: app.processIdentifier,
-            name: app.localizedName ?? "unknown",
-            bundleID: app.bundleIdentifier
+            name: app.localizedName ?? "unknown"
         )
 
         return rawWindows.compactMap { rawWindow in

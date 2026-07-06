@@ -43,7 +43,7 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
             if let pid {
                 recordsByKey?[RecordKey(windowID: windowID, pid: pid)] = nil
             } else {
-                for key in recordsByKey?.keys.filter({ $0.windowID == windowID }) ?? [] {
+                for key in recordsByKey?.keys.filter({ $0.matches(windowID: windowID) }) ?? [] {
                     recordsByKey?[key] = nil
                 }
             }
@@ -131,8 +131,8 @@ private struct RecordDocument: Codable {
 }
 
 private struct RecordKey: Hashable {
-    let windowID: WindowID
-    let pid: pid_t
+    private let windowID: WindowID
+    private let pid: pid_t
 
     init(windowID: WindowID, pid: pid_t) {
         self.windowID = windowID
@@ -142,5 +142,14 @@ private struct RecordKey: Hashable {
     init(_ record: HiddenWindowRecord) {
         windowID = record.windowID
         pid = record.pid
+    }
+
+    func matches(windowID: WindowID) -> Bool {
+        self.windowID == windowID
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(windowID)
+        hasher.combine(pid)
     }
 }

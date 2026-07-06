@@ -1,13 +1,13 @@
 import Foundation
 
-public enum WorkspaceError: Error, Equatable, CustomStringConvertible {
+enum WorkspaceError: Error, Equatable, CustomStringConvertible {
     case invalidWorkspaceName(String)
     case windowNotFound(WindowID)
     case windowNotInActiveWorkspace(WindowID, String)
     case noFocusedWindow
     case frameUnavailable(WindowID)
 
-    public var description: String {
+    var description: String {
         switch self {
         case let .invalidWorkspaceName(workspace):
             "Invalid workspace name: \(workspace)"
@@ -98,10 +98,8 @@ public struct RestoreAllHiddenWindowsResult: Equatable {
 
 public struct WindowBootstrapResult {
     public let hiddenRecords: HiddenWindowRecordStartupApplyResult
-    public let sync: WorkspaceSyncSummary
 
-    public init(hiddenRecords: HiddenWindowRecordStartupApplyResult, sync: WorkspaceSyncSummary) {
+    public init(hiddenRecords: HiddenWindowRecordStartupApplyResult) {
         self.hiddenRecords = hiddenRecords
-        self.sync = sync
     }
 }

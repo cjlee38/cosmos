@@ -10,9 +10,6 @@ class WorkspaceHiddenWindowRecordTestCase: XCTestCase {
         HiddenWindowRecord(
             windowID: 100,
             pid: 7,
-            bundleID: "test.fake",
-            appName: "FakeApp",
-            title: "One",
             workspace: workspace,
             originalFrame: originalFrame,
             hiddenPosition: hidePoint
@@ -37,7 +34,7 @@ class WorkspaceHiddenWindowRecordTestCase: XCTestCase {
 final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCase {
     func testHideWritesHiddenWindowRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes")
+            .window(id: 100, title: "One", pid: 7, appName: "Notes")
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -50,9 +47,6 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
             HiddenWindowRecord(
                 windowID: 100,
                 pid: 7,
-                bundleID: "com.apple.Notes",
-                appName: "Notes",
-                title: "One",
                 workspace: "2",
                 originalFrame: originalFrame,
                 hiddenPosition: hidePoint,
@@ -256,7 +250,7 @@ final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecord
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
         XCTAssertEqual(result.restored, [100])
-        XCTAssertEqual(result.reassigned, [HiddenWindowRecordAssignment(windowID: 100, workspace: "2")])
+        assertReassigned(result.reassigned, [(100, "2")])
         XCTAssertTrue(result.ignored.isEmpty)
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
@@ -299,7 +293,7 @@ final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecord
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
         XCTAssertTrue(result.restored.isEmpty)
-        XCTAssertEqual(result.reassigned, [HiddenWindowRecordAssignment(windowID: 100, workspace: "2")])
+        assertReassigned(result.reassigned, [(100, "2")])
         XCTAssertTrue(result.ignored.isEmpty)
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertTrue(recordStore.records.isEmpty)
@@ -351,7 +345,7 @@ final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecord
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
-        XCTAssertEqual(result.reassigned, [HiddenWindowRecordAssignment(windowID: 100, workspace: "dev")])
+        assertReassigned(result.reassigned, [(100, "dev")])
         XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
         XCTAssertEqual(controller.membership(for: 100), "dev")
         XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])

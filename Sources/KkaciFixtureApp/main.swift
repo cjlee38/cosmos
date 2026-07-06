@@ -15,6 +15,13 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         false
     }
+
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
+        if controlWindow?.isVisible != true {
+            showControlWindow()
+        }
+        return true
+    }
 }
 
 private extension FixtureAppDelegate {

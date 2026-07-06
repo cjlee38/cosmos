@@ -31,10 +31,6 @@ public final class WindowRegistry: WindowSystem {
         axClient.focusedWindowID()
     }
 
-    public func snapshot(for id: WindowID) -> WindowSnapshot? {
-        handle(for: id).map(axClient.snapshot)
-    }
-
     public func frame(for id: WindowID) -> WindowFrame? {
         guard let handle = handle(for: id) else {
             return nil

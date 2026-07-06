@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 @testable import KkaciCore
+import XCTest
 
 extension WindowFrame {
     static func frame(x: CGFloat, y: CGFloat, width: CGFloat = 100, height: CGFloat = 100) -> WindowFrame {
@@ -14,16 +15,25 @@ extension WindowSnapshot {
         title: String,
         pid: pid_t = 1,
         appName: String = "FakeApp",
-        bundleID: String? = "test.fake",
         frame: WindowFrame? = nil,
         isMinimized: Bool = false
     ) -> WindowSnapshot {
         WindowSnapshot(
             id: id,
-            app: RunningAppInfo(pid: pid, name: appName, bundleID: bundleID),
+            app: RunningAppInfo(pid: pid, name: appName),
             title: title,
             frame: frame ?? .frame(x: CGFloat(id), y: CGFloat(id)),
             isMinimized: isMinimized
         )
     }
+}
+
+func assertReassigned(
+    _ actual: [HiddenWindowRecordAssignment],
+    _ expected: [(WindowID, String)],
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    XCTAssertEqual(actual.map(\.windowID), expected.map(\.0), file: file, line: line)
+    XCTAssertEqual(actual.map(\.workspace), expected.map(\.1), file: file, line: line)
 }

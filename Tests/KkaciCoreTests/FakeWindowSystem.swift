@@ -52,18 +52,6 @@ final class FakeWindowSystem: WindowSystem {
         focusedWindow
     }
 
-    func snapshot(for id: WindowID) -> WindowSnapshot? {
-        windows.first { $0.id == id }.map { snapshot in
-            WindowSnapshot(
-                id: snapshot.id,
-                app: snapshot.app,
-                title: snapshot.title,
-                frame: frames[snapshot.id] ?? snapshot.frame,
-                isMinimized: snapshot.isMinimized
-            )
-        }
-    }
-
     func frame(for id: WindowID) -> WindowFrame? {
         frames[id]
     }
