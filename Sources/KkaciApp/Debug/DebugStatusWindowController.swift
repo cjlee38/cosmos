@@ -5,8 +5,8 @@ final class DebugStatusWindowController: NSWindowController {
     private let renderer: DebugStatusRenderer
     private let textView = NSTextView()
 
-    init(controller: WorkspaceController, eventLog: RuntimeEventLog) {
-        renderer = DebugStatusRenderer(controller: controller, eventLog: eventLog)
+    init(controller: WorkspaceController) {
+        renderer = DebugStatusRenderer(controller: controller)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 820, height: 520),

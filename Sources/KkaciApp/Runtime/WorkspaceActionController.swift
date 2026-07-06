@@ -2,14 +2,14 @@ import Foundation
 import KkaciCore
 
 final class WorkspaceActionController {
+    private let log = Log(category: "workspace")
+
     private let controller: WorkspaceController
     private let thumbnailRefresher: WindowThumbnailRefresher
-    private let eventLog: RuntimeEventLog
     private let refreshSurfaces: () -> Void
     private lazy var switcherCoordinator = SwitcherCoordinator(
         controller: controller,
         thumbnailRefresher: thumbnailRefresher,
-        eventLog: eventLog,
         refreshStatus: { [weak self] in
             self?.refreshSurfaces()
         }
@@ -19,12 +19,10 @@ final class WorkspaceActionController {
     init(
         controller: WorkspaceController,
         thumbnailRefresher: WindowThumbnailRefresher,
-        eventLog: RuntimeEventLog,
         refreshSurfaces: @escaping () -> Void
     ) {
         self.controller = controller
         self.thumbnailRefresher = thumbnailRefresher
-        self.eventLog = eventLog
         self.refreshSurfaces = refreshSurfaces
     }
 
@@ -87,9 +85,10 @@ final class WorkspaceActionController {
                 suppressedFocusedWindowID = result.windowID
             }
             refreshThumbnails()
-            eventLog.record("Moved \(result.windowID) to workspace \(result.workspace)")
+            refreshSurfaces()
+            log.info("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
-            eventLog.record("Error: \(error)")
+            log.error("Move focused window failed: \(String(describing: error))")
         }
     }
 
@@ -112,13 +111,14 @@ final class WorkspaceActionController {
             switch try controller.syncWorkspaceToFocusedWindow() {
             case let .switched(windowID, workspace):
                 refreshThumbnails()
-                eventLog.record("Switched to workspace \(workspace) for \(windowID)")
+                refreshSurfaces()
+                log.info("Switched to workspace \(workspace) for \(windowID)")
             case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
                 refreshThumbnails()
                 refreshSurfaces()
             }
         } catch {
-            eventLog.record("Focus sync failed: \(error)")
+            log.error("Focus sync failed: \(String(describing: error))")
         }
     }
 
@@ -128,14 +128,15 @@ final class WorkspaceActionController {
             refreshThumbnails()
             refreshSurfaces()
         } catch {
-            eventLog.record("Window update failed: \(error)")
+            log.error("Window update failed: \(String(describing: error))")
         }
     }
 
     func restoreAllHiddenWindows() {
         let result = controller.restoreAllHiddenWindows()
         refreshThumbnails()
-        eventLog.record("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
+        refreshSurfaces()
+        log.info("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
     }
 
     private func perform(
@@ -148,18 +149,20 @@ final class WorkspaceActionController {
             if shouldRefreshThumbnails {
                 refreshThumbnails()
             }
-            eventLog.record(successMessage)
+            refreshSurfaces()
+            log.info(successMessage)
         } catch {
-            eventLog.record("Error: \(error)")
+            log.error("Workspace action failed: \(String(describing: error))")
         }
     }
 
     private func showWindowFocusResult(_ result: WindowFocusResult) {
         switch result {
         case let .focused(id):
-            eventLog.record("Focused \(id)")
+            refreshSurfaces()
+            log.info("Focused \(id)")
         case let .noWindowsInWorkspace(workspace):
-            eventLog.record("No windows in workspace \(workspace)")
+            log.info("No windows in workspace \(workspace)")
         }
     }
 

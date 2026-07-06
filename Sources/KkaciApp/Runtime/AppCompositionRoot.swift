@@ -6,7 +6,6 @@ struct AppCompositionRoot {
         let registry = WindowRegistry(axClient: axClient)
         let configStore = FileKkaciConfigStore.default
         let recordStore = FileHiddenWindowRecordStore.default
-        let eventLog = RuntimeEventLog()
         let controller = WorkspaceController(
             windowSystem: registry,
             displayProvider: DisplayProvider(),
@@ -31,8 +30,7 @@ struct AppCompositionRoot {
             ),
             permissionController: AccessibilityPermissionController(axClient: axClient),
             keyboardShortcutManager: keyboardShortcutManager,
-            thumbnailRefresher: thumbnailRefresher,
-            eventLog: eventLog
+            thumbnailRefresher: thumbnailRefresher
         )
     }
 }

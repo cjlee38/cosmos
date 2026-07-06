@@ -2,9 +2,10 @@ import AppKit
 import KkaciCore
 
 final class StatusMenuController: NSObject {
+    private let log = Log(category: "menu")
+
     private let controller: WorkspaceController
     private let thumbnailRefresher: WindowThumbnailRefresher
-    private let eventLog: RuntimeEventLog
     private let reloadConfigHandler: () -> Void
     private let requestAccessibilityPermissionHandler: () -> Bool
     private let settingsSnapshotProvider: () -> SettingsSnapshot
@@ -12,15 +13,12 @@ final class StatusMenuController: NSObject {
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
     private let permissionItem = NSMenuItem()
-    private let messageItem = NSMenuItem()
     private lazy var debugStatusWindowController = DebugStatusWindowController(
-        controller: controller,
-        eventLog: eventLog
+        controller: controller
     )
     private lazy var actionController = WorkspaceActionController(
         controller: controller,
         thumbnailRefresher: thumbnailRefresher,
-        eventLog: eventLog,
         refreshSurfaces: { [weak self] in
             self?.refreshSurfaces()
         }
@@ -32,7 +30,6 @@ final class StatusMenuController: NSObject {
     init(
         controller: WorkspaceController,
         thumbnailRefresher: WindowThumbnailRefresher,
-        eventLog: RuntimeEventLog,
         reloadConfigHandler: @escaping () -> Void,
         requestAccessibilityPermissionHandler: @escaping () -> Bool,
         settingsSnapshotProvider: @escaping () -> SettingsSnapshot,
@@ -40,16 +37,12 @@ final class StatusMenuController: NSObject {
     ) {
         self.controller = controller
         self.thumbnailRefresher = thumbnailRefresher
-        self.eventLog = eventLog
         self.reloadConfigHandler = reloadConfigHandler
         self.requestAccessibilityPermissionHandler = requestAccessibilityPermissionHandler
         self.settingsSnapshotProvider = settingsSnapshotProvider
         self.updateWorkspaceMonitorHandler = updateWorkspaceMonitorHandler
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
-        self.eventLog.onChange = { [weak self] in
-            self?.refreshSurfaces()
-        }
         buildMenu()
         refreshMenu()
     }
@@ -124,7 +117,7 @@ final class StatusMenuController: NSObject {
         actionController.applyExternalWindowSetChange()
     }
 
-    private func refreshSurfaces() {
+    func refreshSurfaces() {
         refreshMenu()
         debugStatusWindowController.refresh()
         settingsWindowController?.refresh()
@@ -180,11 +173,6 @@ final class StatusMenuController: NSObject {
         menu.addItem(.separator())
         menu.addItem(commandItem(title: "Emergency Unhide All", action: #selector(emergencyUnhideAll)))
         menu.addItem(.separator())
-
-        messageItem.isEnabled = false
-        messageItem.title = eventLog.latestMessage
-        menu.addItem(messageItem)
-        menu.addItem(.separator())
         menu.addItem(commandItem(title: "Quit", action: #selector(quit)))
     }
 
@@ -199,7 +187,6 @@ final class StatusMenuController: NSObject {
             buildMenu()
         }
 
-        messageItem.title = eventLog.latestMessage
         statusItem.button?.title = "kkaci \(controller.activeWorkspace)"
         for (workspace, item) in workspaceItems {
             item.state = controller.isWorkspaceActive(workspace) ? .on : .off
@@ -235,14 +222,14 @@ final class StatusMenuController: NSObject {
         let isGranted = requestAccessibilityPermissionHandler()
         updatePermissionStatus(isGranted)
         guard isGranted else {
-            eventLog.record("Grant permission in System Settings")
+            log.warning("Grant permission in System Settings")
             return
         }
     }
 
     @objc private func switchWorkspace(_ sender: NSMenuItem) {
         guard let workspace = sender.representedObject as? String else {
-            eventLog.record("Missing workspace")
+            log.error("Missing workspace for menu item")
             return
         }
         switchWorkspace(named: workspace)

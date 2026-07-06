@@ -2,18 +2,18 @@ import AppKit
 import KkaciCore
 
 final class AppRuntime {
+    private let log = Log(category: "runtime")
+
     private let controller: WorkspaceController
     private let configRuntime: ConfigRuntime
     private let permissionController: AccessibilityPermissionController
     private let keyboardShortcutManager: KeyboardShortcutManager
     private let thumbnailRefresher: WindowThumbnailRefresher
-    private let eventLog: RuntimeEventLog
     private var windowEventMonitor: WindowEventMonitor?
 
     private lazy var statusMenuController = StatusMenuController(
         controller: controller,
         thumbnailRefresher: thumbnailRefresher,
-        eventLog: eventLog,
         reloadConfigHandler: { [unowned self] in
             reloadConfig()
         },
@@ -33,15 +33,13 @@ final class AppRuntime {
         configRuntime: ConfigRuntime,
         permissionController: AccessibilityPermissionController,
         keyboardShortcutManager: KeyboardShortcutManager,
-        thumbnailRefresher: WindowThumbnailRefresher,
-        eventLog: RuntimeEventLog
+        thumbnailRefresher: WindowThumbnailRefresher
     ) {
         self.controller = controller
         self.configRuntime = configRuntime
         self.permissionController = permissionController
         self.keyboardShortcutManager = keyboardShortcutManager
         self.thumbnailRefresher = thumbnailRefresher
-        self.eventLog = eventLog
     }
 
     func start() {
@@ -55,13 +53,14 @@ final class AppRuntime {
         statusMenuController.updatePermissionStatus(hasPermission)
 
         guard hasPermission else {
-            eventLog.record("Accessibility permission required")
+            log.warning("Accessibility permission required")
             return
         }
 
         let bootstrapSucceeded = bootstrapWindowStateAfterPermission()
         if let startupConfigLoadError = controller.startupConfigLoadError, bootstrapSucceeded {
-            eventLog.record("Config load failed; using defaults until reload: \(startupConfigLoadError)")
+            let errorMessage = String(describing: startupConfigLoadError)
+            log.error("Config load failed; using defaults until reload: \(errorMessage)")
         }
     }
 
@@ -73,7 +72,7 @@ final class AppRuntime {
         do {
             try configRuntime.installInitialShortcuts(actions: statusMenuController)
         } catch {
-            eventLog.record("Hotkey registration failed: \(error)")
+            log.error("Hotkey registration failed: \(String(describing: error))")
         }
     }
 
@@ -81,9 +80,11 @@ final class AppRuntime {
         do {
             try configRuntime.reload(actions: statusMenuController)
             thumbnailRefresher.refreshAllThumbnails()
-            eventLog.record("Config reloaded")
+            statusMenuController.refreshSurfaces()
+            log.info("Config reloaded")
         } catch {
-            eventLog.record("Config reload failed; keeping previous config: \(error)")
+            let errorMessage = String(describing: error)
+            log.error("Config reload failed; keeping previous config: \(errorMessage)")
         }
     }
 
@@ -91,9 +92,10 @@ final class AppRuntime {
         do {
             try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
             thumbnailRefresher.refreshAllThumbnails()
-            eventLog.record("Workspace \(workspace) uses monitor \(monitorSlot)")
+            statusMenuController.refreshSurfaces()
+            log.info("Workspace \(workspace) uses monitor \(monitorSlot)")
         } catch {
-            eventLog.record("Workspace monitor update failed: \(error)")
+            log.error("Workspace monitor update failed: \(String(describing: error))")
         }
     }
 
@@ -128,10 +130,12 @@ final class AppRuntime {
             let bootstrapResult = try controller.bootstrapWindowState(defaultWorkspace: "1")
             startWindowEventMonitor()
             thumbnailRefresher.refreshAllThumbnails()
-            eventLog.record(bootstrapMessage(for: bootstrapResult.hiddenRecords))
+            statusMenuController.refreshSurfaces()
+            let message = bootstrapMessage(for: bootstrapResult.hiddenRecords)
+            log.info(message)
             return true
         } catch {
-            eventLog.record("Initial window bootstrap failed: \(error)")
+            log.error("Initial window bootstrap failed: \(String(describing: error))")
             return false
         }
     }

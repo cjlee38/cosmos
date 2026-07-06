@@ -2,6 +2,8 @@ import AppKit
 import KkaciCore
 
 final class SwitcherCoordinator {
+    private let log = Log(category: "switcher")
+
     private enum Session {
         case windows(items: [WindowSwitcherItem], selectedIndex: Int, anchorFrame: WindowFrame?)
         case workspaces(groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?)
@@ -11,7 +13,6 @@ final class SwitcherCoordinator {
     private let contentProvider: SwitcherContentProvider
     private let thumbnailRefresher: WindowThumbnailRefresher
     private let overlay = SwitcherOverlayWindowController()
-    private let eventLog: RuntimeEventLog
     private let refreshStatus: () -> Void
     private var session: Session?
     private var thumbnailViewUpdateScheduled = false
@@ -19,7 +20,6 @@ final class SwitcherCoordinator {
     init(
         controller: WorkspaceController,
         thumbnailRefresher: WindowThumbnailRefresher,
-        eventLog: RuntimeEventLog,
         refreshStatus: @escaping () -> Void
     ) {
         self.controller = controller
@@ -29,7 +29,6 @@ final class SwitcherCoordinator {
             workspaceThumbnailCache: thumbnailRefresher.workspaceThumbnailCache
         )
         self.thumbnailRefresher = thumbnailRefresher
-        self.eventLog = eventLog
         self.refreshStatus = refreshStatus
     }
 
@@ -80,7 +79,8 @@ extension SwitcherCoordinator {
         let anchorFrame = contentProvider.overlayAnchorFrame(from: windows)
 
         guard !items.isEmpty else {
-            eventLog.record("No windows in workspace \(controller.activeWorkspace)")
+            let activeWorkspace = controller.activeWorkspace
+            log.info("No windows in workspace \(activeWorkspace)")
             return
         }
 
@@ -99,7 +99,7 @@ extension SwitcherCoordinator {
         let groups = contentProvider.workspaceGroups(from: windows)
 
         guard !groups.isEmpty else {
-            eventLog.record("No workspaces")
+            log.info("No workspaces")
             return
         }
 
@@ -143,11 +143,11 @@ extension SwitcherCoordinator {
         log("commit window id=\(item.windowID) selected=\(selectedIndex)")
         do {
             try controller.focusWindow(item.windowID)
-            eventLog.record("Focused \(item.windowID)")
+            log.info("Focused \(item.windowID)")
             refreshSceneThumbnails(priorityIDs: [item.windowID])
             refreshStatus()
         } catch {
-            eventLog.record("Window switch failed: \(error)")
+            log.error("Window switch failed: \(String(describing: error))")
         }
     }
 
@@ -199,11 +199,11 @@ extension SwitcherCoordinator {
         log("commit workspace=\(name)")
         do {
             _ = try controller.switchWorkspace(to: name)
-            eventLog.record("Switched to workspace \(name)")
+            log.info("Switched to workspace \(name)")
             refreshSceneThumbnails()
             refreshStatus()
         } catch {
-            eventLog.record("Workspace switch failed: \(error)")
+            log.error("Workspace switch failed: \(String(describing: error))")
         }
     }
 }
@@ -393,6 +393,6 @@ private extension SwitcherCoordinator {
     }
 
     private func log(_ message: String) {
-        NSLog("[kkaci switcher] %@", message)
+        log.trace(message)
     }
 }

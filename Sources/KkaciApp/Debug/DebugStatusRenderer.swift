@@ -4,11 +4,9 @@ import KkaciCore
 
 final class DebugStatusRenderer {
     private let controller: WorkspaceController
-    private let eventLog: RuntimeEventLog
 
-    init(controller: WorkspaceController, eventLog: RuntimeEventLog) {
+    init(controller: WorkspaceController) {
         self.controller = controller
-        self.eventLog = eventLog
     }
 
     func render() -> String {
@@ -21,7 +19,6 @@ final class DebugStatusRenderer {
             "active workspace: \(controller.activeWorkspace)",
             "active workspaces: \(controller.activeWorkspaces.joined(separator: ", "))",
             "workspaces: \(controller.workspaces.joined(separator: ", "))",
-            "latest event: \(eventLog.latestMessage)",
             ""
         ]
 

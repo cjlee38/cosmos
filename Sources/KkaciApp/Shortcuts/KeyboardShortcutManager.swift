@@ -41,6 +41,8 @@ struct KeyboardShortcutRegistration {
 }
 
 final class KeyboardShortcutManager {
+    private let log = Log(category: "keyboard")
+
     private let resolver = KeyboardShortcutResolver()
     private var hotKeys: [String: HotKey] = [:]
     private var holdGroups: [String: HoldGroup] = [:]
@@ -56,7 +58,7 @@ final class KeyboardShortcutManager {
 
     func start() {
         modifierReleaseMonitor.start()
-        log("modifier release monitor started")
+        log.debug("modifier release monitor started")
     }
 
     func replaceShortcuts(_ registrations: [KeyboardShortcutRegistration]) throws {
@@ -83,7 +85,7 @@ final class KeyboardShortcutManager {
             )
         }
 
-        log("register key=\(registration.registration.key) action=\(registration.registration.name)")
+        log.debug("register key=\(registration.registration.key) action=\(registration.registration.name)")
         hotKeys[registration.keystroke.description] = HotKey(
             key: registration.keystroke.key,
             modifiers: registration.keystroke.modifiers,
@@ -91,7 +93,7 @@ final class KeyboardShortcutManager {
                 self?.handleKeyDown(registration)
             },
             keyUpHandler: { [weak self] in
-                self?.log("up key=\(registration.registration.key) action=\(registration.registration.name)")
+                self?.logInput("up key=\(registration.registration.key) action=\(registration.registration.name)")
             }
         )
     }
@@ -101,13 +103,13 @@ final class KeyboardShortcutManager {
             hotKey.isPaused = true
         }
         if !hotKeys.isEmpty {
-            log("unregister count=\(hotKeys.count)")
+            log.debug("unregister count=\(hotKeys.count)")
         }
         hotKeys.removeAll()
     }
 
     private func handleKeyDown(_ registration: ResolvedShortcut) {
-        log("down key=\(registration.registration.key) action=\(registration.registration.name)")
+        logInput("down key=\(registration.registration.key) action=\(registration.registration.name)")
         if let releaseGroup = registration.registration.releaseGroup {
             activeHoldGroups.insert(releaseGroup)
         }
@@ -134,15 +136,15 @@ final class KeyboardShortcutManager {
                 continue
             }
 
-            log("release group=\(group)")
+            logInput("release group=\(group)")
             DispatchQueue.main.async {
                 holdGroup.onRelease()
             }
         }
     }
 
-    private func log(_ message: String) {
-        NSLog("[kkaci keyboard] %@", message)
+    private func logInput(_ message: String) {
+        log.trace(message)
     }
 }
 
