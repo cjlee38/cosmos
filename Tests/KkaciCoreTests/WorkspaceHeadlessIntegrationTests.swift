@@ -233,7 +233,7 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
 
         let secondSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
+            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes")
         ])
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
@@ -311,7 +311,7 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
                 appName: "Chrome",
                 bundleID: "com.google.Chrome",
                 frame: window200Frame
-            ),
+            )
         ]
     }
 }

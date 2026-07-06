@@ -28,7 +28,7 @@ final class RestorableFrameResolverTests: XCTestCase {
                     frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000),
                     visibleFrame: CGRect(x: 0, y: 40, width: 1_000, height: 900),
                     isMain: true
-                ),
+                )
             ]
         ))
         let frame = WindowFrame.frame(x: 999, y: 999, width: 1_000, height: 1_000)

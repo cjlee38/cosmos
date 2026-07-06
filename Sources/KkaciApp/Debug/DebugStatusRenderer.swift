@@ -22,7 +22,7 @@ final class DebugStatusRenderer {
             "active workspaces: \(controller.activeWorkspaces.joined(separator: ", "))",
             "workspaces: \(controller.workspaces.joined(separator: ", "))",
             "latest event: \(eventLog.latestMessage)",
-            "",
+            ""
         ]
 
         lines.append("monitors:")

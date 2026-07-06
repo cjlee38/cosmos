@@ -98,11 +98,11 @@ private enum WorkspaceThumbnailRenderer {
             y: drawingBounds.midY - usedSize.height / 2
         )
         let size = CGSize(width: visibleRect.width * scale, height: visibleRect.height * scale)
-        let x = origin.x + (visibleRect.minX - desktopBounds.minX) * scale
+        let originX = origin.x + (visibleRect.minX - desktopBounds.minX) * scale
         let yFromTop = (visibleRect.minY - desktopBounds.minY) * scale
-        let y = origin.y + usedSize.height - yFromTop - size.height
+        let originY = origin.y + usedSize.height - yFromTop - size.height
 
-        return NSRect(x: x, y: y, width: size.width, height: size.height)
+        return NSRect(x: originX, y: originY, width: size.width, height: size.height)
     }
 
     private static func sourceRect(for visibleRect: CGRect, in windowRect: CGRect, imageSize: NSSize) -> NSRect {
@@ -110,11 +110,11 @@ private enum WorkspaceThumbnailRenderer {
         let heightScale = imageSize.height / max(windowRect.height, 1)
         let width = visibleRect.width * widthScale
         let height = visibleRect.height * heightScale
-        let x = (visibleRect.minX - windowRect.minX) * widthScale
+        let originX = (visibleRect.minX - windowRect.minX) * widthScale
         let yFromTop = (visibleRect.minY - windowRect.minY) * heightScale
-        let y = imageSize.height - yFromTop - height
+        let originY = imageSize.height - yFromTop - height
 
-        return NSRect(x: x, y: y, width: width, height: height)
+        return NSRect(x: originX, y: originY, width: width, height: height)
     }
 
     private static func desktopBounds(for group: WorkspaceSwitcherGroup) -> CGRect {
@@ -170,7 +170,7 @@ private enum WorkspaceThumbnailRenderer {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 28, weight: .medium),
             .foregroundColor: NSColor.secondaryLabelColor,
-            .paragraphStyle: paragraph,
+            .paragraphStyle: paragraph
         ]
         let textRect = NSRect(x: rect.minX, y: rect.midY - 20, width: rect.width, height: 40)
         NSString(string: "No windows").draw(in: textRect, withAttributes: attributes)
@@ -182,7 +182,7 @@ private enum WorkspaceThumbnailRenderer {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: max(18, min(rect.width, rect.height) * 0.34), weight: .semibold),
             .foregroundColor: NSColor.white,
-            .paragraphStyle: paragraph,
+            .paragraphStyle: paragraph
         ]
         let textRect = NSRect(x: rect.minX, y: rect.midY - 18, width: rect.width, height: 36)
         NSString(string: text).draw(in: textRect, withAttributes: attributes)

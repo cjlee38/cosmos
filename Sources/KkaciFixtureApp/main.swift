@@ -64,7 +64,7 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 22),
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -22),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -22),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -22)
         ])
 
         return root
@@ -81,7 +81,7 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             ("Open Minimized Window", #selector(openMinimizedWindow)),
             ("Open Sheet", #selector(openSheet)),
             ("Open Modal Dialog", #selector(openModalDialog)),
-            ("Close Fixture Windows", #selector(closeFixtureWindows)),
+            ("Close Fixture Windows", #selector(closeFixtureWindows))
         ]
     }
 
@@ -272,7 +272,7 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -28),
+            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -28)
         ])
 
         return root
@@ -307,7 +307,7 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -28),
 
             closeButton.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            closeButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -24),
+            closeButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -24)
         ])
 
         return root

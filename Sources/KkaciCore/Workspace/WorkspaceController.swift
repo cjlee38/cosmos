@@ -302,8 +302,7 @@ public final class WorkspaceController {
 
     private func currentMonitorSlot() -> MonitorSlot {
         if let focusedWindowID = windowSystem.focusedWindowID(),
-           let frame = windowSystem.frame(for: focusedWindowID)
-        {
+           let frame = windowSystem.frame(for: focusedWindowID) {
             return monitorSlotResolver.slot(containing: frame)
         }
         return state.monitorSlot(for: activeWorkspace)

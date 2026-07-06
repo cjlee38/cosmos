@@ -8,7 +8,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     func testHideWritesHiddenWindowRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
+            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes")
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -28,13 +28,13 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
                 originalFrame: originalFrame,
                 hiddenPosition: hidePoint,
                 updatedAt: recordStore.records[0].updatedAt
-            ),
+            )
         ])
     }
 
     func testNormalRestoreRemovesHiddenWindowRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7),
+            .window(id: 100, title: "One", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -50,7 +50,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     func testHideSetPositionFailureDoesNotKeepNewHiddenRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7),
+            .window(id: 100, title: "One", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -70,7 +70,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     func testRestoreSetPositionFailureKeepsHiddenStateAndRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7),
+            .window(id: 100, title: "One", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -116,7 +116,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
             .window(id: 200, title: "Two", pid: 7),
-            .window(id: 300, title: "Three", pid: 7),
+            .window(id: 300, title: "Three", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -141,7 +141,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
     func testEmergencyUnhideSkipsClosedHiddenWindows() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
-            .window(id: 200, title: "Two", pid: 7),
+            .window(id: 200, title: "Two", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -160,7 +160,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
     func testWindowSyncRemovesRecordForClosedHiddenWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
-            .window(id: 200, title: "Two", pid: 7),
+            .window(id: 200, title: "Two", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -178,7 +178,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     func testShutdownRestoreDoesNotRemoveHiddenWindowRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7),
+            .window(id: 100, title: "One", pid: 7)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -196,7 +196,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     func testShutdownRestoreUsesCurrentDisplayWhenHiddenFrameIsOffscreen() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 1_400, y: 120, width: 300, height: 240)),
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 1_400, y: 120, width: 300, height: 240))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -217,7 +217,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         let originalFrame = WindowFrame.frame(x: 120, y: 140)
         let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y)),
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -236,7 +236,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         let originalFrame = WindowFrame.frame(x: 1_400, y: 120, width: 300, height: 240)
         let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y, width: 300, height: 240)),
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y, width: 300, height: 240))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -255,7 +255,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         let originalFrame = WindowFrame.frame(x: 120, y: 140)
         let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: originalFrame),
+            .window(id: 100, title: "One", pid: 7, frame: originalFrame)
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -273,7 +273,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
     func testStartupRecordsIgnorePidMismatch() throws {
         let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "2")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 8, frame: .frame(x: hidePoint.x, y: hidePoint.y)),
+            .window(id: 100, title: "One", pid: 8, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -290,7 +290,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
     func testStartupRecordsIgnoreWindowMovedAwayFromHiddenAndOriginalPosition() throws {
         let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "2")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 900, y: 900)),
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 900, y: 900))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -307,7 +307,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
     func testStartupRecordsCreateMissingWorkspaceBeforeAssignment() throws {
         let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "dev")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y)),
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let store = InMemoryWorkspaceConfigStore()

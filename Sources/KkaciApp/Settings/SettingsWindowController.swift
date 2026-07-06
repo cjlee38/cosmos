@@ -125,7 +125,7 @@ final class SettingsWindowController: NSWindowController {
 
             monitorSection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             scrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
-            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 240),
+            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 240)
         ])
     }
 

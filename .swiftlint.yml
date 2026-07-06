@@ -8,3 +8,10 @@ excluded:
   - .swiftpm
 
 reporter: "xcode"
+
+identifier_name:
+  excluded:
+    - x
+    - y
+    - dx
+    - dy

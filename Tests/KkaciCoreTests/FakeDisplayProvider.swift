@@ -8,7 +8,7 @@ struct FakeDisplayProvider: DisplayProviding {
     init(
         point: CGPoint = CGPoint(x: 999, y: 999),
         snapshots: [DisplaySnapshot] = [
-            DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), isMain: true),
+            DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), isMain: true)
         ]
     ) {
         self.point = point

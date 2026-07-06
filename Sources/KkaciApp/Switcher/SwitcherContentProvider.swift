@@ -45,8 +45,7 @@ final class SwitcherContentProvider {
 
     func overlayAnchorFrame(from windows: [WindowSnapshot]) -> WindowFrame? {
         if let focusedID = controller.focusedWindowID(),
-           let focusedFrame = windows.first(where: { $0.id == focusedID })?.frame
-        {
+           let focusedFrame = windows.first(where: { $0.id == focusedID })?.frame {
             return focusedFrame
         }
 

@@ -58,7 +58,7 @@ final class KkaciConfigTests: XCTestCase {
             workspaces: WorkspaceConfig(names: ["1", "2", "dev"]),
             bindings: [
                 HotKeyBinding(key: "ctrl+tab", command: "next-workspace"),
-                HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev"),
+                HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")
             ]
         )
 
@@ -95,7 +95,7 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertEqual(config.workspaces.names, ["1", "2", "dev"])
         XCTAssertEqual(config.bindings, [
             HotKeyBinding(key: "ctrl+tab", command: "next-workspace"),
-            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev"),
+            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")
         ])
     }
 

@@ -63,7 +63,9 @@ public final class AXClient {
         guard let focused = copyAttribute(kAXFocusedWindowAttribute, from: axApp) else {
             return nil
         }
-        return (focused as! AXUIElement).containingWindowID()
+        // swiftlint:disable:next force_cast
+        let focusedWindow = focused as! AXUIElement
+        return focusedWindow.containingWindowID()
     }
 
     public func snapshot(for handle: WindowHandle) -> WindowSnapshot {
@@ -136,6 +138,7 @@ public final class AXClient {
         )
 
         return rawWindows.compactMap { rawWindow in
+            // swiftlint:disable:next force_cast
             let axWindow = rawWindow as! AXUIElement
             guard isManageableWindow(axWindow),
                   let id = axWindow.containingWindowID()
@@ -170,7 +173,9 @@ public final class AXClient {
             return nil
         }
         var point = CGPoint.zero
-        return AXValueGetValue(value as! AXValue, .cgPoint, &point) ? point : nil
+        // swiftlint:disable:next force_cast
+        let axValue = value as! AXValue
+        return AXValueGetValue(axValue, .cgPoint, &point) ? point : nil
     }
 
     private func sizeAttribute(_ name: String, from element: AXUIElement) -> CGSize? {
@@ -178,7 +183,9 @@ public final class AXClient {
             return nil
         }
         var size = CGSize.zero
-        return AXValueGetValue(value as! AXValue, .cgSize, &size) ? size : nil
+        // swiftlint:disable:next force_cast
+        let axValue = value as! AXValue
+        return AXValueGetValue(axValue, .cgSize, &size) ? size : nil
     }
 }
 

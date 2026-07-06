@@ -3,6 +3,46 @@ import Foundation
 import HotKey
 
 final class KeyboardShortcutResolver {
+    private let keysByName: [String: Key] = [
+        "tab": .tab,
+        "1": .one,
+        "2": .two,
+        "3": .three,
+        "4": .four,
+        "5": .five,
+        "6": .six,
+        "7": .seven,
+        "8": .eight,
+        "9": .nine,
+        "0": .zero,
+        "a": .a,
+        "b": .b,
+        "c": .c,
+        "d": .d,
+        "e": .e,
+        "f": .f,
+        "g": .g,
+        "h": .h,
+        "i": .i,
+        "j": .j,
+        "k": .k,
+        "l": .l,
+        "m": .m,
+        "n": .n,
+        "o": .o,
+        "p": .p,
+        "q": .q,
+        "r": .r,
+        "s": .s,
+        "t": .t,
+        "u": .u,
+        "v": .v,
+        "w": .w,
+        "x": .x,
+        "y": .y,
+        "z": .z
+    ]
+
     func resolve(_ registrations: [KeyboardShortcutRegistration]) throws -> [ResolvedShortcut] {
         var seenKeys: Set<String> = []
         var seenGroups: [String: NSEvent.ModifierFlags] = [:]
@@ -17,8 +57,7 @@ final class KeyboardShortcutResolver {
             if let releaseGroup = registration.releaseGroup {
                 holdModifier = try inferHoldModifier(from: keystroke, key: registration.key)
                 if let existingModifier = seenGroups[releaseGroup],
-                   existingModifier != holdModifier
-                {
+                   existingModifier != holdModifier {
                     throw KeyboardShortcutError.conflictingHoldGroup(releaseGroup)
                 }
                 seenGroups[releaseGroup] = holdModifier
@@ -73,47 +112,10 @@ final class KeyboardShortcutResolver {
     }
 
     private func parseKey(_ key: String) throws -> Key {
-        switch key {
-        case "tab": return .tab
-        case "1": return .one
-        case "2": return .two
-        case "3": return .three
-        case "4": return .four
-        case "5": return .five
-        case "6": return .six
-        case "7": return .seven
-        case "8": return .eight
-        case "9": return .nine
-        case "0": return .zero
-        case "a": return .a
-        case "b": return .b
-        case "c": return .c
-        case "d": return .d
-        case "e": return .e
-        case "f": return .f
-        case "g": return .g
-        case "h": return .h
-        case "i": return .i
-        case "j": return .j
-        case "k": return .k
-        case "l": return .l
-        case "m": return .m
-        case "n": return .n
-        case "o": return .o
-        case "p": return .p
-        case "q": return .q
-        case "r": return .r
-        case "s": return .s
-        case "t": return .t
-        case "u": return .u
-        case "v": return .v
-        case "w": return .w
-        case "x": return .x
-        case "y": return .y
-        case "z": return .z
-        default:
+        guard let resolvedKey = keysByName[key] else {
             throw KeyboardShortcutError.unsupportedKey(key)
         }
+        return resolvedKey
     }
 
     private func inferHoldModifier(from keystroke: Keystroke, key: String) throws -> NSEvent.ModifierFlags {

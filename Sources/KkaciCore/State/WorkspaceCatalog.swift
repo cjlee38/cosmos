@@ -11,7 +11,7 @@ struct WorkspaceCatalog {
         self.activeWorkspace = workspaces.names[0]
         self.monitorSlotsByWorkspace = workspaces.monitorSlotsByName
         self.activeWorkspaceByMonitorSlot = [
-            workspaces.monitorSlot(for: workspaces.names[0]): workspaces.names[0],
+            workspaces.monitorSlot(for: workspaces.names[0]): workspaces.names[0]
         ]
         seedActiveWorkspaces()
     }

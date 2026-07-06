@@ -102,7 +102,7 @@ final class DebugStatusWindowController: NSWindowController {
             refreshButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
 
             closeButton.leadingAnchor.constraint(equalTo: refreshButton.trailingAnchor, constant: 8),
-            closeButton.bottomAnchor.constraint(equalTo: refreshButton.bottomAnchor),
+            closeButton.bottomAnchor.constraint(equalTo: refreshButton.bottomAnchor)
         ])
     }
 

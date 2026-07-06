@@ -101,8 +101,7 @@ final class WorkspaceActionController {
 
     func syncWorkspaceToFocusedWindow() {
         if let suppressedFocusedWindowID,
-           controller.focusedWindowID() == suppressedFocusedWindowID
-        {
+           controller.focusedWindowID() == suppressedFocusedWindowID {
             self.suppressedFocusedWindowID = nil
             applyExternalWindowSetChange()
             return
@@ -114,7 +113,7 @@ final class WorkspaceActionController {
             case .switched(let windowID, let workspace):
                 refreshThumbnails()
                 eventLog.record("Switched to workspace \(workspace) for \(windowID)")
-            case .alreadyActive(_, _), .noFocusedWindow, .unmanagedWindow(_):
+            case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
                 refreshThumbnails()
                 refreshSurfaces()
             }

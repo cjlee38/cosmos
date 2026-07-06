@@ -91,7 +91,7 @@ public struct KkaciConfig: Codable, Equatable {
             HotKeyBinding(key: "option+3", command: "workspace", workspace: "3"),
             HotKeyBinding(key: "option+shift+1", command: "move-window-to-workspace", workspace: "1"),
             HotKeyBinding(key: "option+shift+2", command: "move-window-to-workspace", workspace: "2"),
-            HotKeyBinding(key: "option+shift+3", command: "move-window-to-workspace", workspace: "3"),
+            HotKeyBinding(key: "option+shift+3", command: "move-window-to-workspace", workspace: "3")
         ]
     )
 

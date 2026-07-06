@@ -32,44 +32,53 @@ public final class REPL {
             }
 
             do {
-                switch command {
-                case "help", "?":
-                    printHelp()
-                case "permission":
-                    print(ensureAccessibilityPermission(true) ? "granted" : "missing")
-                case "list", "ls":
-                    printWindows()
-                case "focused":
-                    printFocusedWindow()
-                case "assign":
-                    try assign(parts)
-                case "capture":
-                    try capture(parts)
-                case "switch", "ws":
-                    try switchWorkspace(parts)
-                case "next-workspace", "next-ws":
-                    try switchToNextWorkspace(parts)
-                case "prev-workspace", "previous-workspace", "prev-ws":
-                    try switchToPreviousWorkspace(parts)
-                case "next-window", "next-win":
-                    focusNextWindow(parts)
-                case "prev-window", "previous-window", "prev-win":
-                    focusPreviousWindow(parts)
-                case "hide":
-                    try hide(parts)
-                case "restore":
-                    try restore(parts)
-                case "workspaces":
-                    printWorkspaces()
-                case "quit", "exit":
+                let shouldContinue = try handleCommand(REPLCommand(command), parts: parts)
+                if !shouldContinue {
                     return
-                default:
-                    print("Unknown command: \(command)")
                 }
             } catch {
                 print("error: \(error)")
             }
         }
+    }
+
+    private func handleCommand(_ command: REPLCommand, parts: [String]) throws -> Bool {
+        switch command {
+        case .help:
+            printHelp()
+        case .permission:
+            print(ensureAccessibilityPermission(true) ? "granted" : "missing")
+        case .list:
+            printWindows()
+        case .focused:
+            printFocusedWindow()
+        case .assign:
+            try assign(parts)
+        case .capture:
+            try capture(parts)
+        case .switchWorkspace:
+            try switchWorkspace(parts)
+        case .nextWorkspace:
+            try switchToNextWorkspace(parts)
+        case .previousWorkspace:
+            try switchToPreviousWorkspace(parts)
+        case .nextWindow:
+            focusNextWindow(parts)
+        case .previousWindow:
+            focusPreviousWindow(parts)
+        case .hide:
+            try hide(parts)
+        case .restore:
+            try restore(parts)
+        case .workspaces:
+            printWorkspaces()
+        case .quit:
+            return false
+        case .unknown(let raw):
+            print("Unknown command: \(raw)")
+            return true
+        }
+        return true
     }
 
     private func printHelp() {
@@ -290,5 +299,56 @@ enum CommandError: Error, CustomStringConvertible {
         case .invalidWindowID(let raw):
             "Invalid window id: \(raw)"
         }
+    }
+}
+
+private enum REPLCommand {
+    case help
+    case permission
+    case list
+    case focused
+    case assign
+    case capture
+    case switchWorkspace
+    case nextWorkspace
+    case previousWorkspace
+    case nextWindow
+    case previousWindow
+    case hide
+    case restore
+    case workspaces
+    case quit
+    case unknown(String)
+
+    private static let aliases: [String: REPLCommand] = [
+        "help": .help,
+        "?": .help,
+        "permission": .permission,
+        "list": .list,
+        "ls": .list,
+        "focused": .focused,
+        "assign": .assign,
+        "capture": .capture,
+        "switch": .switchWorkspace,
+        "ws": .switchWorkspace,
+        "next-workspace": .nextWorkspace,
+        "next-ws": .nextWorkspace,
+        "prev-workspace": .previousWorkspace,
+        "previous-workspace": .previousWorkspace,
+        "prev-ws": .previousWorkspace,
+        "next-window": .nextWindow,
+        "next-win": .nextWindow,
+        "prev-window": .previousWindow,
+        "previous-window": .previousWindow,
+        "prev-win": .previousWindow,
+        "hide": .hide,
+        "restore": .restore,
+        "workspaces": .workspaces,
+        "quit": .quit,
+        "exit": .quit
+    ]
+
+    init(_ raw: String) {
+        self = Self.aliases[raw] ?? .unknown(raw)
     }
 }

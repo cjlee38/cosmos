@@ -2,13 +2,49 @@ import CoreGraphics
 @testable import KkaciCore
 import XCTest
 
-final class WorkspaceControllerTests: XCTestCase {
-    private let hidePoint = CGPoint(x: -1, y: -1)
+class WorkspaceControllerTestCase: XCTestCase {
+    let hidePoint = CGPoint(x: -1, y: -1)
 
+    func makeController(
+        _ windowSystem: FakeWindowSystem,
+        displayProvider: FakeDisplayProvider? = nil,
+        configStore: (any KkaciConfigStore)? = nil,
+        isConfigPersistenceEnabled: Bool = true
+    ) -> WorkspaceController {
+        WorkspaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider ?? FakeDisplayProvider(point: hidePoint),
+            configStore: configStore,
+            isConfigPersistenceEnabled: isConfigPersistenceEnabled
+        )
+    }
+
+    func twoDisplayProvider() -> FakeDisplayProvider {
+        FakeDisplayProvider(
+            point: hidePoint,
+            snapshots: [
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), isMain: true),
+                DisplaySnapshot(id: 2, frame: CGRect(x: 1_000, y: 0, width: 1_000, height: 1_000), isMain: false)
+            ]
+        )
+    }
+
+    func differentSizedDisplayProvider() -> FakeDisplayProvider {
+        FakeDisplayProvider(
+            point: hidePoint,
+            snapshots: [
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), isMain: true),
+                DisplaySnapshot(id: 2, frame: CGRect(x: 1_000, y: 0, width: 500, height: 500), isMain: false)
+            ]
+        )
+    }
+}
+
+final class WorkspaceControllerTests: WorkspaceControllerTestCase {
     func testSwitchHidesOtherWorkspacesAndRestoresTargetWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -31,7 +67,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 101, title: "Two"),
-            .window(id: 200, title: "Three"),
+            .window(id: 200, title: "Three")
         ])
         let controller = makeController(windowSystem)
         let targetFrame = try XCTUnwrap(windowSystem.frames[200])
@@ -52,13 +88,13 @@ final class WorkspaceControllerTests: XCTestCase {
             .setPosition(200, targetFrame.origin),
             .focus(200),
             .setPosition(101, hidePoint),
-            .setPosition(100, hidePoint),
+            .setPosition(100, hidePoint)
         ])
     }
 
     func testNewWindowsAreAutoAssignedToCurrentWorkspaceAfterBaseline() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Baseline"),
+            .window(id: 100, title: "Baseline")
         ])
         let controller = makeController(windowSystem)
 
@@ -74,7 +110,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testCurrentWindowsDoesNotDiscoverOrAssignNewWindows() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Baseline"),
+            .window(id: 100, title: "Baseline")
         ])
         let controller = makeController(windowSystem)
 
@@ -91,7 +127,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testWindowSetChangedDiscoversAndAssignsNewWindows() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Baseline"),
+            .window(id: 100, title: "Baseline")
         ])
         let controller = makeController(windowSystem)
 
@@ -109,7 +145,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testWindowSetChangedRepairsInactiveWorkspaceVisibility() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
         let originalFrame = try XCTUnwrap(windowSystem.frames[200])
@@ -130,7 +166,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testClosedWindowsAreRemovedFromMembershipAndHiddenState() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -149,7 +185,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testRestoreFocusesAlreadyVisibleWindowWhenRequested() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
@@ -162,7 +198,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testRestoreHiddenWindowUsesCurrentDisplayWhenOriginalFrameIsOffscreen() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", frame: .frame(x: 1_400, y: 120, width: 300, height: 240)),
+            .window(id: 100, title: "One", frame: .frame(x: 1_400, y: 120, width: 300, height: 240))
         ])
         let controller = makeController(windowSystem, displayProvider: FakeDisplayProvider(point: hidePoint))
 
@@ -180,7 +216,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testFocusWindowFocusesActiveWorkspaceWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -193,12 +229,14 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(windowSystem.focusedIDs, [200])
         XCTAssertEqual(controller.focusNextWindow(), .focused(100))
     }
+}
 
+final class WorkspaceControllerMonitorAndConfigTests: WorkspaceControllerTestCase {
     func testFocusWindowRecordsFocusInTheWindowsWorkspaceWhenAnotherMonitorSlotIsActive() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
             .window(id: 200, title: "Secondary One", frame: .frame(x: 1_100, y: 100)),
-            .window(id: 201, title: "Secondary Two", frame: .frame(x: 1_200, y: 100)),
+            .window(id: 201, title: "Secondary Two", frame: .frame(x: 1_200, y: 100))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -228,7 +266,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testFocusWindowRejectsInactiveWorkspaceWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -244,7 +282,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testRepeatedHideRestoresOriginalFrame() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
@@ -260,7 +298,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testWorkspaceFrameUsesOriginalFrameForHiddenWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", frame: .frame(x: 40, y: 50, width: 300, height: 200)),
+            .window(id: 100, title: "One", frame: .frame(x: 40, y: 50, width: 300, height: 200))
         ])
         let controller = makeController(windowSystem)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
@@ -274,7 +312,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testAssigningWindowToInactiveWorkspaceHidesItImmediately() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
@@ -289,7 +327,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testNextWorkspaceSwitchesThroughConfiguredWorkspaces() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -309,7 +347,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Main One", frame: .frame(x: 100, y: 100)),
             .window(id: 200, title: "Secondary", frame: .frame(x: 1_100, y: 100)),
-            .window(id: 300, title: "Main Two", frame: .frame(x: 200, y: 100)),
+            .window(id: 300, title: "Main Two", frame: .frame(x: 200, y: 100))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -344,7 +382,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
             .window(id: 200, title: "Secondary One", frame: .frame(x: 1_100, y: 100)),
-            .window(id: 300, title: "Secondary Two", frame: .frame(x: 1_200, y: 100)),
+            .window(id: 300, title: "Secondary Two", frame: .frame(x: 1_200, y: 100))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -374,7 +412,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testBootstrapAssignsVisibleWindowsToTheActiveWorkspaceOnTheirMonitorSlot() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
-            .window(id: 200, title: "Secondary", frame: .frame(x: 1_100, y: 100)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1_100, y: 100))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -401,7 +439,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testPreviousWorkspaceWrapsToLastConfiguredWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -417,7 +455,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testMissingWorkspaceIsCreatedAndPersisted() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let store = InMemoryWorkspaceConfigStore()
         let controller = makeController(windowSystem, configStore: store)
@@ -447,7 +485,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testDisabledConfigPersistenceDoesNotSaveCreatedWorkspaces() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let store = InMemoryWorkspaceConfigStore()
         let controller = makeController(
@@ -465,7 +503,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testFailedStartupConfigLoadUsesDefaultsAndDisablesPersistence() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let store = FailingLoadWorkspaceConfigStore()
         let controller = makeController(windowSystem, configStore: store)
@@ -482,7 +520,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testApplyConfigEnablesPersistenceAndKeepsReferencedRuntimeWorkspaces() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let store = InMemoryWorkspaceConfigStore()
         let controller = makeController(
@@ -505,14 +543,16 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch", "dev"])
         XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "scratch", "dev"])
         XCTAssertEqual(store.savedConfigs.last?.bindings, [
-            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev"),
+            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")
         ])
     }
+}
 
+final class WorkspaceControllerWindowCycleAndFocusTests: WorkspaceControllerTestCase {
     func testCaptureVisibleWindowsAssignsOnlyVisibleWindows() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two", isMinimized: true),
+            .window(id: 200, title: "Two", isMinimized: true)
         ])
         let controller = makeController(windowSystem)
 
@@ -526,7 +566,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
-            .window(id: 300, title: "Three"),
+            .window(id: 300, title: "Three")
         ])
         let controller = makeController(windowSystem)
 
@@ -545,7 +585,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testPreviousWindowWrapsInsideActiveWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -562,7 +602,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testWindowFocusCycleReportsEmptyWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
@@ -578,7 +618,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
-            .window(id: 300, title: "Three"),
+            .window(id: 300, title: "Three")
         ])
         let controller = makeController(windowSystem)
 
@@ -594,7 +634,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testMoveFocusedWindowToInactiveWorkspaceOnlyHidesMovedWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 101, title: "Two"),
+            .window(id: 101, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -615,7 +655,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testMoveFocusedWindowToCurrentWorkspaceKeepsItVisible() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
@@ -633,7 +673,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testMoveFocusedWindowToActiveWorkspaceOnAnotherMonitorMovesItsFrameByRatio() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -663,7 +703,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testMoveFocusedWindowToInactiveWorkspaceOnAnotherMonitorRestoresThereLater() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -697,7 +737,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testDraggedVisibleWindowToAnotherMonitorMovesMembershipToActiveWorkspaceThere() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200))
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
@@ -725,7 +765,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testMoveFocusedWindowToMissingWorkspaceCreatesAndPersistsIt() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let store = InMemoryWorkspaceConfigStore()
         let controller = makeController(windowSystem, configStore: store)
@@ -749,7 +789,7 @@ final class WorkspaceControllerTests: XCTestCase {
     func testFocusedWindowInOtherWorkspaceSwitchesActiveWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
+            .window(id: 200, title: "Two")
         ])
         let controller = makeController(windowSystem)
 
@@ -771,7 +811,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
-            .window(id: 201, title: "Three"),
+            .window(id: 201, title: "Three")
         ])
         let controller = makeController(windowSystem)
 
@@ -789,7 +829,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testFocusedWindowInActiveWorkspaceDoesNotSwitch() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
@@ -805,7 +845,7 @@ final class WorkspaceControllerTests: XCTestCase {
 
     func testUnassignedFocusedWindowDoesNotSwitchWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
+            .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
@@ -818,37 +858,4 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.activeWorkspace, "1")
     }
 
-    private func makeController(
-        _ windowSystem: FakeWindowSystem,
-        displayProvider: FakeDisplayProvider? = nil,
-        configStore: (any KkaciConfigStore)? = nil,
-        isConfigPersistenceEnabled: Bool = true
-    ) -> WorkspaceController {
-        WorkspaceController(
-            windowSystem: windowSystem,
-            displayProvider: displayProvider ?? FakeDisplayProvider(point: hidePoint),
-            configStore: configStore,
-            isConfigPersistenceEnabled: isConfigPersistenceEnabled
-        )
-    }
-
-    private func twoDisplayProvider() -> FakeDisplayProvider {
-        FakeDisplayProvider(
-            point: hidePoint,
-            snapshots: [
-                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), isMain: true),
-                DisplaySnapshot(id: 2, frame: CGRect(x: 1_000, y: 0, width: 1_000, height: 1_000), isMain: false),
-            ]
-        )
-    }
-
-    private func differentSizedDisplayProvider() -> FakeDisplayProvider {
-        FakeDisplayProvider(
-            point: hidePoint,
-            snapshots: [
-                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), isMain: true),
-                DisplaySnapshot(id: 2, frame: CGRect(x: 1_000, y: 0, width: 500, height: 500), isMain: false),
-            ]
-        )
-    }
 }

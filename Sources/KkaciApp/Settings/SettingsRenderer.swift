@@ -10,7 +10,7 @@ struct SettingsRenderer {
             "active workspace: \(snapshot.activeWorkspace)",
             "active workspaces: \(snapshot.activeWorkspaces.joined(separator: ", "))",
             "",
-            "monitors:",
+            "monitors:"
         ]
 
         for monitor in snapshot.monitorSlots {
@@ -22,7 +22,7 @@ struct SettingsRenderer {
 
         lines += [
             "",
-            "runtime workspaces:",
+            "runtime workspaces:"
         ]
 
         for workspace in snapshot.runtimeWorkspaces {

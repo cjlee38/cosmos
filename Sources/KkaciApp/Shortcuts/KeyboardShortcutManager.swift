@@ -76,8 +76,7 @@ final class KeyboardShortcutManager {
     private func register(_ registration: ResolvedShortcut) {
         if let releaseGroup = registration.registration.releaseGroup,
            let onRelease = registration.registration.onRelease,
-           let holdModifier = registration.holdModifier
-        {
+           let holdModifier = registration.holdModifier {
             holdGroups[releaseGroup] = HoldGroup(
                 modifier: holdModifier,
                 onRelease: onRelease

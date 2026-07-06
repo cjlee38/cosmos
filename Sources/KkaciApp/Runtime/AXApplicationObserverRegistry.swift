@@ -103,6 +103,6 @@ final class AXApplicationObserverRegistry {
         kAXWindowResizedNotification,
         kAXWindowMiniaturizedNotification,
         kAXWindowDeminiaturizedNotification,
-        kAXTitleChangedNotification,
+        kAXTitleChangedNotification
     ]
 }
