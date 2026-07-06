@@ -25,7 +25,7 @@ final class SwitcherCoordinator {
         self.controller = controller
         self.contentProvider = SwitcherContentProvider(
             controller: controller,
-            windowThumbnailCache: thumbnailRefresher.thumbnailCache,
+            windowThumbnailCache: thumbnailRefresher.windowThumbnailCache,
             workspaceThumbnailCache: thumbnailRefresher.workspaceThumbnailCache
         )
         self.thumbnailRefresher = thumbnailRefresher
@@ -271,7 +271,7 @@ final class SwitcherCoordinator {
     }
 
     private func refreshManagedThumbnails(priorityIDs: [WindowID] = []) {
-        thumbnailRefresher.refreshManagedThumbnails(
+        thumbnailRefresher.refreshWindowThumbnails(
             priorityIDs: priorityIDs,
             onThumbnailUpdated: { [weak self] _ in
                 self?.scheduleThumbnailViewUpdate()

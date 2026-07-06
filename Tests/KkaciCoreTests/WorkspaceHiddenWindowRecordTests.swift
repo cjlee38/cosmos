@@ -112,34 +112,6 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         XCTAssertTrue(try store.loadRecords().isEmpty)
     }
 
-    func testFileRecordStoreLoadsLegacySnapshotFileAndMigratesWrites() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kkaci-record-legacy-tests-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-
-        let legacyURL = directory.appendingPathComponent("snapshot.json")
-        let recordURL = directory.appendingPathComponent("hidden-window-records.json")
-        let legacyStore = FileHiddenWindowRecordStore(url: legacyURL)
-        let store = FileHiddenWindowRecordStore(url: recordURL, legacyURL: legacyURL)
-        let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "2")
-
-        legacyStore.upsertRecord(record)
-        legacyStore.flushPendingWrites()
-
-        XCTAssertEqual(try store.loadRecords().map(\.windowID), [100])
-
-        store.upsertRecord(record)
-        store.flushPendingWrites()
-
-        XCTAssertTrue(FileManager.default.fileExists(atPath: recordURL.path))
-
-        store.removeRecord(windowID: 100, pid: 7)
-        store.flushPendingWrites()
-
-        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: legacyURL.path))
-    }
-
     func testEmergencyUnhideRestoresAllHiddenWindowsAndRemovesRecords() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),

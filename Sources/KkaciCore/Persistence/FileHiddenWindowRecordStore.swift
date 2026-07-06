@@ -5,21 +5,16 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
         let directory = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("kkaci", isDirectory: true)
-        return FileHiddenWindowRecordStore(
-            url: directory.appendingPathComponent("hidden-window-records.json"),
-            legacyURL: directory.appendingPathComponent("snapshot.json")
-        )
+        return FileHiddenWindowRecordStore(url: directory.appendingPathComponent("hidden-window-records.json"))
     }()
 
     public let url: URL
-    private let legacyURL: URL?
     private let fileManager: FileManager
     private let queue = DispatchQueue(label: "kkaci.hidden-window-record-store")
     private var recordsByKey: [RecordKey: HiddenWindowRecord]?
 
-    public init(url: URL, legacyURL: URL? = nil, fileManager: FileManager = .default) {
+    public init(url: URL, fileManager: FileManager = .default) {
         self.url = url
-        self.legacyURL = legacyURL
         self.fileManager = fileManager
     }
 
@@ -65,12 +60,12 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
             return
         }
 
-        guard let sourceURL = readableURL() else {
+        guard fileManager.fileExists(atPath: url.path) else {
             recordsByKey = [:]
             return
         }
 
-        let data = try Data(contentsOf: sourceURL)
+        let data = try Data(contentsOf: url)
         let document = try JSONDecoder().decode(RecordDocument.self, from: data)
         recordsByKey = Dictionary(uniqueKeysWithValues: document.records.map {
             (RecordKey($0), $0)
@@ -104,21 +99,9 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
         }
     }
 
-    private func readableURL() -> URL? {
-        if fileManager.fileExists(atPath: url.path) {
-            return url
-        }
-        if let legacyURL, fileManager.fileExists(atPath: legacyURL.path) {
-            return legacyURL
-        }
-        return nil
-    }
-
     private func removePersistedRecordFiles() throws {
-        for fileURL in [url, legacyURL].compactMap({ $0 }) {
-            if fileManager.fileExists(atPath: fileURL.path) {
-                try fileManager.removeItem(at: fileURL)
-            }
+        if fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
         }
     }
 
@@ -141,15 +124,6 @@ private struct RecordDocument: Codable {
         self.records = records
     }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let records = try container.decodeIfPresent([HiddenWindowRecord].self, forKey: .records) {
-            self.records = records
-        } else {
-            self.records = try container.decode([HiddenWindowRecord].self, forKey: .legacySnapshots)
-        }
-    }
-
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(records, forKey: .records)
@@ -157,7 +131,6 @@ private struct RecordDocument: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case records
-        case legacySnapshots = "snapshots"
     }
 }
 

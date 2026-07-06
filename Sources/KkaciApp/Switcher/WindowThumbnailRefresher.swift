@@ -2,47 +2,44 @@ import AppKit
 import KkaciCore
 
 final class WindowThumbnailRefresher {
-    let thumbnailCache: WindowThumbnailCache
+    let windowThumbnailCache: WindowThumbnailCache
     let workspaceThumbnailCache: WorkspaceThumbnailCache
     private let controller: WorkspaceController
     private var workspaceThumbnailRefreshScheduled = false
 
     init(
         controller: WorkspaceController,
-        thumbnailCache: WindowThumbnailCache,
+        thumbnailCache windowThumbnailCache: WindowThumbnailCache,
         workspaceThumbnailCache: WorkspaceThumbnailCache
     ) {
         self.controller = controller
-        self.thumbnailCache = thumbnailCache
+        self.windowThumbnailCache = windowThumbnailCache
         self.workspaceThumbnailCache = workspaceThumbnailCache
     }
 
-    func refreshManagedThumbnails(
+    func refreshWindowThumbnails(
         priorityIDs: [WindowID] = [],
         onThumbnailUpdated: @escaping (WindowID) -> Void = { _ in }
     ) {
         let windows = controller.currentWindows().windows
-        let managedWindows = windows.filter { controller.membership(for: $0.id) != nil }
-        let managedIDs = Set(managedWindows.map(\.id))
-        thumbnailCache.removeStaleThumbnails(keeping: Set(windows.map(\.id)))
-        thumbnailCache.refresh(
-            windows: managedWindows,
-            priorityIDs: priorityIDs.filter { managedIDs.contains($0) },
+        windowThumbnailCache.removeStaleThumbnails(keeping: Set(windows.map(\.id)))
+        windowThumbnailCache.refresh(
+            windows: windows,
+            priorityIDs: priorityIDs,
             onThumbnailUpdated: onThumbnailUpdated
         )
     }
 
     func refreshWorkspaceThumbnails() {
         let windows = controller.currentWindows().windows
-        let managedWindows = windows.filter { controller.membership(for: $0.id) != nil }
-        workspaceThumbnailCache.refresh(groups: workspaceGroups(from: managedWindows))
+        workspaceThumbnailCache.refresh(groups: workspaceGroups(from: windows))
     }
 
     func refreshAllThumbnails(
         priorityIDs: [WindowID] = [],
         onThumbnailUpdated: @escaping (WindowID) -> Void = { _ in }
     ) {
-        refreshManagedThumbnails(priorityIDs: priorityIDs) { [weak self] id in
+        refreshWindowThumbnails(priorityIDs: priorityIDs) { [weak self] id in
             self?.scheduleWorkspaceThumbnailRefresh()
             onThumbnailUpdated(id)
         }
@@ -83,7 +80,7 @@ final class WindowThumbnailRefresher {
             appName: window.app.name,
             title: window.title,
             frame: controller.workspaceFrame(for: window.id),
-            preview: thumbnailCache.thumbnail(for: window.id),
+            preview: windowThumbnailCache.thumbnail(for: window.id),
             icon: icon(for: window.app.pid)
         )
     }

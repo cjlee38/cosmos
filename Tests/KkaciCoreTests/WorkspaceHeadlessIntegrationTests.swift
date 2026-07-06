@@ -289,18 +289,11 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
     }
 
     private func recordStore(in directory: URL) -> FileHiddenWindowRecordStore {
-        FileHiddenWindowRecordStore(
-            url: recordURL(in: directory),
-            legacyURL: legacySnapshotURL(in: directory)
-        )
+        FileHiddenWindowRecordStore(url: recordURL(in: directory))
     }
 
     private func recordURL(in directory: URL) -> URL {
         directory.appendingPathComponent("hidden-window-records.json")
-    }
-
-    private func legacySnapshotURL(in directory: URL) -> URL {
-        directory.appendingPathComponent("snapshot.json")
     }
 
     private func temporaryDirectory() -> URL {
