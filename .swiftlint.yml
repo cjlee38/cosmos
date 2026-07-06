@@ -1,0 +1,10 @@
+included:
+  - Package.swift
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - .swiftpm
+
+reporter: "xcode"
