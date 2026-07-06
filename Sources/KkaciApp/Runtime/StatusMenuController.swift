@@ -45,7 +45,7 @@ final class StatusMenuController: NSObject {
         self.requestAccessibilityPermissionHandler = requestAccessibilityPermissionHandler
         self.settingsSnapshotProvider = settingsSnapshotProvider
         self.updateWorkspaceMonitorHandler = updateWorkspaceMonitorHandler
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         self.eventLog.onChange = { [weak self] in
             self?.refreshSurfaces()
@@ -277,7 +277,10 @@ final class StatusMenuController: NSObject {
 
         let alert = NSAlert()
         alert.messageText = "Emergency Unhide All"
-        alert.informativeText = "Restore all windows currently hidden by kkaci. Windows from other workspaces may become visible until the next workspace switch."
+        alert.informativeText = [
+            "Restore all windows currently hidden by kkaci.",
+            "Windows from other workspaces may become visible until the next workspace switch."
+        ].joined(separator: " ")
         alert.addButton(withTitle: "Unhide All")
         alert.addButton(withTitle: "Cancel")
 
@@ -295,7 +298,6 @@ final class StatusMenuController: NSObject {
     @objc private func quit() {
         NSApp.terminate(nil)
     }
-
 }
 
 extension StatusMenuController: KeyboardShortcutActionHandling {}

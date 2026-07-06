@@ -27,9 +27,9 @@ public enum AXClientError: Error, CustomStringConvertible {
         switch self {
         case .accessibilityPermissionMissing:
             "Accessibility permission is not granted."
-        case .attributeUnavailable(let name):
+        case let .attributeUnavailable(name):
             "AX attribute is unavailable: \(name)"
-        case .setAttributeFailed(let name, let error):
+        case let .setAttributeFailed(name, error):
             "Failed to set AX attribute \(name): \(error)"
         }
     }

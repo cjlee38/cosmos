@@ -41,8 +41,28 @@ public final class REPL {
             }
         }
     }
+}
 
+private extension REPL {
     private func handleCommand(_ command: REPLCommand, parts: [String]) throws -> Bool {
+        switch command {
+        case .quit:
+            return false
+        case let .unknown(raw):
+            print("Unknown command: \(raw)")
+        case .help, .permission, .list, .focused, .workspaces:
+            handleReadCommand(command)
+        case .assign, .capture, .switchWorkspace, .nextWorkspace, .previousWorkspace:
+            try handleWorkspaceCommand(command, parts: parts)
+        case .nextWindow, .previousWindow:
+            handleWindowCycleCommand(command, parts: parts)
+        case .hide, .restore:
+            try handleWindowVisibilityCommand(command, parts: parts)
+        }
+        return true
+    }
+
+    private func handleReadCommand(_ command: REPLCommand) {
         switch command {
         case .help:
             printHelp()
@@ -52,6 +72,15 @@ public final class REPL {
             printWindows()
         case .focused:
             printFocusedWindow()
+        case .workspaces:
+            printWorkspaces()
+        default:
+            return
+        }
+    }
+
+    private func handleWorkspaceCommand(_ command: REPLCommand, parts: [String]) throws {
+        switch command {
         case .assign:
             try assign(parts)
         case .capture:
@@ -62,23 +91,31 @@ public final class REPL {
             try switchToNextWorkspace(parts)
         case .previousWorkspace:
             try switchToPreviousWorkspace(parts)
+        default:
+            return
+        }
+    }
+
+    private func handleWindowCycleCommand(_ command: REPLCommand, parts: [String]) {
+        switch command {
         case .nextWindow:
             focusNextWindow(parts)
         case .previousWindow:
             focusPreviousWindow(parts)
+        default:
+            return
+        }
+    }
+
+    private func handleWindowVisibilityCommand(_ command: REPLCommand, parts: [String]) throws {
+        switch command {
         case .hide:
             try hide(parts)
         case .restore:
             try restore(parts)
-        case .workspaces:
-            printWorkspaces()
-        case .quit:
-            return false
-        case .unknown(let raw):
-            print("Unknown command: \(raw)")
-            return true
+        default:
+            return
         }
-        return true
     }
 
     private func printHelp() {
@@ -101,7 +138,9 @@ public final class REPL {
           quit | exit                stop
         """)
     }
+}
 
+private extension REPL {
     private func printWindows() {
         let result = controller.listWindows()
         printSyncSummary(result.sync)
@@ -118,7 +157,10 @@ public final class REPL {
             let hidden = controller.isHiddenByWorkspace(window.id) ? "hidden" : "visible"
             let title = window.title.isEmpty ? "(untitled)" : window.title
             let frame = window.frame.map(formatFrame) ?? "frame=?"
-            print("\(focusMark) \(window.id) ws=\(workspace) \(hidden) pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)")
+            print(
+                "\(focusMark) \(window.id) ws=\(workspace) \(hidden) "
+                    + "pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)"
+            )
         }
     }
 
@@ -268,9 +310,9 @@ public final class REPL {
 
     private func printWindowFocusResult(_ result: WindowFocusResult) {
         switch result {
-        case .focused(let id):
+        case let .focused(id):
             print("focused \(id)")
-        case .noWindowsInWorkspace(let workspace):
+        case let .noWindowsInWorkspace(workspace):
             print("no windows in workspace \(workspace)")
         }
     }
@@ -283,7 +325,9 @@ public final class REPL {
     }
 
     private func formatFrame(_ frame: WindowFrame) -> String {
-        "x=\(format(frame.origin.x)) y=\(format(frame.origin.y)) w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+        let origin = "x=\(format(frame.origin.x)) y=\(format(frame.origin.y))"
+        let size = "w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+        return "\(origin) \(size)"
     }
 
     private func format(_ value: CGFloat) -> String {
@@ -296,59 +340,8 @@ enum CommandError: Error, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .invalidWindowID(let raw):
+        case let .invalidWindowID(raw):
             "Invalid window id: \(raw)"
         }
-    }
-}
-
-private enum REPLCommand {
-    case help
-    case permission
-    case list
-    case focused
-    case assign
-    case capture
-    case switchWorkspace
-    case nextWorkspace
-    case previousWorkspace
-    case nextWindow
-    case previousWindow
-    case hide
-    case restore
-    case workspaces
-    case quit
-    case unknown(String)
-
-    private static let aliases: [String: REPLCommand] = [
-        "help": .help,
-        "?": .help,
-        "permission": .permission,
-        "list": .list,
-        "ls": .list,
-        "focused": .focused,
-        "assign": .assign,
-        "capture": .capture,
-        "switch": .switchWorkspace,
-        "ws": .switchWorkspace,
-        "next-workspace": .nextWorkspace,
-        "next-ws": .nextWorkspace,
-        "prev-workspace": .previousWorkspace,
-        "previous-workspace": .previousWorkspace,
-        "prev-ws": .previousWorkspace,
-        "next-window": .nextWindow,
-        "next-win": .nextWindow,
-        "prev-window": .previousWindow,
-        "previous-window": .previousWindow,
-        "prev-win": .previousWindow,
-        "hide": .hide,
-        "restore": .restore,
-        "workspaces": .workspaces,
-        "quit": .quit,
-        "exit": .quit
-    ]
-
-    init(_ raw: String) {
-        self = Self.aliases[raw] ?? .unknown(raw)
     }
 }

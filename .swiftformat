@@ -1,3 +1,5 @@
 --swift-version 5.9
 --indent 4
 --exclude .build,.swiftpm
+--trailing-commas never
+--disable wrapMultilineStatementBraces

@@ -7,7 +7,7 @@ struct WorkspaceState {
     private var hiddenFrames = HiddenWindowFrameStore()
 
     init(workspaces: WorkspaceConfig = WorkspaceConfig(names: ["1", "2", "3"])) {
-        self.catalog = WorkspaceCatalog(workspaces: workspaces)
+        catalog = WorkspaceCatalog(workspaces: workspaces)
     }
 
     var activeWorkspace: String {

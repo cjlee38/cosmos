@@ -69,7 +69,7 @@ public final class WindowRegistry: WindowSystem {
         frontToBackIndex: [WindowID: Int]
     ) -> Bool {
         switch (frontToBackIndex[lhs.id], frontToBackIndex[rhs.id]) {
-        case (let lhsIndex?, let rhsIndex?):
+        case let (lhsIndex?, rhsIndex?):
             if lhsIndex != rhsIndex {
                 return lhsIndex < rhsIndex
             }

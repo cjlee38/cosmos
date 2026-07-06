@@ -3,9 +3,52 @@ import Foundation
 @testable import KkaciCore
 import XCTest
 
-final class WorkspaceHeadlessIntegrationTests: XCTestCase {
-    private let hidePoint = CGPoint(x: -1, y: -1)
+class WorkspaceHeadlessIntegrationTestCase: XCTestCase {
+    let hidePoint = CGPoint(x: -1, y: -1)
 
+    func makeController(
+        _ windowSystem: FakeWindowSystem,
+        in directory: URL,
+        recordStore: FileHiddenWindowRecordStore
+    ) throws -> WorkspaceController {
+        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml"))
+        return WorkspaceController(
+            windowSystem: windowSystem,
+            displayProvider: FakeDisplayProvider(point: hidePoint),
+            configStore: configStore,
+            recordStore: recordStore
+        )
+    }
+
+    func recordStore(in directory: URL) -> FileHiddenWindowRecordStore {
+        FileHiddenWindowRecordStore(url: recordURL(in: directory))
+    }
+
+    func recordURL(in directory: URL) -> URL {
+        directory.appendingPathComponent("hidden-window-records.json")
+    }
+
+    func temporaryDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("kkaci-headless-integration-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    func windows(window200Frame: WindowFrame? = nil) -> [WindowSnapshot] {
+        [
+            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
+            .window(
+                id: 200,
+                title: "Two",
+                pid: 8,
+                appName: "Chrome",
+                bundleID: "com.google.Chrome",
+                frame: window200Frame
+            )
+        ]
+    }
+}
+
+final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestCase {
     func testShutdownRecordIsAppliedOnRestartAndInactiveWorkspaceIsHiddenAgain() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -178,7 +221,9 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         XCTAssertEqual(windowSystem.positions[300], hidePoint)
         XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200, 300])
     }
+}
 
+final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrationTestCase {
     func testCreatedWorkspacePersistsAndRecordReassignsToItAfterRestart() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -250,7 +295,13 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let window300 = WindowSnapshot.window(id: 300, title: "Three", pid: 9, appName: "Finder", bundleID: "com.apple.finder")
+        let window300 = WindowSnapshot.window(
+            id: 300,
+            title: "Three",
+            pid: 9,
+            appName: "Finder",
+            bundleID: "com.apple.finder"
+        )
         let windowSystem = FakeWindowSystem(windows: windows() + [window300])
         let recordStore = recordStore(in: directory)
         let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
@@ -272,46 +323,5 @@ final class WorkspaceHeadlessIntegrationTests: XCTestCase {
         XCTAssertEqual(windowSystem.frames[200], window200Frame)
         XCTAssertEqual(windowSystem.frames[300], window300Frame)
         XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
-    }
-
-    private func makeController(
-        _ windowSystem: FakeWindowSystem,
-        in directory: URL,
-        recordStore: FileHiddenWindowRecordStore
-    ) throws -> WorkspaceController {
-        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml"))
-        return WorkspaceController(
-            windowSystem: windowSystem,
-            displayProvider: FakeDisplayProvider(point: hidePoint),
-            configStore: configStore,
-            recordStore: recordStore
-        )
-    }
-
-    private func recordStore(in directory: URL) -> FileHiddenWindowRecordStore {
-        FileHiddenWindowRecordStore(url: recordURL(in: directory))
-    }
-
-    private func recordURL(in directory: URL) -> URL {
-        directory.appendingPathComponent("hidden-window-records.json")
-    }
-
-    private func temporaryDirectory() -> URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("kkaci-headless-integration-\(UUID().uuidString)", isDirectory: true)
-    }
-
-    private func windows(window200Frame: WindowFrame? = nil) -> [WindowSnapshot] {
-        [
-            .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes"),
-            .window(
-                id: 200,
-                title: "Two",
-                pid: 8,
-                appName: "Chrome",
-                bundleID: "com.google.Chrome",
-                frame: window200Frame
-            )
-        ]
     }
 }

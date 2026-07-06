@@ -12,7 +12,7 @@ final class SwitcherContentProvider {
         workspaceThumbnailCache: WorkspaceThumbnailCache
     ) {
         self.controller = controller
-        self.previewProvider = WindowPreviewProvider(thumbnailCache: windowThumbnailCache)
+        previewProvider = WindowPreviewProvider(thumbnailCache: windowThumbnailCache)
         self.workspaceThumbnailCache = workspaceThumbnailCache
     }
 
@@ -67,5 +67,4 @@ final class SwitcherContentProvider {
                 )
             }
     }
-
 }

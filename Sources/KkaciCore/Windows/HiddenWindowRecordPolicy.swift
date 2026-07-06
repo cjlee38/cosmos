@@ -8,7 +8,7 @@ enum HiddenWindowRecordStartupAction: Equatable {
 
     var workspace: String? {
         switch self {
-        case .restoreAndAssign(let workspace), .assignOnly(let workspace):
+        case let .restoreAndAssign(workspace), let .assignOnly(workspace):
             workspace
         case .ignore:
             nil

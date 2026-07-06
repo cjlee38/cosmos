@@ -15,8 +15,10 @@ struct SettingsRenderer {
 
         for monitor in snapshot.monitorSlots {
             let main = monitor.display.isMain ? " main" : ""
+            let frame = format(monitor.display.frame)
+            let visibleFrame = format(monitor.display.visibleFrame)
             lines.append(
-                "  \(monitor.slot)\(main) display=\(monitor.display.id) frame=\(format(monitor.display.frame)) usable=\(format(monitor.display.visibleFrame))"
+                "  \(monitor.slot)\(main) display=\(monitor.display.id) frame=\(frame) usable=\(visibleFrame)"
             )
         }
 
@@ -55,7 +57,9 @@ struct SettingsRenderer {
     }
 
     private func format(_ rect: CGRect) -> String {
-        "x=\(format(rect.origin.x)) y=\(format(rect.origin.y)) w=\(format(rect.size.width)) h=\(format(rect.size.height))"
+        let origin = "x=\(format(rect.origin.x)) y=\(format(rect.origin.y))"
+        let size = "w=\(format(rect.size.width)) h=\(format(rect.size.height))"
+        return "\(origin) \(size)"
     }
 
     private func format(_ value: CGFloat) -> String {

@@ -29,7 +29,8 @@ final class SwitcherOverlayScreenLocator {
             else {
                 return false
             }
-            return distanceSquared(from: lhsBounds.center, to: point) < distanceSquared(from: rhsBounds.center, to: point)
+            return distanceSquared(from: lhsBounds.center, to: point)
+                < distanceSquared(from: rhsBounds.center, to: point)
         } ?? NSScreen.main ?? screens[0]
     }
 

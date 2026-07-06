@@ -162,19 +162,19 @@ enum KeyboardShortcutError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .emptyKey:
-            return "empty key"
-        case .missingKey(let value):
-            return "missing key in \(value)"
-        case .multipleKeys(let value):
-            return "multiple keys in \(value)"
-        case .unsupportedKey(let key):
-            return "unsupported key \(key)"
-        case .duplicateKey(let key):
-            return "duplicate key \(key)"
-        case .missingHoldModifier(let key):
-            return "hold shortcut needs a modifier: \(key)"
-        case .conflictingHoldGroup(let group):
-            return "hold group uses conflicting modifiers: \(group)"
+            "empty key"
+        case let .missingKey(value):
+            "missing key in \(value)"
+        case let .multipleKeys(value):
+            "multiple keys in \(value)"
+        case let .unsupportedKey(key):
+            "unsupported key \(key)"
+        case let .duplicateKey(key):
+            "duplicate key \(key)"
+        case let .missingHoldModifier(key):
+            "hold shortcut needs a modifier: \(key)"
+        case let .conflictingHoldGroup(group):
+            "hold group uses conflicting modifiers: \(group)"
         }
     }
 }

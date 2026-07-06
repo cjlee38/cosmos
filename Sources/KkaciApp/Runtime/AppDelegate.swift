@@ -7,11 +7,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.runtime = runtime
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         runtime.start()
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
+    func applicationWillTerminate(_: Notification) {
         runtime.shutdown()
     }
 }

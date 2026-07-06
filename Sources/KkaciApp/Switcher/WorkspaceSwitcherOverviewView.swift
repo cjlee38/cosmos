@@ -22,7 +22,8 @@ final class WorkspaceSwitcherListView: NSView {
         )
     }
 
-    required init?(coder: NSCoder) {
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
@@ -106,7 +107,7 @@ private struct WorkspaceOverviewLayout {
         let canvasHeight = canvasWidth / screenAspect
 
         self.contentSize = contentSize
-        self.cardSize = NSSize(width: canvasWidth + horizontalChrome, height: canvasHeight + chromeHeight)
+        cardSize = NSSize(width: canvasWidth + horizontalChrome, height: canvasHeight + chromeHeight)
         self.columns = columns
         self.rows = rows
         self.spacing = spacing
@@ -127,11 +128,11 @@ private struct WorkspaceOverviewLayout {
         switch groupCount {
         case ...1:
             1
-        case 2...3:
+        case 2 ... 3:
             groupCount
         case 4:
             2
-        case 5...6:
+        case 5 ... 6:
             3
         default:
             Int(ceil(sqrt(Double(groupCount))))
@@ -156,7 +157,7 @@ private final class WorkspacePreviewCardView: NSView {
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) {
-        self.name = group.name
+        name = group.name
         self.hoverGate = hoverGate
         self.onHover = onHover
         self.onClick = onClick
@@ -166,11 +167,12 @@ private final class WorkspacePreviewCardView: NSView {
         updateSelection(isSelected)
     }
 
-    required init?(coder: NSCoder) {
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+    override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
         true
     }
 
@@ -188,23 +190,23 @@ private final class WorkspacePreviewCardView: NSView {
         ))
     }
 
-    override func mouseEntered(with event: NSEvent) {
+    override func mouseEntered(with _: NSEvent) {
         hover()
     }
 
-    override func mouseMoved(with event: NSEvent) {
+    override func mouseMoved(with _: NSEvent) {
         hover()
     }
 
-    override func mouseDown(with event: NSEvent) {
+    override func mouseDown(with _: NSEvent) {
         onClick(name)
     }
 
-    override func rightMouseDown(with event: NSEvent) {
+    override func rightMouseDown(with _: NSEvent) {
         onClick(name)
     }
 
-    override func otherMouseDown(with event: NSEvent) {
+    override func otherMouseDown(with _: NSEvent) {
         onClick(name)
     }
 

@@ -6,16 +6,18 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     private weak var activeModalWindow: NSWindow?
     private var sequence = 1
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(.regular)
         buildMainMenu()
         showControlWindow()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         false
     }
+}
 
+private extension FixtureAppDelegate {
     private func showControlWindow() {
         let window = NSWindow(
             contentRect: NSRect(x: 120, y: 120, width: 480, height: 520),
@@ -39,7 +41,9 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         let title = NSTextField(labelWithString: "kkaci fixture windows")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
 
-        let description = NSTextField(wrappingLabelWithString: "Open external AppKit windows with known titles and behaviors for kkaci AX/manual verification.")
+        let descriptionText = "Open external AppKit windows with known titles and behaviors "
+            + "for kkaci AX/manual verification."
+        let description = NSTextField(wrappingLabelWithString: descriptionText)
         description.textColor = .secondaryLabelColor
 
         let stack = NSStackView()
@@ -196,7 +200,9 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
         fixtureWindows.removeAll()
     }
+}
 
+extension FixtureAppDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
               window === activeModalWindow
@@ -206,7 +212,9 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         NSApp.stopModal()
         activeModalWindow = nil
     }
+}
 
+private extension FixtureAppDelegate {
     @discardableResult
     private func makeFixtureWindow(
         title: String,

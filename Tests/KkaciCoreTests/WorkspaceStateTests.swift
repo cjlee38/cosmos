@@ -36,10 +36,10 @@ final class WorkspaceStateTests: XCTestCase {
 
         _ = state.sync(windows: [
             .window(id: 100, title: "main", frame: .frame(x: 100, y: 100)),
-            .window(id: 200, title: "secondary", frame: .frame(x: 1_100, y: 100))
+            .window(id: 200, title: "secondary", frame: .frame(x: 1100, y: 100))
         ]) { frame in
             guard let frame else { return 1 }
-            return frame.center.x >= 1_000 ? 2 : 1
+            return frame.center.x >= 1000 ? 2 : 1
         }
 
         XCTAssertEqual(state.membership(for: 100), "1")

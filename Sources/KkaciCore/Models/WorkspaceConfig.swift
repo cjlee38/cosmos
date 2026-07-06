@@ -53,7 +53,10 @@ public struct WorkspaceConfig: Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let names = try container.decodeIfPresent([String].self, forKey: .names) ?? ["1", "2", "3"]
-        let monitorSlotsByName = try container.decodeIfPresent([String: MonitorSlot].self, forKey: .monitorSlotsByName) ?? [:]
+        let monitorSlotsByName = try container.decodeIfPresent(
+            [String: MonitorSlot].self,
+            forKey: .monitorSlotsByName
+        ) ?? [:]
         self.init(names: names, monitorSlotsByName: monitorSlotsByName)
     }
 

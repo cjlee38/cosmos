@@ -10,7 +10,7 @@ final class WindowPreviewProvider {
 
     func makeItem(for window: WindowSnapshot, frame: WindowFrame?) -> WindowSwitcherItem {
         WindowSwitcherItem(
-            id: window.id,
+            windowID: window.id,
             appName: window.app.name,
             title: window.title,
             frame: frame,

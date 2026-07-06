@@ -110,7 +110,7 @@ final class WorkspaceActionController {
         suppressedFocusedWindowID = nil
         do {
             switch try controller.syncWorkspaceToFocusedWindow() {
-            case .switched(let windowID, let workspace):
+            case let .switched(windowID, workspace):
                 refreshThumbnails()
                 eventLog.record("Switched to workspace \(workspace) for \(windowID)")
             case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
@@ -156,9 +156,9 @@ final class WorkspaceActionController {
 
     private func showWindowFocusResult(_ result: WindowFocusResult) {
         switch result {
-        case .focused(let id):
+        case let .focused(id):
             eventLog.record("Focused \(id)")
-        case .noWindowsInWorkspace(let workspace):
+        case let .noWindowsInWorkspace(workspace):
             eventLog.record("No windows in workspace \(workspace)")
         }
     }
@@ -166,5 +166,4 @@ final class WorkspaceActionController {
     private func refreshThumbnails() {
         thumbnailRefresher.refreshAllThumbnails()
     }
-
 }

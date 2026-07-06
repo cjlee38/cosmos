@@ -52,13 +52,16 @@ final class DebugStatusRenderer {
             for window in result.windows {
                 let marker = window.id == focused ? "*" : " "
                 let workspace = controller.membership(for: window.id) ?? "-"
-                let monitor = controller.membership(for: window.id).map { String(controller.monitorSlot(for: $0)) } ?? "-"
+                let monitor = controller.membership(for: window.id)
+                    .map { String(controller.monitorSlot(for: $0)) } ?? "-"
                 let hidden = controller.isHiddenByWorkspace(window.id) ? "hidden" : "visible"
                 let minimized = window.isMinimized ? "minimized" : "normal"
                 let title = window.title.isEmpty ? "(untitled)" : window.title
                 let frame = window.frame.map(formatFrame) ?? "frame=?"
                 let cgOrder = cgWindowOrder.format(window.id)
-                lines.append("\(marker) id=\(window.id) \(cgOrder) ws=\(workspace) monitor=\(monitor) \(hidden) \(minimized) pid=\(window.app.pid) \(window.app.name) :: \(title) \(frame)")
+                let identity = "id=\(window.id) \(cgOrder) ws=\(workspace) monitor=\(monitor)"
+                let state = "\(hidden) \(minimized) pid=\(window.app.pid)"
+                lines.append("\(marker) \(identity) \(state) \(window.app.name) :: \(title) \(frame)")
             }
         }
 
@@ -66,11 +69,15 @@ final class DebugStatusRenderer {
     }
 
     private func formatFrame(_ frame: WindowFrame) -> String {
-        "x=\(format(frame.origin.x)) y=\(format(frame.origin.y)) w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+        let origin = "x=\(format(frame.origin.x)) y=\(format(frame.origin.y))"
+        let size = "w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+        return "\(origin) \(size)"
     }
 
     private func format(_ frame: CGRect) -> String {
-        "x=\(format(frame.origin.x)) y=\(format(frame.origin.y)) w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+        let origin = "x=\(format(frame.origin.x)) y=\(format(frame.origin.y))"
+        let size = "w=\(format(frame.size.width)) h=\(format(frame.size.height))"
+        return "\(origin) \(size)"
     }
 
     private func format(_ value: CGFloat) -> String {
@@ -83,8 +90,8 @@ private struct CGWindowOrderSnapshot {
     private let screenIndexByID: [WindowID: Int]
 
     init() {
-        self.allIndexByID = Self.indexByWindowID(options: [.optionAll, .excludeDesktopElements])
-        self.screenIndexByID = Self.indexByWindowID(options: [.optionOnScreenOnly, .excludeDesktopElements])
+        allIndexByID = Self.indexByWindowID(options: [.optionAll, .excludeDesktopElements])
+        screenIndexByID = Self.indexByWindowID(options: [.optionOnScreenOnly, .excludeDesktopElements])
     }
 
     func format(_ id: WindowID) -> String {

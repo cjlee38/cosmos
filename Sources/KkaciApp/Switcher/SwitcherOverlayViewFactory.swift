@@ -74,7 +74,7 @@ final class SwitcherOverlayViewFactory {
                 onClick: onClick
             )
             tile.frame.origin = tileOrigin(index: index, metrics: metrics)
-            listView.addTile(tile, id: item.id)
+            listView.addTile(tile, id: item.windowID)
         }
 
         return listView
@@ -126,15 +126,15 @@ final class SwitcherOverlayViewFactory {
     private func targetTileWidth(count: Int) -> CGFloat {
         switch count {
         case ...1:
-            return 280
+            280
         case 2:
-            return 240
+            240
         case 3:
-            return 210
+            210
         case 4:
-            return 185
+            185
         default:
-            return 168
+            168
         }
     }
 
@@ -196,7 +196,7 @@ final class WindowSwitcherListView: NSView {
 
     func updatePreviews(items: [WindowSwitcherItem]) {
         for item in items {
-            tileViewsByID[item.id]?.forEach { $0.updatePreview(item) }
+            tileViewsByID[item.windowID]?.forEach { $0.updatePreview(item) }
         }
     }
 
@@ -208,7 +208,7 @@ final class WindowSwitcherListView: NSView {
 }
 
 final class WindowSwitcherTileView: NSView {
-    private let id: WindowID
+    private let windowID: WindowID
     private let hoverGate: SwitcherHoverGate
     private let onHover: ((WindowID) -> Void)?
     private let onClick: ((WindowID) -> Void)?
@@ -225,7 +225,7 @@ final class WindowSwitcherTileView: NSView {
         onHover: ((WindowID) -> Void)?,
         onClick: ((WindowID) -> Void)?
     ) {
-        self.id = item.id
+        windowID = item.windowID
         self.hoverGate = hoverGate
         self.onHover = onHover
         self.onClick = onClick
@@ -235,11 +235,12 @@ final class WindowSwitcherTileView: NSView {
         updatePreview(item)
     }
 
-    required init?(coder: NSCoder) {
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+    override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
         true
     }
 
@@ -253,16 +254,16 @@ final class WindowSwitcherTileView: NSView {
         ))
     }
 
-    override func mouseEntered(with event: NSEvent) {
+    override func mouseEntered(with _: NSEvent) {
         hover()
     }
 
-    override func mouseMoved(with event: NSEvent) {
+    override func mouseMoved(with _: NSEvent) {
         hover()
     }
 
-    override func mouseDown(with event: NSEvent) {
-        onClick?(id)
+    override func mouseDown(with _: NSEvent) {
+        onClick?(windowID)
     }
 
     func updatePreview(_ item: WindowSwitcherItem) {
@@ -292,7 +293,7 @@ final class WindowSwitcherTileView: NSView {
             return
         }
 
-        onHover?(id)
+        onHover?(windowID)
     }
 
     private func setup(item: WindowSwitcherItem, metrics: WindowTileMetrics) {
@@ -346,6 +347,10 @@ final class WindowSwitcherTileView: NSView {
             height: appLabelHeight
         )
 
+        addContentViews(appLabel: appLabel, titleLabel: titleLabel, preview: preview)
+    }
+
+    private func addContentViews(appLabel: NSView, titleLabel: NSView, preview: NSView) {
         addSubview(appIconView)
         addSubview(appLabel)
         addSubview(titleLabel)
@@ -377,7 +382,10 @@ final class WindowSwitcherTileView: NSView {
             return
         }
         previewImageView.frame = previewContainer.bounds
-        fallbackIconView.frame = previewContainer.bounds.insetBy(dx: previewContainer.bounds.width * 0.28, dy: previewContainer.bounds.height * 0.28)
+        fallbackIconView.frame = previewContainer.bounds.insetBy(
+            dx: previewContainer.bounds.width * 0.28,
+            dy: previewContainer.bounds.height * 0.28
+        )
         fallbackInitialLabel.frame = previewContainer.bounds
     }
 

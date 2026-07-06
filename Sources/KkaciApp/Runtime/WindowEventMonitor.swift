@@ -13,6 +13,7 @@ final class WindowEventMonitor {
     private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] notification in
         self?.handleAXNotification(notification)
     }
+
     private var workspaceObserverTokens: [NSObjectProtocol] = []
     private var appObserverTokens: [NSObjectProtocol] = []
     private var pendingCallbacks: Set<Callback> = []

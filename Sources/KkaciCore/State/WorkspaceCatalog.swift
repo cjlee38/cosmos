@@ -7,10 +7,10 @@ struct WorkspaceCatalog {
     private var activeWorkspaceByMonitorSlot: [MonitorSlot: String]
 
     init(workspaces: WorkspaceConfig) {
-        self.workspaceOrder = workspaces.names
-        self.activeWorkspace = workspaces.names[0]
-        self.monitorSlotsByWorkspace = workspaces.monitorSlotsByName
-        self.activeWorkspaceByMonitorSlot = [
+        workspaceOrder = workspaces.names
+        activeWorkspace = workspaces.names[0]
+        monitorSlotsByWorkspace = workspaces.monitorSlotsByName
+        activeWorkspaceByMonitorSlot = [
             workspaces.monitorSlot(for: workspaces.names[0]): workspaces.names[0]
         ]
         seedActiveWorkspaces()

@@ -12,8 +12,8 @@ final class WorkspaceConfigurationRuntime {
     ) {
         self.configStore = configStore
         let startupConfig = Self.loadStartupConfig(from: configStore)
-        self.config = startupConfig.config
-        self.startupLoadError = startupConfig.loadError
+        config = startupConfig.config
+        startupLoadError = startupConfig.loadError
         self.isPersistenceEnabled = configStore != nil && isPersistenceEnabled && startupConfig.loadError == nil
     }
 
@@ -65,7 +65,7 @@ final class WorkspaceConfigurationRuntime {
         }
 
         do {
-            return StartupConfigLoad(config: try configStore.load(), loadError: nil)
+            return try StartupConfigLoad(config: configStore.load(), loadError: nil)
         } catch {
             return StartupConfigLoad(config: .default, loadError: error)
         }

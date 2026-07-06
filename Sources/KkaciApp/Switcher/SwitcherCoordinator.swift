@@ -23,7 +23,7 @@ final class SwitcherCoordinator {
         refreshStatus: @escaping () -> Void
     ) {
         self.controller = controller
-        self.contentProvider = SwitcherContentProvider(
+        contentProvider = SwitcherContentProvider(
             controller: controller,
             windowThumbnailCache: thumbnailRefresher.windowThumbnailCache,
             workspaceThumbnailCache: thumbnailRefresher.workspaceThumbnailCache
@@ -36,7 +36,7 @@ final class SwitcherCoordinator {
     func stepWindow(direction: SwitcherDirection) {
         log("step window direction=\(direction)")
         switch session {
-        case .windows(let items, let selectedIndex, let anchorFrame):
+        case let .windows(items, selectedIndex, anchorFrame):
             let nextIndex = advancedIndex(
                 selectedIndex,
                 count: items.count,
@@ -52,7 +52,7 @@ final class SwitcherCoordinator {
     func stepWorkspace(direction: SwitcherDirection) {
         log("step workspace direction=\(direction)")
         switch session {
-        case .workspaces(let groups, let selectedIndex, let anchorFrame):
+        case let .workspaces(groups, selectedIndex, anchorFrame):
             let nextIndex = advancedIndex(
                 selectedIndex,
                 count: groups.count,
@@ -71,7 +71,9 @@ final class SwitcherCoordinator {
         session = nil
         overlay.hideOverlay()
     }
+}
 
+extension SwitcherCoordinator {
     private func startWindowSession(direction: SwitcherDirection) {
         let windows = controller.currentWindows().windows
         let items = contentProvider.windowItems(in: controller.activeWorkspace, from: windows)
@@ -84,7 +86,7 @@ final class SwitcherCoordinator {
 
         let selectedIndex = initialIndex(
             matching: controller.focusedWindowID(),
-            in: items.map(\.id),
+            in: items.map(\.windowID),
             direction: direction
         )
         beginWindowSession(items, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
@@ -115,14 +117,18 @@ final class SwitcherCoordinator {
         presentCurrentSession()
     }
 
-    private func beginWorkspaceSession(_ groups: [WorkspaceSwitcherGroup], selectedIndex: Int, anchorFrame: WindowFrame?) {
+    private func beginWorkspaceSession(
+        _ groups: [WorkspaceSwitcherGroup],
+        selectedIndex: Int,
+        anchorFrame: WindowFrame?
+    ) {
         session = .workspaces(groups: groups, selectedIndex: selectedIndex, anchorFrame: anchorFrame)
         log("show workspaces count=\(groups.count) selected=\(selectedIndex)")
         presentCurrentSession()
     }
 
     func commitWindowSelection() {
-        guard case .windows(let items, let selectedIndex, _) = session else {
+        guard case let .windows(items, selectedIndex, _) = session else {
             return
         }
 
@@ -134,11 +140,11 @@ final class SwitcherCoordinator {
         }
 
         let item = items[selectedIndex]
-        log("commit window id=\(item.id) selected=\(selectedIndex)")
+        log("commit window id=\(item.windowID) selected=\(selectedIndex)")
         do {
-            try controller.focusWindow(item.id)
-            eventLog.record("Focused \(item.id)")
-            refreshSceneThumbnails(priorityIDs: [item.id])
+            try controller.focusWindow(item.windowID)
+            eventLog.record("Focused \(item.windowID)")
+            refreshSceneThumbnails(priorityIDs: [item.windowID])
             refreshStatus()
         } catch {
             eventLog.record("Window switch failed: \(error)")
@@ -146,7 +152,7 @@ final class SwitcherCoordinator {
     }
 
     func commitWorkspaceSelection() {
-        guard case .workspaces(let groups, let selectedIndex, _) = session else {
+        guard case let .workspaces(groups, selectedIndex, _) = session else {
             return
         }
 
@@ -159,7 +165,7 @@ final class SwitcherCoordinator {
 
     @discardableResult
     private func selectWorkspace(name: String) -> Bool {
-        guard case .workspaces(let groups, _, let anchorFrame) = session,
+        guard case let .workspaces(groups, _, anchorFrame) = session,
               let index = groups.firstIndex(where: { $0.name == name })
         else {
             return false
@@ -200,11 +206,13 @@ final class SwitcherCoordinator {
             eventLog.record("Workspace switch failed: \(error)")
         }
     }
+}
 
+private extension SwitcherCoordinator {
     @discardableResult
     private func selectWindow(id: WindowID) -> Bool {
-        guard case .windows(let items, _, let anchorFrame) = session,
-              let index = items.firstIndex(where: { $0.id == id })
+        guard case let .windows(items, _, anchorFrame) = session,
+              let index = items.firstIndex(where: { $0.windowID == id })
         else {
             return false
         }
@@ -225,7 +233,7 @@ final class SwitcherCoordinator {
 
         session = .windows(items: items, selectedIndex: index, anchorFrame: anchorFrame)
         if overlay.isOverlayVisible {
-            overlay.updateWindowSelection(selectedID: items[index].id)
+            overlay.updateWindowSelection(selectedID: items[index].windowID)
         } else {
             presentCurrentSession()
         }
@@ -233,7 +241,7 @@ final class SwitcherCoordinator {
 
     private func presentCurrentSession() {
         switch session {
-        case .windows(let items, let selectedIndex, let anchorFrame):
+        case let .windows(items, selectedIndex, anchorFrame):
             overlay.showWindowSwitcher(
                 items: items,
                 selectedIndex: selectedIndex,
@@ -245,7 +253,7 @@ final class SwitcherCoordinator {
                     self?.commitWindow(id: id)
                 }
             )
-        case .workspaces(let groups, let selectedIndex, let anchorFrame):
+        case let .workspaces(groups, selectedIndex, anchorFrame):
             overlay.showWorkspaceSwitcher(
                 groups: groups,
                 selectedIndex: selectedIndex,
@@ -287,7 +295,9 @@ final class SwitcherCoordinator {
             }
         )
     }
+}
 
+private extension SwitcherCoordinator {
     private func scheduleThumbnailViewUpdate() {
         guard session != nil, !thumbnailViewUpdateScheduled else {
             return
@@ -306,7 +316,7 @@ final class SwitcherCoordinator {
 
     private func updateActiveSessionThumbnails() {
         switch session {
-        case .windows(_, let selectedIndex, let anchorFrame):
+        case let .windows(_, selectedIndex, anchorFrame):
             let windows = controller.currentWindows().windows
             let items = contentProvider.windowItems(in: controller.activeWorkspace, from: windows)
             guard !items.isEmpty else {
@@ -319,7 +329,7 @@ final class SwitcherCoordinator {
                 anchorFrame: anchorFrame
             )
             overlay.updateWindowSwitcher(items: items)
-        case .workspaces(_, let selectedIndex, let anchorFrame):
+        case let .workspaces(_, selectedIndex, anchorFrame):
             let windows = controller.currentWindows().windows
             let groups = contentProvider.workspaceGroups(from: windows)
             guard !groups.isEmpty else {
@@ -338,10 +348,8 @@ final class SwitcherCoordinator {
     }
 
     private func selectedWindowIDs(items: [WindowSwitcherItem], selectedIndex: Int) -> [WindowID] {
-        guard items.indices.contains(selectedIndex) else {
-            return []
-        }
-        return [items[selectedIndex].id]
+        guard items.indices.contains(selectedIndex) else { return [] }
+        return [items[selectedIndex].windowID]
     }
 
     private func clampedIndex(_ index: Int, count: Int) -> Int {
@@ -363,9 +371,7 @@ final class SwitcherCoordinator {
     }
 
     private func advancedIndex(_ index: Int, count: Int, direction: SwitcherDirection) -> Int {
-        guard count > 0 else {
-            return 0
-        }
+        guard count > 0 else { return 0 }
 
         switch direction {
         case .forward:
@@ -377,12 +383,12 @@ final class SwitcherCoordinator {
 
     private func describeSession() -> String {
         switch session {
-        case .windows(_, let selectedIndex, _):
-            return "windows selected=\(selectedIndex)"
-        case .workspaces(_, let selectedIndex, _):
-            return "workspaces selected=\(selectedIndex)"
+        case let .windows(_, selectedIndex, _):
+            "windows selected=\(selectedIndex)"
+        case let .workspaces(_, selectedIndex, _):
+            "workspaces selected=\(selectedIndex)"
         case nil:
-            return "none"
+            "none"
         }
     }
 

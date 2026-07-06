@@ -12,7 +12,7 @@ final class RestorableFrameResolverTests: XCTestCase {
 
     func testClampsFrameWhenCenterIsOutsideCurrentDisplays() {
         let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider())
-        let frame = WindowFrame.frame(x: 1_400, y: 120, width: 300, height: 240)
+        let frame = WindowFrame.frame(x: 1400, y: 120, width: 300, height: 240)
 
         XCTAssertEqual(
             resolver.frameForRestore(frame),
@@ -25,17 +25,17 @@ final class RestorableFrameResolverTests: XCTestCase {
             snapshots: [
                 DisplaySnapshot(
                     id: 1,
-                    frame: CGRect(x: 0, y: 0, width: 1_000, height: 1_000),
-                    visibleFrame: CGRect(x: 0, y: 40, width: 1_000, height: 900),
+                    frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+                    visibleFrame: CGRect(x: 0, y: 40, width: 1000, height: 900),
                     isMain: true
                 )
             ]
         ))
-        let frame = WindowFrame.frame(x: 999, y: 999, width: 1_000, height: 1_000)
+        let frame = WindowFrame.frame(x: 999, y: 999, width: 1000, height: 1000)
 
         XCTAssertEqual(
             resolver.frameForRestore(frame),
-            WindowFrame.frame(x: 0, y: 40, width: 1_000, height: 1_000)
+            WindowFrame.frame(x: 0, y: 40, width: 1000, height: 1000)
         )
     }
 }

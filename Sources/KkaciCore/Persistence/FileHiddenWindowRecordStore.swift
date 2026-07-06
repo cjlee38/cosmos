@@ -140,7 +140,7 @@ private struct RecordKey: Hashable {
     }
 
     init(_ record: HiddenWindowRecord) {
-        self.windowID = record.windowID
-        self.pid = record.pid
+        windowID = record.windowID
+        pid = record.pid
     }
 }

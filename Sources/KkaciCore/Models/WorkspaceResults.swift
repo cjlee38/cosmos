@@ -9,15 +9,15 @@ public enum WorkspaceError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .invalidWorkspaceName(let workspace):
+        case let .invalidWorkspaceName(workspace):
             "Invalid workspace name: \(workspace)"
-        case .windowNotFound(let id):
+        case let .windowNotFound(id):
             "Window not found: \(id)"
-        case .windowNotInActiveWorkspace(let id, let workspace):
+        case let .windowNotInActiveWorkspace(id, workspace):
             "Window \(id) belongs to inactive workspace \(workspace)."
         case .noFocusedWindow:
             "No focused window."
-        case .frameUnavailable(let id):
+        case let .frameUnavailable(id):
             "Window frame is unavailable: \(id)"
         }
     }

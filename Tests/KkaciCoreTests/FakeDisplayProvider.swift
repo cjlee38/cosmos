@@ -15,7 +15,7 @@ struct FakeDisplayProvider: DisplayProviding {
         self.snapshots = snapshots
     }
 
-    func hidePoint(for frame: WindowFrame) -> CGPoint {
+    func hidePoint(for _: WindowFrame) -> CGPoint {
         point
     }
 

@@ -3,9 +3,38 @@ import Foundation
 @testable import KkaciCore
 import XCTest
 
-final class WorkspaceHiddenWindowRecordTests: XCTestCase {
-    private let hidePoint = CGPoint(x: -1, y: -1)
+class WorkspaceHiddenWindowRecordTestCase: XCTestCase {
+    let hidePoint = CGPoint(x: -1, y: -1)
 
+    func hiddenRecord(originalFrame: WindowFrame, workspace: String) -> HiddenWindowRecord {
+        HiddenWindowRecord(
+            windowID: 100,
+            pid: 7,
+            bundleID: "test.fake",
+            appName: "FakeApp",
+            title: "One",
+            workspace: workspace,
+            originalFrame: originalFrame,
+            hiddenPosition: hidePoint
+        )
+    }
+
+    func makeController(
+        _ windowSystem: FakeWindowSystem,
+        displayProvider: FakeDisplayProvider? = nil,
+        configStore: (any KkaciConfigStore)? = nil,
+        recordStore: (any HiddenWindowRecordStore)? = nil
+    ) -> WorkspaceController {
+        WorkspaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider ?? FakeDisplayProvider(point: hidePoint),
+            configStore: configStore,
+            recordStore: recordStore
+        )
+    }
+}
+
+final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCase {
     func testHideWritesHiddenWindowRecord() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, appName: "Notes", bundleID: "com.apple.Notes")
@@ -196,7 +225,7 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
 
     func testShutdownRestoreUsesCurrentDisplayWhenHiddenFrameIsOffscreen() throws {
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 1_400, y: 120, width: 300, height: 240))
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: 1400, y: 120, width: 300, height: 240))
         ])
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -212,7 +241,9 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         )
         XCTAssertEqual(recordStore.records.map(\.windowID), [100])
     }
+}
 
+final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCase {
     func testStartupRecordsRestoreCornerWindowAndReassignWorkspace() throws {
         let originalFrame = WindowFrame.frame(x: 120, y: 140)
         let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
@@ -233,10 +264,15 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
     }
 
     func testStartupRecordsRestoreOffscreenOriginalFrameInsideCurrentDisplay() throws {
-        let originalFrame = WindowFrame.frame(x: 1_400, y: 120, width: 300, height: 240)
+        let originalFrame = WindowFrame.frame(x: 1400, y: 120, width: 300, height: 240)
         let record = hiddenRecord(originalFrame: originalFrame, workspace: "2")
         let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y, width: 300, height: 240))
+            .window(
+                id: 100,
+                title: "One",
+                pid: 7,
+                frame: .frame(x: hidePoint.x, y: hidePoint.y, width: 300, height: 240)
+            )
         ])
         let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
         let controller = makeController(windowSystem, recordStore: recordStore)
@@ -319,32 +355,5 @@ final class WorkspaceHiddenWindowRecordTests: XCTestCase {
         XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
         XCTAssertEqual(controller.membership(for: 100), "dev")
         XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
-    }
-
-    private func hiddenRecord(originalFrame: WindowFrame, workspace: String) -> HiddenWindowRecord {
-        HiddenWindowRecord(
-            windowID: 100,
-            pid: 7,
-            bundleID: "test.fake",
-            appName: "FakeApp",
-            title: "One",
-            workspace: workspace,
-            originalFrame: originalFrame,
-            hiddenPosition: hidePoint
-        )
-    }
-
-    private func makeController(
-        _ windowSystem: FakeWindowSystem,
-        displayProvider: FakeDisplayProvider? = nil,
-        configStore: (any KkaciConfigStore)? = nil,
-        recordStore: (any HiddenWindowRecordStore)? = nil
-    ) -> WorkspaceController {
-        WorkspaceController(
-            windowSystem: windowSystem,
-            displayProvider: displayProvider ?? FakeDisplayProvider(point: hidePoint),
-            configStore: configStore,
-            recordStore: recordStore
-        )
     }
 }

@@ -76,7 +76,7 @@ final class WindowThumbnailRefresher {
 
     private func makeItem(for window: WindowSnapshot) -> WindowSwitcherItem {
         WindowSwitcherItem(
-            id: window.id,
+            windowID: window.id,
             appName: window.app.name,
             title: window.title,
             frame: controller.workspaceFrame(for: window.id),

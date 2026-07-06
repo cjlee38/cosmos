@@ -35,7 +35,8 @@ final class SettingsWindowController: NSWindowController {
         buildContent()
     }
 
-    required init?(coder: NSCoder) {
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
@@ -51,6 +52,31 @@ final class SettingsWindowController: NSWindowController {
             return
         }
 
+        configureTextView()
+        let scrollView = makeScrollView()
+        let monitorSection = makeMonitorSection()
+        let buttons = makeButtonRow()
+        let root = NSStackView(views: [monitorSection, scrollView, buttons])
+        root.translatesAutoresizingMaskIntoConstraints = false
+        root.orientation = .vertical
+        root.alignment = .leading
+        root.spacing = 12
+
+        contentView.addSubview(root)
+
+        NSLayoutConstraint.activate([
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+
+            monitorSection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            scrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
+            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 240)
+        ])
+    }
+
+    private func configureTextView() {
         textView.isEditable = false
         textView.isSelectable = true
         textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
@@ -72,7 +98,9 @@ final class SettingsWindowController: NSWindowController {
             height: CGFloat.greatestFiniteMagnitude
         )
         textView.textContainer?.widthTracksTextView = false
+    }
 
+    private func makeScrollView() -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.hasVerticalScroller = true
@@ -81,7 +109,10 @@ final class SettingsWindowController: NSWindowController {
         scrollView.drawsBackground = true
         scrollView.backgroundColor = .textBackgroundColor
         scrollView.documentView = textView
+        return scrollView
+    }
 
+    private func makeMonitorSection() -> NSStackView {
         let monitorTitle = label("Workspace Monitors")
         monitorTitle.font = .boldSystemFont(ofSize: 13)
         monitorSummaryLabel.lineBreakMode = .byTruncatingTail
@@ -96,7 +127,10 @@ final class SettingsWindowController: NSWindowController {
         monitorSection.orientation = .vertical
         monitorSection.alignment = .leading
         monitorSection.spacing = 8
+        return monitorSection
+    }
 
+    private func makeButtonRow() -> NSStackView {
         let openButton = button("Open Config", action: #selector(openConfig))
         let revealButton = button("Reveal in Finder", action: #selector(revealConfig))
         let reloadButton = button("Reload Config", action: #selector(reloadConfig))
@@ -108,25 +142,7 @@ final class SettingsWindowController: NSWindowController {
         buttons.orientation = .horizontal
         buttons.alignment = .centerY
         buttons.spacing = 8
-
-        let root = NSStackView(views: [monitorSection, scrollView, buttons])
-        root.translatesAutoresizingMaskIntoConstraints = false
-        root.orientation = .vertical
-        root.alignment = .leading
-        root.spacing = 12
-
-        contentView.addSubview(root)
-
-        NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
-            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
-
-            monitorSection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
-            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 240)
-        ])
+        return buttons
     }
 
     func refresh() {
@@ -184,7 +200,8 @@ final class SettingsWindowController: NSWindowController {
                 popup.menu?.addItem(item)
             }
 
-            let selectedSlot = snapshot.monitorSlotsByWorkspace[workspace] ?? snapshot.config.workspaces.monitorSlot(for: workspace)
+            let selectedSlot = snapshot.monitorSlotsByWorkspace[workspace]
+                ?? snapshot.config.workspaces.monitorSlot(for: workspace)
             if let item = popup.itemArray.first(where: { ($0.representedObject as? MonitorSlot) == selectedSlot }) {
                 popup.select(item)
             }

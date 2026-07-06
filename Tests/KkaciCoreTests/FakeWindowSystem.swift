@@ -25,7 +25,7 @@ final class FakeWindowSystem: WindowSystem {
 
     init(windows: [WindowSnapshot]) {
         self.windows = windows
-        self.frames = Dictionary(uniqueKeysWithValues: windows.compactMap { window in
+        frames = Dictionary(uniqueKeysWithValues: windows.compactMap { window in
             window.frame.map { (window.id, $0) }
         })
     }

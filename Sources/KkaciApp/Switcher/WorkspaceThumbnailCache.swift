@@ -32,7 +32,7 @@ private enum WorkspaceThumbnailRenderer {
         if positionedWindows.isEmpty {
             drawEmptyState(in: NSRect(origin: .zero, size: size))
         } else {
-            // TODO: If rendering cost becomes noticeable, consider front-to-back occlusion culling.
+            // Rendering note: if cost becomes noticeable, consider front-to-back occlusion culling.
             for (item, frame) in positionedWindows.reversed() {
                 drawWindow(item, frame: frame, desktopBounds: desktopBounds, imageSize: size)
             }
