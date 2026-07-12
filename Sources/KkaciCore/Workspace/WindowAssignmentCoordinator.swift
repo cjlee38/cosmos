@@ -110,11 +110,16 @@ final class WindowAssignmentCoordinator {
         }
 
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
-        let replacementFocus = workspace == currentWorkspace
+        let previousActivation = state.activationSnapshot
+        let destinationIsActive = state.activeWorkspaces.contains(workspace)
+        let replacementFocus = workspace == currentWorkspace || destinationIsActive
             ? nil
             : frontToBackWindowIDs.first { $0 != id }
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
         state.assign(id, to: workspace)
+        if destinationIsActive {
+            state.activate(workspace)
+        }
 
         do {
             try visibilityCoordinator.applyActiveWorkspace(
@@ -127,6 +132,7 @@ final class WindowAssignmentCoordinator {
             return WindowMoveResult(windowID: id, workspace: workspace)
         } catch {
             restoreMembership(id, to: currentWorkspace, state: &state)
+            state.restoreActivationSnapshot(previousActivation)
             try? visibilityCoordinator.applyActiveWorkspace(state: &state)
             throw error
         }

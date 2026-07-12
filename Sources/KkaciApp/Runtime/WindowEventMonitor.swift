@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import Foundation
 import KkaciCore
 
@@ -34,7 +35,7 @@ struct WindowRuntimeEventBatch {
     }
 
     var shouldFollowFocusedWindow: Bool {
-        events.contains { $0.kind == .focusChanged }
+        events.contains { $0.kind == .focusChanged || $0.kind == .layoutChanged }
     }
 
     var needsFullThumbnailRefresh: Bool {
@@ -52,6 +53,8 @@ final class WindowEventMonitor {
     private var appObserverTokens: [NSObjectProtocol] = []
     private var pendingEvents: Set<WindowRuntimeEvent> = []
     private var deliveryScheduled = false
+    private var isWindowDragActive = false
+    private var mouseUpMonitor: Any?
 
     init(onEvents: @escaping (WindowRuntimeEventBatch) -> Void) {
         self.onEvents = onEvents
@@ -84,6 +87,7 @@ final class WindowEventMonitor {
         appObserverTokens.removeAll()
 
         axObserverRegistry.stop()
+        stopMouseUpMonitor()
     }
 
     private func observeRunningApplications() {
@@ -150,7 +154,47 @@ final class WindowEventMonitor {
         guard let kind = eventKind(for: notification) else {
             return
         }
+        if isMouseDrivenLayoutNotification(notification), isLeftMouseButtonDown {
+            startWindowDragIfNeeded()
+        }
         schedule(.init(kind: kind, windowID: AXClient.windowID(for: element)))
+    }
+
+    private func isMouseDrivenLayoutNotification(_ notification: CFString) -> Bool {
+        notification as String == kAXWindowMovedNotification
+            || notification as String == kAXWindowResizedNotification
+    }
+
+    private var isLeftMouseButtonDown: Bool {
+        CGEventSource.buttonState(.combinedSessionState, button: .left)
+    }
+
+    private func startWindowDragIfNeeded() {
+        guard !isWindowDragActive else {
+            return
+        }
+        guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] _ in
+            self?.finishWindowDrag()
+        }) else {
+            return
+        }
+
+        isWindowDragActive = true
+        mouseUpMonitor = monitor
+    }
+
+    private func finishWindowDrag() {
+        isWindowDragActive = false
+        stopMouseUpMonitor()
+        scheduleDelivery()
+    }
+
+    private func stopMouseUpMonitor() {
+        guard let mouseUpMonitor else {
+            return
+        }
+        NSEvent.removeMonitor(mouseUpMonitor)
+        self.mouseUpMonitor = nil
     }
 
     private func eventKind(for notification: CFString) -> WindowRuntimeEventKind? {
@@ -173,6 +217,13 @@ final class WindowEventMonitor {
 
     private func schedule(_ event: WindowRuntimeEvent) {
         pendingEvents.insert(event)
+        scheduleDelivery()
+    }
+
+    private func scheduleDelivery() {
+        guard !isWindowDragActive else {
+            return
+        }
         guard !deliveryScheduled else {
             return
         }
@@ -183,9 +234,13 @@ final class WindowEventMonitor {
                 return
             }
 
+            deliveryScheduled = false
+            guard !isWindowDragActive else {
+                return
+            }
+
             let events = pendingEvents
             pendingEvents.removeAll()
-            deliveryScheduled = false
             onEvents(WindowRuntimeEventBatch(events: events))
         }
     }
