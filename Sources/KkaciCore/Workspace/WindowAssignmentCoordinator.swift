@@ -88,7 +88,11 @@ final class WindowAssignmentCoordinator {
         }
     }
 
-    func moveFocusedWindow(to workspace: String, state: inout WorkspaceState) throws -> WindowMoveResult {
+    func moveFocusedWindow(
+        to workspace: String,
+        frontToBackWindowIDs: [WindowID],
+        state: inout WorkspaceState
+    ) throws -> WindowMoveResult {
         guard let id = windowSystem.focusedWindowID() else {
             throw WorkspaceError.noFocusedWindow
         }
@@ -106,12 +110,17 @@ final class WindowAssignmentCoordinator {
         }
 
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
+        let replacementFocus = workspace == currentWorkspace
+            ? nil
+            : frontToBackWindowIDs.first { $0 != id }
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
         state.assign(id, to: workspace)
 
         do {
             try visibilityCoordinator.applyActiveWorkspace(
                 state: &state,
+                focusActiveWorkspace: replacementFocus != nil,
+                preferredFocus: replacementFocus,
                 strictWindowIDs: [id],
                 preferredFramesByWindowID: dictionary(for: id, frame: preferredFrame)
             )

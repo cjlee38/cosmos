@@ -265,7 +265,11 @@ public extension WorkspaceController {
 
     func moveFocusedWindow(to workspace: String) throws -> WindowMoveResult {
         _ = syncWindows()
-        return try assignmentCoordinator.moveFocusedWindow(to: workspace, state: &state)
+        return try assignmentCoordinator.moveFocusedWindow(
+            to: workspace,
+            frontToBackWindowIDs: windows(in: activeWorkspace).map(\.id),
+            state: &state
+        )
     }
 
     @discardableResult

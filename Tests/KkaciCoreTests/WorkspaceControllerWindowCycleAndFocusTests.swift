@@ -87,7 +87,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(101))
         XCTAssertEqual(windowSystem.positions[100], hidePoint)
-        XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
+        XCTAssertEqual(windowSystem.focusedIDs, [101])
     }
 
     func testMoveFocusedWindowRejectsWindowMovedOutOfActiveWorkspace() throws {
@@ -107,6 +107,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         }
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 
     func testMoveFocusedWindowToCurrentWorkspaceKeepsItVisible() throws {
