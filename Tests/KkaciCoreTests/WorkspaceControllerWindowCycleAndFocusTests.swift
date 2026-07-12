@@ -111,6 +111,25 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 
+    func testMoveFocusedWindowRejectsWindowMovedOutOfActiveWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One")
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        windowSystem.focusedWindow = 100
+
+        _ = try controller.moveFocusedWindow(to: "2")
+
+        XCTAssertThrowsError(try controller.moveFocusedWindow(to: "3")) { error in
+            XCTAssertEqual(error as? WorkspaceError, .windowNotInActiveWorkspace(100, "2"))
+        }
+        XCTAssertEqual(controller.membership(for: 100), "2")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+    }
+
     func testMoveFocusedWindowToCurrentWorkspaceKeepsItVisible() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
@@ -157,6 +176,11 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.membership(for: 100), "a")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1050, y: 50, width: 150, height: 100))
+
+        XCTAssertThrowsError(try controller.moveFocusedWindow(to: "1")) { error in
+            XCTAssertEqual(error as? WorkspaceError, .windowNotInActiveWorkspace(100, "a"))
+        }
+        XCTAssertEqual(controller.membership(for: 100), "a")
     }
 
     func testMoveFocusedWindowToInactiveWorkspaceOnAnotherMonitorRestoresThereLater() throws {

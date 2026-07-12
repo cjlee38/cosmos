@@ -89,15 +89,23 @@ final class WindowAssignmentCoordinator {
     }
 
     func moveFocusedWindow(to workspace: String, state: inout WorkspaceState) throws -> WindowMoveResult {
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         guard let id = windowSystem.focusedWindowID() else {
             throw WorkspaceError.noFocusedWindow
         }
         guard windowSystem.contains(id) else {
             throw WorkspaceError.windowNotFound(id)
         }
+        guard let currentWorkspace = state.membership(for: id),
+              currentWorkspace == state.activeWorkspace,
+              !state.isHidden(id)
+        else {
+            throw WorkspaceError.windowNotInActiveWorkspace(
+                id,
+                state.membership(for: id) ?? state.activeWorkspace
+            )
+        }
 
-        let previousWorkspace = state.membership(for: id)
+        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
         state.assign(id, to: workspace)
 
@@ -109,7 +117,7 @@ final class WindowAssignmentCoordinator {
             )
             return WindowMoveResult(windowID: id, workspace: workspace)
         } catch {
-            restoreMembership(id, to: previousWorkspace, state: &state)
+            restoreMembership(id, to: currentWorkspace, state: &state)
             try? visibilityCoordinator.applyActiveWorkspace(state: &state)
             throw error
         }

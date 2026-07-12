@@ -19,7 +19,7 @@ final class WorkspaceNavigationCoordinator {
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let previousActivation = state.activationSnapshot
         let oldFocusedWindow = focusedWindowInActiveWorkspace(state: state)
-            ?? state.focusTarget(for: state.activeWorkspace, fallback: nil)
+            ?? state.focusTarget(for: state.activeWorkspace)
 
         state.activate(workspace)
         do {
@@ -50,6 +50,7 @@ final class WorkspaceNavigationCoordinator {
         let monitorSlot = state.monitorSlot(for: workspace)
         guard workspace != state.activeWorkspace(on: monitorSlot) else {
             state.recordFocus(id, in: workspace)
+            state.activate(workspace)
             return .alreadyActive(windowID: id, workspace: workspace)
         }
 
@@ -80,7 +81,7 @@ final class WorkspaceNavigationCoordinator {
             state.recordFocus(currentFocused, in: workspace)
         }
 
-        let current = currentFocused ?? state.focusTarget(for: workspace, fallback: nil)
+        let current = currentFocused ?? state.focusTarget(for: workspace)
         let target = next
             ? state.nextWindow(in: workspace, after: current)
             : state.previousWindow(in: workspace, before: current)

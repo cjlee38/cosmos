@@ -145,8 +145,8 @@ struct WorkspaceState {
         memberships.recordFocus(id, in: workspace)
     }
 
-    func focusTarget(for workspace: String, fallback: WindowID?) -> WindowID? {
-        windowIDs(in: workspace).first ?? fallback
+    func focusTarget(for workspace: String) -> WindowID? {
+        windowIDs(in: workspace).first
     }
 
     func nextWorkspace(after workspace: String) -> String {

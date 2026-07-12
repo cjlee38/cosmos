@@ -21,7 +21,6 @@ final class WorkspaceVisibilityCoordinator {
         let visibleWorkspaces = state.activeWorkspaces.isEmpty
             ? Set([activeWorkspace])
             : state.activeWorkspaces
-        var firstRestored: WindowID?
 
         for workspace in visibleWorkspaces.sorted() {
             for id in state.windowIDs(in: workspace) {
@@ -36,12 +35,11 @@ final class WorkspaceVisibilityCoordinator {
                         throw error
                     }
                 }
-                firstRestored = firstRestored ?? id
             }
         }
 
         if focusActiveWorkspace {
-            let focusTarget = preferredFocus ?? state.focusTarget(for: activeWorkspace, fallback: firstRestored)
+            let focusTarget = preferredFocus ?? state.focusTarget(for: activeWorkspace)
             if let focusTarget {
                 windowSystem.focus(focusTarget)
                 state.recordFocus(focusTarget, in: activeWorkspace)

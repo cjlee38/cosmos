@@ -2,6 +2,72 @@ import CoreGraphics
 @testable import KkaciCore
 import XCTest
 
+final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
+    func testSwitchingToEmptyWorkspaceDoesNotFocusAnotherMonitorWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100))
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "2", "a"],
+                monitorSlotsByName: ["a": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "a")
+        windowSystem.focusedWindow = 100
+        windowSystem.focusedIDs.removeAll()
+
+        _ = try controller.switchWorkspace(to: "2")
+
+        XCTAssertEqual(controller.activeWorkspace, "2")
+        XCTAssertEqual(Set(controller.activeWorkspaces), ["2", "a"])
+        XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
+    }
+
+    func testFocusedWindowOnAnotherActiveMonitorBecomesCurrentWorkspace() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100))
+        ])
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "a"],
+                monitorSlotsByName: ["a": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "a")
+        _ = try controller.switchWorkspace(to: "a")
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.syncWorkspaceToFocusedWindow()
+
+        XCTAssertEqual(result, .alreadyActive(windowID: 100, workspace: "1"))
+        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(Set(controller.activeWorkspaces), ["1", "a"])
+    }
+}
+
 final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
     func testFocusWindowRecordsFocusInTheWindowsWorkspaceWhenAnotherMonitorSlotIsActive() throws {
         let windowSystem = FakeWindowSystem(windows: [

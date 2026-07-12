@@ -61,7 +61,7 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(sync.removed, [200])
         XCTAssertNil(state.membership(for: 200))
         XCTAssertFalse(state.isHidden(200))
-        XCTAssertNil(state.focusTarget(for: "2", fallback: nil))
+        XCTAssertNil(state.focusTarget(for: "2"))
     }
 
     func testRepeatedHideDoesNotOverwriteOriginalFrame() {
