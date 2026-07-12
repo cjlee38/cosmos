@@ -142,6 +142,25 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.membership(for: 200), "3")
     }
 
+    func testExternalFocusEventRefreshesWindowStateOnce() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two")
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "2")
+        windowSystem.focusedWindow = 200
+        windowSystem.refreshCount = 0
+
+        let result = try controller.applyExternalWindowEvents(followFocusedWindow: true)
+
+        XCTAssertEqual(windowSystem.refreshCount, 1)
+        XCTAssertEqual(result.focusedWindowSync, .switched(windowID: 200, workspace: "2"))
+    }
+
     func testWindowSetChangedRepairsInactiveWorkspaceVisibility() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),

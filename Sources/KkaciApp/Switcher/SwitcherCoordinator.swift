@@ -33,6 +33,9 @@ final class SwitcherCoordinator {
         )
         self.thumbnailRefresher = thumbnailRefresher
         self.refreshStatus = refreshStatus
+        thumbnailRefresher.setWindowThumbnailUpdateHandler { [weak self] _ in
+            self?.scheduleThumbnailViewUpdate()
+        }
         thumbnailRefresher.workspaceThumbnailCache.setUpdateHandler { [weak self] in
             self?.scheduleThumbnailViewUpdate()
         }
@@ -49,9 +52,6 @@ final class SwitcherCoordinator {
         selection.step(direction)
         session = .windows(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
-        if overlay.isOverlayVisible {
-            refreshManagedThumbnails(priorityIDs: [selection.selectedItem])
-        }
     }
 
     func stepWorkspace(direction: SwitcherDirection) {
@@ -199,9 +199,6 @@ private extension SwitcherCoordinator {
 
         session = .windows(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
-        if overlay.isOverlayVisible {
-            refreshManagedThumbnails(priorityIDs: [id])
-        }
         return true
     }
 
@@ -261,7 +258,10 @@ private extension SwitcherCoordinator {
                     self?.commitWindow(id: id)
                 }
             )
-            refreshManagedThumbnails(priorityIDs: [selection.selectedItem])
+            refreshManagedThumbnails(
+                windowIDs: Set(selection.items),
+                priorityIDs: [selection.selectedItem]
+            )
         case let .workspaces(selection, anchorFrame):
             let groups = orderedWorkspaceGroups(names: selection.items, from: windows)
             overlay.showWorkspaceSwitcher(
@@ -305,12 +305,14 @@ private extension SwitcherCoordinator {
         return names.compactMap { groupsByName[$0] }
     }
 
-    private func refreshManagedThumbnails(priorityIDs: [WindowID]) {
-        thumbnailRefresher.refreshWindowThumbnails(
-            priorityIDs: priorityIDs,
-            onThumbnailUpdated: { [weak self] _ in
-                self?.scheduleThumbnailViewUpdate()
-            }
+    private func refreshManagedThumbnails(
+        windowIDs: Set<WindowID>,
+        priorityIDs: [WindowID]
+    ) {
+        thumbnailRefresher.refreshThumbnails(
+            windowIDs: windowIDs,
+            workspaceNames: [controller.activeWorkspace],
+            priorityIDs: priorityIDs
         )
     }
 }

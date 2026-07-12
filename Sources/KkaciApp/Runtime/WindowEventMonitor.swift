@@ -1,29 +1,60 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import KkaciCore
 
-final class WindowEventMonitor {
-    private enum Callback {
-        case focusedWindowChanged
-        case windowSetChanged
+enum WindowRuntimeEventKind: Hashable {
+    case focusChanged
+    case thumbnailChanged
+    case layoutChanged
+    case windowSetChanged
+    case displayChanged
+
+    var needsThumbnailCapture: Bool {
+        self == .thumbnailChanged
+    }
+}
+
+struct WindowRuntimeEvent: Hashable {
+    let kind: WindowRuntimeEventKind
+    let windowID: WindowID?
+}
+
+struct WindowRuntimeEventBatch {
+    let events: Set<WindowRuntimeEvent>
+
+    var windowIDs: Set<WindowID> {
+        Set(events.compactMap(\.windowID))
     }
 
-    private let onFocusedWindowChanged: () -> Void
-    private let onWindowSetChanged: () -> Void
-    private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] notification in
-        self?.handleAXNotification(notification)
+    var windowIDsNeedingCapture: Set<WindowID> {
+        Set(events.compactMap { event in
+            event.kind.needsThumbnailCapture ? event.windowID : nil
+        })
+    }
+
+    var shouldFollowFocusedWindow: Bool {
+        events.contains { $0.kind == .focusChanged }
+    }
+
+    var needsFullThumbnailRefresh: Bool {
+        events.contains { $0.kind == .displayChanged }
+    }
+}
+
+final class WindowEventMonitor {
+    private let onEvents: (WindowRuntimeEventBatch) -> Void
+    private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] element, notification in
+        self?.handleAXNotification(element: element, notification: notification)
     }
 
     private var workspaceObserverTokens: [NSObjectProtocol] = []
     private var appObserverTokens: [NSObjectProtocol] = []
-    private var pendingCallbacks: Set<Callback> = []
+    private var pendingEvents: Set<WindowRuntimeEvent> = []
+    private var deliveryScheduled = false
 
-    init(
-        onFocusedWindowChanged: @escaping () -> Void,
-        onWindowSetChanged: @escaping () -> Void
-    ) {
-        self.onFocusedWindowChanged = onFocusedWindowChanged
-        self.onWindowSetChanged = onWindowSetChanged
+    init(onEvents: @escaping (WindowRuntimeEventBatch) -> Void) {
+        self.onEvents = onEvents
     }
 
     deinit {
@@ -82,7 +113,7 @@ final class WindowEventMonitor {
         ) { [weak self] notification in
             if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
                 self?.axObserverRegistry.observe(app)
-                self?.schedule(.windowSetChanged)
+                self?.schedule(.init(kind: .windowSetChanged, windowID: nil))
             }
         })
 
@@ -95,7 +126,7 @@ final class WindowEventMonitor {
                 return
             }
             self?.axObserverRegistry.removeObserver(for: app.processIdentifier)
-            self?.schedule(.windowSetChanged)
+            self?.schedule(.init(kind: .windowSetChanged, windowID: nil))
         })
     }
 
@@ -105,42 +136,57 @@ final class WindowEventMonitor {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.schedule(.windowSetChanged)
+            self?.schedule(.init(kind: .displayChanged, windowID: nil))
         })
     }
 
     private func scheduleFocusSyncIfObservable(_ app: NSRunningApplication) {
         if axObserverRegistry.canObserve(app) {
-            schedule(.focusedWindowChanged)
+            schedule(.init(kind: .focusChanged, windowID: nil))
         }
     }
 
-    private func handleAXNotification(_ notification: CFString) {
-        let name = notification as String
-        if name == kAXFocusedWindowChangedNotification {
-            schedule(.focusedWindowChanged)
-        } else {
-            schedule(.windowSetChanged)
+    private func handleAXNotification(element: AXUIElement, notification: CFString) {
+        guard let kind = eventKind(for: notification) else {
+            return
+        }
+        schedule(.init(kind: kind, windowID: AXClient.windowID(for: element)))
+    }
+
+    private func eventKind(for notification: CFString) -> WindowRuntimeEventKind? {
+        switch notification as String {
+        case kAXFocusedWindowChangedNotification:
+            .focusChanged
+        case kAXWindowCreatedNotification,
+             kAXWindowResizedNotification,
+             kAXWindowMiniaturizedNotification,
+             kAXWindowDeminiaturizedNotification,
+             kAXTitleChangedNotification:
+            .thumbnailChanged
+        case kAXUIElementDestroyedNotification,
+             kAXWindowMovedNotification:
+            .layoutChanged
+        default:
+            nil
         }
     }
 
-    private func schedule(_ callback: Callback) {
-        guard pendingCallbacks.insert(callback).inserted else {
+    private func schedule(_ event: WindowRuntimeEvent) {
+        pendingEvents.insert(event)
+        guard !deliveryScheduled else {
             return
         }
 
+        deliveryScheduled = true
         DispatchQueue.main.async { [weak self] in
             guard let self else {
                 return
             }
 
-            pendingCallbacks.remove(callback)
-            switch callback {
-            case .focusedWindowChanged:
-                onFocusedWindowChanged()
-            case .windowSetChanged:
-                onWindowSetChanged()
-            }
+            let events = pendingEvents
+            pendingEvents.removeAll()
+            deliveryScheduled = false
+            onEvents(WindowRuntimeEventBatch(events: events))
         }
     }
 }

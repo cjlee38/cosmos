@@ -6,7 +6,8 @@ final class WindowThumbnailRefresher {
     let workspaceThumbnailCache: WorkspaceThumbnailCache
     let applicationIconCache: ApplicationIconCache
     private let controller: WorkspaceController
-    private var workspaceThumbnailRefreshScheduled = false
+    private var pendingWorkspaceNames: Set<String> = []
+    private var onWindowThumbnailUpdated: ((WindowID) -> Void)?
 
     init(
         controller: WorkspaceController,
@@ -18,57 +19,93 @@ final class WindowThumbnailRefresher {
         self.windowThumbnailCache = windowThumbnailCache
         self.workspaceThumbnailCache = workspaceThumbnailCache
         self.applicationIconCache = applicationIconCache
-    }
-
-    func refreshWindowThumbnails(
-        priorityIDs: [WindowID] = [],
-        onThumbnailUpdated: @escaping (WindowID) -> Void = { _ in }
-    ) {
-        let windows = controller.currentWindows().windows
-        refreshApplicationIcons(windows: windows, onWindowUpdated: onThumbnailUpdated)
-        windowThumbnailCache.removeStaleThumbnails(keeping: Set(windows.map(\.id)))
-        windowThumbnailCache.refresh(
-            windows: windows,
-            priorityIDs: priorityIDs,
-            onThumbnailUpdated: onThumbnailUpdated
+        windowThumbnailCache.setUpdateHandlers(
+            onThumbnailUpdated: { [weak self] windowID in
+                self?.onWindowThumbnailUpdated?(windowID)
+            },
+            onCaptureCycleCompleted: { [weak self] in
+                self?.flushPendingWorkspaceThumbnails()
+            }
         )
     }
 
-    func refreshWorkspaceThumbnails() {
-        let windows = controller.currentWindows().windows
-        workspaceThumbnailCache.refresh(groups: workspaceGroups(from: windows))
+    func setWindowThumbnailUpdateHandler(_ handler: @escaping (WindowID) -> Void) {
+        onWindowThumbnailUpdated = handler
     }
 
-    func refreshAllThumbnails(
-        priorityIDs: [WindowID] = [],
-        onThumbnailUpdated: @escaping (WindowID) -> Void = { _ in }
+    func refreshThumbnails(
+        windowIDs: Set<WindowID>,
+        workspaceNames: Set<String>,
+        priorityIDs: [WindowID] = []
     ) {
-        refreshWindowThumbnails(priorityIDs: priorityIDs) { [weak self] id in
-            self?.scheduleWorkspaceThumbnailRefresh()
-            onThumbnailUpdated(id)
+        let windows = controller.currentWindows().windows
+        let liveWindowIDs = Set(windows.map(\.id))
+        let liveWorkspaceNames = Set(controller.workspaces)
+
+        windowThumbnailCache.removeStaleThumbnails(keeping: liveWindowIDs)
+        workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceNames)
+        refreshApplicationIcons(windows: windows)
+        pendingWorkspaceNames.formUnion(workspaceNames.intersection(liveWorkspaceNames))
+        windowThumbnailCache.refresh(windowIDs: orderedWindowIDs(
+            windowIDs.intersection(liveWindowIDs),
+            windows: windows,
+            priorityIDs: priorityIDs
+        ))
+
+        if !windowThumbnailCache.isRefreshing {
+            flushPendingWorkspaceThumbnails()
         }
-        refreshWorkspaceThumbnails()
     }
 
-    private func scheduleWorkspaceThumbnailRefresh() {
-        guard !workspaceThumbnailRefreshScheduled else {
+    func refreshWorkspaceThumbnails(names: Set<String>) {
+        let windows = controller.currentWindows().windows
+        let liveWorkspaceNames = Set(controller.workspaces)
+        workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceNames)
+        workspaceThumbnailCache.refresh(groups: workspaceGroups(
+            from: windows,
+            names: names.intersection(liveWorkspaceNames)
+        ))
+    }
+
+    func refreshAllThumbnails(priorityIDs: [WindowID] = []) {
+        let windows = controller.currentWindows().windows
+        refreshThumbnails(
+            windowIDs: Set(windows.map(\.id)),
+            workspaceNames: Set(controller.workspaces),
+            priorityIDs: priorityIDs
+        )
+    }
+
+    private func flushPendingWorkspaceThumbnails() {
+        guard !pendingWorkspaceNames.isEmpty else {
             return
         }
 
-        workspaceThumbnailRefreshScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
-                return
-            }
+        let workspaceNames = pendingWorkspaceNames
+        pendingWorkspaceNames.removeAll()
+        refreshWorkspaceThumbnails(names: workspaceNames)
+    }
 
-            workspaceThumbnailRefreshScheduled = false
-            refreshWorkspaceThumbnails()
+    private func orderedWindowIDs(
+        _ requestedWindowIDs: Set<WindowID>,
+        windows: [WindowSnapshot],
+        priorityIDs: [WindowID]
+    ) -> [WindowID] {
+        var seen: Set<WindowID> = []
+        return (priorityIDs + windows.map(\.id)).filter { windowID in
+            requestedWindowIDs.contains(windowID) && seen.insert(windowID).inserted
         }
     }
 
-    private func workspaceGroups(from windows: [WindowSnapshot]) -> [WorkspaceSwitcherGroup] {
-        controller.workspaces.map { workspace in
-            WorkspaceSwitcherGroup(
+    private func workspaceGroups(
+        from windows: [WindowSnapshot],
+        names: Set<String>
+    ) -> [WorkspaceSwitcherGroup] {
+        controller.workspaces.compactMap { workspace in
+            guard names.contains(workspace) else {
+                return nil
+            }
+            return WorkspaceSwitcherGroup(
                 name: workspace,
                 windows: windows
                     .filter { controller.membership(for: $0.id) == workspace && !$0.isMinimized }
@@ -89,14 +126,19 @@ final class WindowThumbnailRefresher {
         )
     }
 
-    private func refreshApplicationIcons(
-        windows: [WindowSnapshot],
-        onWindowUpdated: @escaping (WindowID) -> Void
-    ) {
-        let windowIDsByPID = Dictionary(grouping: windows, by: \.app.pid)
-            .mapValues { $0.map(\.id) }
-        applicationIconCache.refresh(pids: Set(windowIDsByPID.keys)) { pid in
-            windowIDsByPID[pid]?.forEach(onWindowUpdated)
+    private func refreshApplicationIcons(windows: [WindowSnapshot]) {
+        let windowsByPID = Dictionary(grouping: windows, by: \.app.pid)
+        applicationIconCache.refresh(pids: Set(windowsByPID.keys)) { [weak self] pid in
+            guard let self, let windows = windowsByPID[pid] else {
+                return
+            }
+
+            let windowIDs = windows.map(\.id)
+            windowIDs.forEach { self.onWindowThumbnailUpdated?($0) }
+            pendingWorkspaceNames.formUnion(windowIDs.compactMap(controller.membership(for:)))
+            if !windowThumbnailCache.isRefreshing {
+                flushPendingWorkspaceThumbnails()
+            }
         }
     }
 }

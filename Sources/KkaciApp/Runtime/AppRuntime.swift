@@ -113,14 +113,9 @@ final class AppRuntime {
             return
         }
 
-        let monitor = WindowEventMonitor(
-            onFocusedWindowChanged: { [weak self] in
-                self?.statusMenuController.syncWorkspaceToFocusedWindow()
-            },
-            onWindowSetChanged: { [weak self] in
-                self?.statusMenuController.applyExternalWindowSetChange()
-            }
-        )
+        let monitor = WindowEventMonitor { [weak self] events in
+            self?.statusMenuController.applyExternalWindowEvents(events)
+        }
         monitor.start()
         windowEventMonitor = monitor
     }

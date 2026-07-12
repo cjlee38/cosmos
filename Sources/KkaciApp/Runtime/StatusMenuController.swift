@@ -113,12 +113,8 @@ final class StatusMenuController: NSObject {
         actionController.moveFocusedWindow(to: workspace)
     }
 
-    func syncWorkspaceToFocusedWindow() {
-        actionController.syncWorkspaceToFocusedWindow()
-    }
-
-    func applyExternalWindowSetChange() {
-        actionController.applyExternalWindowSetChange()
+    func applyExternalWindowEvents(_ events: WindowRuntimeEventBatch) {
+        actionController.applyExternalWindowEvents(events)
     }
 
     func refreshSurfaces() {

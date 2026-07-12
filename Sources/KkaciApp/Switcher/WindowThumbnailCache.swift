@@ -6,10 +6,26 @@ final class WindowThumbnailCache {
     private let captureImage: (WindowID) -> CGImage?
     private let captureQueue = DispatchQueue(label: "kkaci.window-thumbnails", qos: .userInitiated)
     private var thumbnails: [WindowID: NSImage] = [:]
-    private var inFlight: Set<WindowID> = []
+    private var queuedWindowIDs: [WindowID] = []
+    private var capturingWindowIDs: Set<WindowID> = []
+    private var liveWindowIDs: Set<WindowID> = []
+    private var onThumbnailUpdated: ((WindowID) -> Void)?
+    private var onCaptureCycleCompleted: (() -> Void)?
+
+    var isRefreshing: Bool {
+        !queuedWindowIDs.isEmpty || !capturingWindowIDs.isEmpty
+    }
 
     init(captureImage: @escaping (WindowID) -> CGImage? = WindowThumbnailCapture.capture) {
         self.captureImage = captureImage
+    }
+
+    func setUpdateHandlers(
+        onThumbnailUpdated: @escaping (WindowID) -> Void,
+        onCaptureCycleCompleted: @escaping () -> Void
+    ) {
+        self.onThumbnailUpdated = onThumbnailUpdated
+        self.onCaptureCycleCompleted = onCaptureCycleCompleted
     }
 
     func thumbnail(for id: WindowID) -> NSImage? {
@@ -17,54 +33,56 @@ final class WindowThumbnailCache {
     }
 
     func removeStaleThumbnails(keeping liveIDs: Set<WindowID>) {
+        liveWindowIDs = liveIDs
         thumbnails = thumbnails.filter { liveIDs.contains($0.key) }
-        inFlight = inFlight.intersection(liveIDs)
+        queuedWindowIDs.removeAll { !liveIDs.contains($0) }
     }
 
-    func refresh(
-        windows: [WindowSnapshot],
-        priorityIDs: [WindowID] = [],
-        onThumbnailUpdated: @escaping (WindowID) -> Void = { _ in }
-    ) {
-        let ids = orderedWindowIDs(windows: windows, priorityIDs: priorityIDs)
-        let pendingIDs = ids.filter { inFlight.insert($0).inserted }
+    func refresh(windowIDs: [WindowID]) {
+        for windowID in windowIDs
+            where liveWindowIDs.contains(windowID) && !queuedWindowIDs.contains(windowID) {
+            queuedWindowIDs.append(windowID)
+        }
+        startNextCaptureBatch()
+    }
 
-        for id in pendingIDs {
-            captureQueue.async { [captureImage] in
-                let image = captureImage(id)
+    private func startNextCaptureBatch() {
+        guard capturingWindowIDs.isEmpty, !queuedWindowIDs.isEmpty else {
+            return
+        }
+
+        let windowIDs = queuedWindowIDs
+        queuedWindowIDs.removeAll()
+        capturingWindowIDs = Set(windowIDs)
+
+        captureQueue.async { [weak self, captureImage] in
+            for windowID in windowIDs {
+                let image = captureImage(windowID)
                 DispatchQueue.main.async { [weak self] in
-                    guard let self else {
-                        return
-                    }
-
-                    inFlight.remove(id)
-                    guard let image else {
-                        return
-                    }
-
-                    thumbnails[id] = NSImage(
-                        cgImage: image,
-                        size: NSSize(width: image.width, height: image.height)
-                    )
-                    onThumbnailUpdated(id)
+                    self?.completeCapture(windowID: windowID, image: image)
                 }
             }
         }
     }
 
-    private func orderedWindowIDs(windows: [WindowSnapshot], priorityIDs: [WindowID]) -> [WindowID] {
-        var seen = Set<WindowID>()
-        var ids: [WindowID] = []
-
-        for id in priorityIDs where seen.insert(id).inserted {
-            ids.append(id)
+    private func completeCapture(windowID: WindowID, image: CGImage?) {
+        capturingWindowIDs.remove(windowID)
+        if liveWindowIDs.contains(windowID), let image {
+            thumbnails[windowID] = NSImage(
+                cgImage: image,
+                size: NSSize(width: image.width, height: image.height)
+            )
+            onThumbnailUpdated?(windowID)
         }
 
-        for window in windows where seen.insert(window.id).inserted {
-            ids.append(window.id)
+        guard capturingWindowIDs.isEmpty else {
+            return
         }
-
-        return ids
+        if queuedWindowIDs.isEmpty {
+            onCaptureCycleCompleted?()
+        } else {
+            startNextCaptureBatch()
+        }
     }
 }
 

@@ -5,7 +5,8 @@ import KkaciCore
 final class WorkspaceThumbnailCache {
     private let renderQueue = DispatchQueue(label: "kkaci.workspace-thumbnails", qos: .userInitiated)
     private var thumbnails: [String: NSImage] = [:]
-    private var pendingGroups: [WorkspaceSwitcherGroup]?
+    private var pendingGroups: [String: WorkspaceThumbnailRenderGroup] = [:]
+    private var liveWorkspaceNames: Set<String> = []
     private var isRendering = false
     private var onThumbnailsUpdated: (() -> Void)?
 
@@ -17,29 +18,40 @@ final class WorkspaceThumbnailCache {
         onThumbnailsUpdated = handler
     }
 
+    func removeStaleThumbnails(keeping workspaceNames: Set<String>) {
+        liveWorkspaceNames = workspaceNames
+        thumbnails = thumbnails.filter { workspaceNames.contains($0.key) }
+        pendingGroups = pendingGroups.filter { workspaceNames.contains($0.key) }
+    }
+
     func refresh(groups: [WorkspaceSwitcherGroup]) {
-        pendingGroups = groups
+        for group in WorkspaceThumbnailRenderer.makeRenderGroups(groups) {
+            pendingGroups[group.name] = group
+        }
         startPendingRender()
     }
 
     private func startPendingRender() {
-        guard !isRendering, let groups = pendingGroups else {
+        guard !isRendering, !pendingGroups.isEmpty else {
             return
         }
 
-        pendingGroups = nil
+        let groups = Array(pendingGroups.values)
+        pendingGroups.removeAll()
         isRendering = true
-        let renderGroups = WorkspaceThumbnailRenderer.makeRenderGroups(groups)
         renderQueue.async { [weak self] in
-            let rendered = WorkspaceThumbnailRenderer.render(renderGroups)
+            let rendered = WorkspaceThumbnailRenderer.render(groups)
             DispatchQueue.main.async {
                 guard let self else {
                     return
                 }
 
-                self.thumbnails = rendered.mapValues { image in
-                    NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
-                }
+                let images = rendered
+                    .filter { self.liveWorkspaceNames.contains($0.key) }
+                    .mapValues { image in
+                        NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+                    }
+                self.thumbnails.merge(images) { _, new in new }
                 self.isRendering = false
                 self.onThumbnailsUpdated?()
                 self.startPendingRender()

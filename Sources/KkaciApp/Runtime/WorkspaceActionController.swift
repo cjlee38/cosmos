@@ -84,11 +84,16 @@ final class WorkspaceActionController {
     func moveFocusedWindow(to workspace: String) {
         cancelSwitcher()
         do {
+            let previousWorkspace = controller.focusedWindowID().flatMap(controller.membership(for:))
             let result = try controller.moveFocusedWindow(to: workspace)
             if result.workspace != controller.activeWorkspace {
                 suppressedFocusedWindowID = result.windowID
             }
-            refreshThumbnails()
+            thumbnailRefresher.refreshThumbnails(
+                windowIDs: [result.windowID],
+                workspaceNames: Set([previousWorkspace, result.workspace].compactMap { $0 }),
+                priorityIDs: [result.windowID]
+            )
             refreshSurfaces()
             log.info("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
@@ -97,42 +102,64 @@ final class WorkspaceActionController {
     }
 
     func createWorkspace(named workspace: String) {
-        perform("Created workspace \(workspace)", shouldRefreshThumbnails: false) {
+        perform("Created workspace \(workspace)") {
             _ = try controller.createWorkspace(named: workspace)
         }
+        thumbnailRefresher.refreshWorkspaceThumbnails(names: [workspace])
         prepareSwitcher()
     }
 
-    func syncWorkspaceToFocusedWindow() {
+    func applyExternalWindowEvents(_ events: WindowRuntimeEventBatch) {
+        let previousMemberships = currentMemberships()
+        var shouldFollowFocusedWindow = events.shouldFollowFocusedWindow
         if let suppressedFocusedWindowID,
            controller.focusedWindowID() == suppressedFocusedWindowID {
             self.suppressedFocusedWindowID = nil
-            applyExternalWindowSetChange()
-            return
+            shouldFollowFocusedWindow = false
+        } else {
+            suppressedFocusedWindowID = nil
         }
 
-        suppressedFocusedWindowID = nil
         do {
-            switch try controller.syncWorkspaceToFocusedWindow() {
-            case let .switched(windowID, workspace):
-                refreshThumbnails()
-                refreshSurfaces()
-                log.info("Switched to workspace \(workspace) for \(windowID)")
-            case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
-                refreshThumbnails()
-                refreshSurfaces()
+            let result = try controller.applyExternalWindowEvents(
+                followFocusedWindow: shouldFollowFocusedWindow
+            )
+            let windows = controller.currentWindows().windows
+            let liveWindowIDs = Set(windows.map(\.id))
+            let autoAssignedWindowIDs = Set(result.sync.autoAssigned.map(\.0))
+            var affectedWindowIDs = events.windowIDs
+                .union(autoAssignedWindowIDs)
+                .union(result.sync.removed)
+            if events.shouldFollowFocusedWindow, let focusedWindowID = controller.focusedWindowID() {
+                affectedWindowIDs.insert(focusedWindowID)
             }
-        } catch {
-            log.error("Focus sync failed: \(String(describing: error))")
-        }
-    }
 
-    func applyExternalWindowSetChange() {
-        do {
-            _ = try controller.applyExternalWindowSetChange()
-            prepareSwitcher()
-            refreshThumbnails()
+            let windowIDs: Set<WindowID>
+            let workspaceNames: Set<String>
+            if events.needsFullThumbnailRefresh {
+                windowIDs = liveWindowIDs
+                workspaceNames = Set(controller.workspaces)
+            } else {
+                windowIDs = events.windowIDsNeedingCapture
+                    .union(autoAssignedWindowIDs)
+                    .intersection(liveWindowIDs)
+                workspaceNames = Set(affectedWindowIDs.compactMap { windowID in
+                    previousMemberships[windowID]
+                }).union(affectedWindowIDs.compactMap(controller.membership(for:)))
+            }
+
+            thumbnailRefresher.refreshThumbnails(
+                windowIDs: windowIDs,
+                workspaceNames: workspaceNames,
+                priorityIDs: controller.focusedWindowID().map { [$0] } ?? []
+            )
+            if !result.sync.autoAssigned.isEmpty || !result.sync.removed.isEmpty {
+                prepareSwitcher()
+            }
             refreshSurfaces()
+            if case let .switched(windowID, workspace) = result.focusedWindowSync {
+                log.info("Switched to workspace \(workspace) for \(windowID)")
+            }
         } catch {
             log.error("Window update failed: \(String(describing: error))")
         }
@@ -140,21 +167,17 @@ final class WorkspaceActionController {
 
     func restoreAllHiddenWindows() {
         let result = controller.restoreAllHiddenWindows()
-        refreshThumbnails()
+        thumbnailRefresher.refreshWorkspaceThumbnails(names: Set(controller.workspaces))
         refreshSurfaces()
         log.info("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
     }
 
     private func perform(
         _ successMessage: String,
-        shouldRefreshThumbnails: Bool = true,
         action: () throws -> Void
     ) {
         do {
             try action()
-            if shouldRefreshThumbnails {
-                refreshThumbnails()
-            }
             refreshSurfaces()
             log.info(successMessage)
         } catch {
@@ -172,7 +195,9 @@ final class WorkspaceActionController {
         }
     }
 
-    private func refreshThumbnails() {
-        thumbnailRefresher.refreshAllThumbnails()
+    private func currentMemberships() -> [WindowID: String] {
+        Dictionary(uniqueKeysWithValues: controller.currentWindows().windows.compactMap { window in
+            controller.membership(for: window.id).map { (window.id, $0) }
+        })
     }
 }

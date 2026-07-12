@@ -7,10 +7,10 @@ final class AXApplicationObserverRegistry {
         let observer: AXObserver
     }
 
-    private let onNotification: (CFString) -> Void
+    private let onNotification: (AXUIElement, CFString) -> Void
     private var observedApps: [pid_t: ObservedApp] = [:]
 
-    init(onNotification: @escaping (CFString) -> Void) {
+    init(onNotification: @escaping (AXUIElement, CFString) -> Void) {
         self.onNotification = onNotification
     }
 
@@ -30,7 +30,7 @@ final class AXApplicationObserverRegistry {
         var observer: AXObserver?
         let createError = AXObserverCreate(
             pid,
-            { _, _, notification, context in
+            { _, element, notification, context in
                 guard let context else {
                     return
                 }
@@ -38,7 +38,7 @@ final class AXApplicationObserverRegistry {
                 let registry = Unmanaged<AXApplicationObserverRegistry>
                     .fromOpaque(context)
                     .takeUnretainedValue()
-                registry.onNotification(notification)
+                registry.onNotification(element, notification)
             },
             &observer
         )

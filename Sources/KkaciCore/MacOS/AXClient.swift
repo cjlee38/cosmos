@@ -38,6 +38,10 @@ enum AXClientError: Error, CustomStringConvertible {
 public final class AXClient {
     public init() {}
 
+    public static func windowID(for element: AXUIElement) -> WindowID? {
+        element.containingWindowID()
+    }
+
     public func ensureAccessibilityPermission(prompt: Bool) -> Bool {
         let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [promptKey: prompt] as CFDictionary

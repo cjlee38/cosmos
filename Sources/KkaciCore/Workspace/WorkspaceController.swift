@@ -107,7 +107,32 @@ public extension WorkspaceController {
 
     @discardableResult
     func applyExternalWindowSetChange() throws -> WorkspaceSyncSummary {
-        try refreshWindowsAndApplyActiveWorkspace()
+        try applyExternalWindowEvents(followFocusedWindow: false).sync
+    }
+
+    func applyExternalWindowEvents(
+        followFocusedWindow: Bool
+    ) throws -> ExternalWindowEventResult {
+        let sync = syncWindows().sync
+        let focusedWindowSync: FocusedWindowWorkspaceSyncResult?
+        if followFocusedWindow {
+            let focusResult = try navigationCoordinator.syncWorkspaceToFocusedWindow(state: &state)
+            focusedWindowSync = focusResult
+            switch focusResult {
+            case .switched:
+                break
+            case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
+                try applyActiveWorkspaceVisibility()
+            }
+        } else {
+            focusedWindowSync = nil
+            try applyActiveWorkspaceVisibility()
+        }
+
+        return ExternalWindowEventResult(
+            sync: sync,
+            focusedWindowSync: focusedWindowSync
+        )
     }
 
     func membership(for id: WindowID) -> String? {

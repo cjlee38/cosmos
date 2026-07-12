@@ -86,6 +86,19 @@ public struct WindowListResult {
     }
 }
 
+public struct ExternalWindowEventResult {
+    public let sync: WorkspaceSyncSummary
+    public let focusedWindowSync: FocusedWindowWorkspaceSyncResult?
+
+    public init(
+        sync: WorkspaceSyncSummary,
+        focusedWindowSync: FocusedWindowWorkspaceSyncResult?
+    ) {
+        self.sync = sync
+        self.focusedWindowSync = focusedWindowSync
+    }
+}
+
 public struct RestoreAllHiddenWindowsResult: Equatable {
     public let restored: [WindowID]
     public let skipped: [WindowID]
