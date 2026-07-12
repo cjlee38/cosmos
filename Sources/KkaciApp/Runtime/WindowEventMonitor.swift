@@ -35,7 +35,11 @@ struct WindowRuntimeEventBatch {
     }
 
     var shouldFollowFocusedWindow: Bool {
-        events.contains { $0.kind == .focusChanged || $0.kind == .layoutChanged }
+        events.contains { $0.kind == .focusChanged }
+    }
+
+    var containsLayoutChange: Bool {
+        events.contains { $0.kind == .layoutChanged }
     }
 
     var needsFullThumbnailRefresh: Bool {

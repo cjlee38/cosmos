@@ -111,7 +111,7 @@ final class WorkspaceActionController {
 
     func applyExternalWindowEvents(_ events: WindowRuntimeEventBatch) {
         let previousMemberships = currentMemberships()
-        var shouldFollowFocusedWindow = events.shouldFollowFocusedWindow
+        var shouldFollowFocusedWindow = shouldFollowFocusedWindow(for: events)
         if let suppressedFocusedWindowID,
            controller.focusedWindowID() == suppressedFocusedWindowID {
             self.suppressedFocusedWindowID = nil
@@ -199,5 +199,15 @@ final class WorkspaceActionController {
         Dictionary(uniqueKeysWithValues: controller.currentWindows().windows.compactMap { window in
             controller.membership(for: window.id).map { (window.id, $0) }
         })
+    }
+
+    private func shouldFollowFocusedWindow(for events: WindowRuntimeEventBatch) -> Bool {
+        if events.shouldFollowFocusedWindow {
+            return true
+        }
+        guard events.containsLayoutChange, let focusedWindowID = controller.focusedWindowID() else {
+            return false
+        }
+        return !controller.isHiddenByWorkspace(focusedWindowID)
     }
 }
