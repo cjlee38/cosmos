@@ -105,6 +105,12 @@ public extension WorkspaceController {
         WindowListResult(windows: windowStore.windows, sync: .empty)
     }
 
+    func windows(in workspace: String) -> [WindowSnapshot] {
+        windowStore.windows.filter { window in
+            state.membership(for: window.id) == workspace && !window.isMinimized
+        }
+    }
+
     @discardableResult
     func applyExternalWindowSetChange() throws -> WorkspaceSyncSummary {
         try applyExternalWindowEvents(followFocusedWindow: false).sync
@@ -149,10 +155,6 @@ public extension WorkspaceController {
 
     func focusedWindowID() -> WindowID? {
         windowSystem.focusedWindowID()
-    }
-
-    func windowIDsByMostRecentFocus(in workspace: String) -> [WindowID] {
-        state.windowIDsByMostRecentFocus(in: workspace)
     }
 
     func isWorkspaceActive(_ workspace: String) -> Bool {
@@ -218,7 +220,11 @@ public extension WorkspaceController {
 
     func switchWorkspace(to workspace: String) throws -> WorkspaceSyncSummary {
         let sync = syncWindows().sync
-        try navigationCoordinator.switchWorkspace(to: workspace, state: &state)
+        try navigationCoordinator.switchWorkspace(
+            to: workspace,
+            frontToBackWindowIDs: visibleWindowIDsInZOrder,
+            state: &state
+        )
         return sync
     }
 
@@ -241,12 +247,20 @@ public extension WorkspaceController {
 
     func focusNextWindow() -> WindowFocusResult {
         _ = syncWindows()
-        return navigationCoordinator.focusCycledWindow(next: true, state: &state)
+        return navigationCoordinator.focusCycledWindow(
+            next: true,
+            frontToBackWindowIDs: windows(in: activeWorkspace).map(\.id),
+            state: state
+        )
     }
 
     func focusPreviousWindow() -> WindowFocusResult {
         _ = syncWindows()
-        return navigationCoordinator.focusCycledWindow(next: false, state: &state)
+        return navigationCoordinator.focusCycledWindow(
+            next: false,
+            frontToBackWindowIDs: windows(in: activeWorkspace).map(\.id),
+            state: state
+        )
     }
 
     func moveFocusedWindow(to workspace: String) throws -> WindowMoveResult {
@@ -291,7 +305,6 @@ public extension WorkspaceController {
 
         _ = try hiddenWindowOperator.restore(id, state: &state)
         windowSystem.focus(id)
-        state.recordFocus(id, in: workspace)
     }
 
     func restoreAllHiddenWindows() -> RestoreAllHiddenWindowsResult {
@@ -302,6 +315,10 @@ public extension WorkspaceController {
 }
 
 private extension WorkspaceController {
+    private var visibleWindowIDsInZOrder: [WindowID] {
+        windowStore.windows.filter { !$0.isMinimized }.map(\.id)
+    }
+
     private func syncWindows() -> WindowListResult {
         windowSetSynchronizer.refresh(state: &state)
     }

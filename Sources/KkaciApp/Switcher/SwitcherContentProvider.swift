@@ -32,11 +32,11 @@ final class SwitcherContentProvider {
         }
     }
 
-    func workspaceGroups(from windows: [WindowSnapshot]) -> [WorkspaceSwitcherGroup] {
+    func workspaceGroups() -> [WorkspaceSwitcherGroup] {
         controller.workspaces.map { workspace in
             WorkspaceSwitcherGroup(
                 name: workspace,
-                windows: workspacePreviewItems(in: workspace, from: windows),
+                windows: workspacePreviewItems(in: workspace),
                 preview: workspaceThumbnailCache.thumbnail(for: workspace)
             )
         }
@@ -56,9 +56,8 @@ final class SwitcherContentProvider {
         }?.frame
     }
 
-    private func workspacePreviewItems(in workspace: String, from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
-        windows
-            .filter { controller.membership(for: $0.id) == workspace && !$0.isMinimized }
+    private func workspacePreviewItems(in workspace: String) -> [WindowSwitcherItem] {
+        controller.windows(in: workspace)
             .map { window in
                 previewProvider.makeItem(
                     for: window,

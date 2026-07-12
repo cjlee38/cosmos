@@ -15,17 +15,23 @@ final class WorkspaceNavigationCoordinator {
         self.visibilityCoordinator = visibilityCoordinator
     }
 
-    func switchWorkspace(to workspace: String, state: inout WorkspaceState) throws {
+    func switchWorkspace(
+        to workspace: String,
+        frontToBackWindowIDs: [WindowID],
+        state: inout WorkspaceState
+    ) throws {
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let previousActivation = state.activationSnapshot
         let oldFocusedWindow = focusedWindowInActiveWorkspace(state: state)
-            ?? state.focusTarget(for: state.activeWorkspace)
+            ?? firstWindow(in: state.activeWorkspace, from: frontToBackWindowIDs, state: state)
+        let preferredFocus = firstWindow(in: workspace, from: frontToBackWindowIDs, state: state)
 
         state.activate(workspace)
         do {
             try visibilityCoordinator.applyActiveWorkspace(
                 state: &state,
                 focusActiveWorkspace: true,
+                preferredFocus: preferredFocus,
                 oldFocusedWindow: oldFocusedWindow,
                 strictWindowIDs: Set(state.windowIDs(in: workspace))
             )
@@ -49,13 +55,11 @@ final class WorkspaceNavigationCoordinator {
 
         let monitorSlot = state.monitorSlot(for: workspace)
         guard workspace != state.activeWorkspace(on: monitorSlot) else {
-            state.recordFocus(id, in: workspace)
             state.activate(workspace)
             return .alreadyActive(windowID: id, workspace: workspace)
         }
 
         let previousActivation = state.activationSnapshot
-        state.recordFocus(id, in: workspace)
         state.activate(workspace)
         do {
             try visibilityCoordinator.applyActiveWorkspace(
@@ -74,25 +78,31 @@ final class WorkspaceNavigationCoordinator {
         return .switched(windowID: id, workspace: workspace)
     }
 
-    func focusCycledWindow(next: Bool, state: inout WorkspaceState) -> WindowFocusResult {
+    func focusCycledWindow(
+        next: Bool,
+        frontToBackWindowIDs: [WindowID],
+        state: WorkspaceState
+    ) -> WindowFocusResult {
         let workspace = state.activeWorkspace
         let currentFocused = focusedWindowInActiveWorkspace(state: state)
-        if let currentFocused {
-            state.recordFocus(currentFocused, in: workspace)
-        }
-
-        let current = currentFocused ?? state.focusTarget(for: workspace)
-        let target = next
-            ? state.nextWindow(in: workspace, after: current)
-            : state.previousWindow(in: workspace, before: current)
+        let current = currentFocused ?? frontToBackWindowIDs.first
+        let direction: CycleDirection = next ? .forward : .backward
+        let target = cycledValue(in: frontToBackWindowIDs, after: current, direction: direction)
 
         guard let target else {
             return .noWindowsInWorkspace(workspace)
         }
 
         windowSystem.focus(target)
-        state.recordFocus(target, in: workspace)
         return .focused(target)
+    }
+
+    private func firstWindow(
+        in workspace: String,
+        from frontToBackWindowIDs: [WindowID],
+        state: WorkspaceState
+    ) -> WindowID? {
+        frontToBackWindowIDs.first { state.membership(for: $0) == workspace }
     }
 
     private func focusedWindowInActiveWorkspace(state: WorkspaceState) -> WindowID? {

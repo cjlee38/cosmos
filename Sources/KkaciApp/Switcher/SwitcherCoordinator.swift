@@ -112,10 +112,7 @@ extension SwitcherCoordinator {
 private extension SwitcherCoordinator {
     private func startWindowSession(direction: SwitcherDirection) {
         let windows = controller.currentWindows().windows
-        let liveWindowIDs = Set(windows.map(\.id))
-        let windowIDs = controller
-            .windowIDsByMostRecentFocus(in: controller.activeWorkspace)
-            .filter(liveWindowIDs.contains)
+        let windowIDs = controller.windows(in: controller.activeWorkspace).map(\.id)
 
         guard let selection = SwitcherSession(
             items: windowIDs,
@@ -136,9 +133,7 @@ private extension SwitcherCoordinator {
 
     private func startWorkspaceSession(direction: SwitcherDirection) {
         let windows = controller.currentWindows().windows
-        let activeWindowID = controller
-            .windowIDsByMostRecentFocus(in: controller.activeWorkspace)
-            .first
+        let activeWindowID = controller.windows(in: controller.activeWorkspace).first?.id
         let anchorFrame = contentProvider.overlayAnchorFrame(
             from: windows,
             preferredWindowID: activeWindowID
@@ -263,7 +258,7 @@ private extension SwitcherCoordinator {
                 priorityIDs: [selection.selectedItem]
             )
         case let .workspaces(selection, anchorFrame):
-            let groups = orderedWorkspaceGroups(names: selection.items, from: windows)
+            let groups = orderedWorkspaceGroups(names: selection.items)
             overlay.showWorkspaceSwitcher(
                 groups: groups,
                 selectedName: selection.selectedItem,
@@ -295,12 +290,9 @@ private extension SwitcherCoordinator {
         }
     }
 
-    private func orderedWorkspaceGroups(
-        names: [String],
-        from windows: [WindowSnapshot]
-    ) -> [WorkspaceSwitcherGroup] {
+    private func orderedWorkspaceGroups(names: [String]) -> [WorkspaceSwitcherGroup] {
         let groupsByName = Dictionary(
-            uniqueKeysWithValues: contentProvider.workspaceGroups(from: windows).map { ($0.name, $0) }
+            uniqueKeysWithValues: contentProvider.workspaceGroups().map { ($0.name, $0) }
         )
         return names.compactMap { groupsByName[$0] }
     }
@@ -345,7 +337,7 @@ private extension SwitcherCoordinator {
             let items = contentProvider.windowItems(withIDs: selection.items, from: windows)
             overlay.updateWindowSwitcher(items: items)
         case let .workspaces(selection, _):
-            let groups = orderedWorkspaceGroups(names: selection.items, from: windows)
+            let groups = orderedWorkspaceGroups(names: selection.items)
             overlay.updateWorkspaceSwitcher(groups: groups)
         case nil:
             return

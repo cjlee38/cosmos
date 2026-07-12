@@ -58,7 +58,32 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         ))
     }
 
-    func testRapidWindowSwitcherSessionsAlternateBetweenTwoMostRecentWindows() throws {
+    func testWorkspaceWindowsKeepCurrentMacOSZOrderAndExcludeMinimizedWindows() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two"),
+            .window(id: 300, title: "Three", isMinimized: true)
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = controller.listWindows()
+        try controller.assignWindow(200, to: "1")
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(300, to: "1")
+
+        XCTAssertEqual(controller.windows(in: "1").map(\.id), [100, 200])
+
+        windowSystem.windows = [
+            .window(id: 200, title: "Two"),
+            .window(id: 100, title: "One"),
+            .window(id: 300, title: "Three", isMinimized: true)
+        ]
+        _ = controller.refreshWindows()
+
+        XCTAssertEqual(controller.windows(in: "1").map(\.id), [200, 100])
+    }
+
+    func testRapidWindowSwitcherSessionsFollowCurrentMacOSZOrder() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 1, title: "One"),
             .window(id: 2, title: "Two"),
@@ -71,7 +96,7 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         try controller.assignWindow(2, to: "1")
         try controller.assignWindow(1, to: "1")
 
-        let firstOrder = controller.windowIDsByMostRecentFocus(in: "1")
+        let firstOrder = controller.windows(in: "1").map(\.id)
         let firstSession = try XCTUnwrap(SwitcherSession(
             items: firstOrder,
             currentItem: firstOrder.first,
@@ -80,7 +105,14 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         XCTAssertEqual(firstSession.selectedItem, 2)
         try controller.focusWindow(firstSession.selectedItem)
 
-        let secondOrder = controller.windowIDsByMostRecentFocus(in: "1")
+        windowSystem.windows = [
+            .window(id: 2, title: "Two"),
+            .window(id: 1, title: "One"),
+            .window(id: 3, title: "Three")
+        ]
+        _ = controller.refreshWindows()
+
+        let secondOrder = controller.windows(in: "1").map(\.id)
         let secondSession = try XCTUnwrap(SwitcherSession(
             items: secondOrder,
             currentItem: secondOrder.first,

@@ -46,7 +46,7 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.membership(for: 200), "2")
     }
 
-    func testRemovedWindowsArePrunedFromMembershipHiddenStateAndMRUOrder() {
+    func testRemovedWindowsArePrunedFromMembershipAndHiddenState() {
         var state = WorkspaceState()
         _ = state.sync(windows: [
             .window(id: 100, title: "first"),
@@ -54,14 +54,12 @@ final class WorkspaceStateTests: XCTestCase {
         ]) { _ in 1 }
         state.assign(200, to: "2")
         state.storeHiddenFrameIfNeeded(.frame(x: 20, y: 20), for: 200)
-        state.recordFocus(200, in: "2")
 
         let sync = state.sync(windows: [.window(id: 100, title: "first")]) { _ in 1 }
 
         XCTAssertEqual(sync.removed, [200])
         XCTAssertNil(state.membership(for: 200))
         XCTAssertFalse(state.isHidden(200))
-        XCTAssertNil(state.focusTarget(for: "2"))
     }
 
     func testRepeatedHideDoesNotOverwriteOriginalFrame() {
@@ -139,27 +137,13 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertEqual(state.previousWorkspace(before: "2"), "1")
     }
 
-    func testWindowCycleUsesAssignedWindowsInWorkspace() {
+    func testWorkspaceMembershipTracksAssignedWindowsWithoutOrdering() {
         var state = WorkspaceState()
         state.assign(300, to: "2")
         state.assign(100, to: "2")
         state.assign(200, to: "1")
 
-        XCTAssertEqual(state.windowIDs(in: "2"), [100, 300])
-        XCTAssertEqual(state.nextWindow(in: "2", after: nil), 100)
-        XCTAssertEqual(state.nextWindow(in: "2", after: 100), 300)
-        XCTAssertEqual(state.nextWindow(in: "2", after: 300), 100)
-        XCTAssertEqual(state.previousWindow(in: "2", before: 100), 300)
-        XCTAssertNil(state.nextWindow(in: "9", after: nil))
-    }
-
-    func testWindowOrderUsesMostRecentlyRecordedFocus() {
-        var state = WorkspaceState()
-        state.assign(100, to: "2")
-        state.assign(200, to: "2")
-        state.assign(300, to: "2")
-        state.recordFocus(100, in: "2")
-
-        XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2"), [100, 300, 200])
+        XCTAssertEqual(Set(state.windowIDs(in: "2")), [100, 300])
+        XCTAssertEqual(Set(state.windowIDs(in: "1")), [200])
     }
 }

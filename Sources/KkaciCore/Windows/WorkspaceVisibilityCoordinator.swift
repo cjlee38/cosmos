@@ -38,12 +38,8 @@ final class WorkspaceVisibilityCoordinator {
             }
         }
 
-        if focusActiveWorkspace {
-            let focusTarget = preferredFocus ?? state.focusTarget(for: activeWorkspace)
-            if let focusTarget {
-                windowSystem.focus(focusTarget)
-                state.recordFocus(focusTarget, in: activeWorkspace)
-            }
+        if focusActiveWorkspace, let preferredFocus {
+            windowSystem.focus(preferredFocus)
         }
 
         for id in hideOrder(state: state, visibleWorkspaces: visibleWorkspaces, oldFocusedWindow: oldFocusedWindow) {

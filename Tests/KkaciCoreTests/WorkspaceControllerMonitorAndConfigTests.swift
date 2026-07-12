@@ -69,7 +69,7 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
 }
 
 final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
-    func testFocusWindowRecordsFocusInTheWindowsWorkspaceWhenAnotherMonitorSlotIsActive() throws {
+    func testFocusWindowOnAnotherActiveMonitorDoesNotChangeCachedZOrder() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
             .window(id: 200, title: "Secondary One", frame: .frame(x: 1100, y: 100)),
@@ -97,7 +97,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         try controller.focusWindow(200)
 
         XCTAssertEqual(windowSystem.focusedIDs.last, 200)
-        XCTAssertEqual(controller.windowIDsByMostRecentFocus(in: "2"), [200, 201])
+        XCTAssertEqual(controller.windows(in: "2").map(\.id), [200, 201])
     }
 
     func testFocusWindowRejectsInactiveWorkspaceWindow() throws {

@@ -1,57 +1,41 @@
 import Foundation
 
 struct WorkspaceMemberships {
-    private var windowIDsByWorkspace: [String: [WindowID]] = [:]
+    private var workspaceByWindowID: [WindowID: String] = [:]
 
     var assignedWindowIDs: [WindowID] {
-        windowIDsByWorkspace.values.flatMap { $0 }
+        Array(workspaceByWindowID.keys)
     }
 
     var referencedWorkspaces: Set<String> {
-        Set(windowIDsByWorkspace.keys)
+        Set(workspaceByWindowID.values)
     }
 
     func workspace(for id: WindowID) -> String? {
-        windowIDsByWorkspace.first { _, ids in
-            ids.contains(id)
-        }?.key
+        workspaceByWindowID[id]
     }
 
     mutating func assign(_ id: WindowID, to workspace: String) {
-        remove(id)
-        windowIDsByWorkspace[workspace, default: []].insert(id, at: 0)
+        workspaceByWindowID[id] = workspace
     }
 
     mutating func unassign(_ id: WindowID) {
-        remove(id)
+        workspaceByWindowID[id] = nil
     }
 
     mutating func capture(_ ids: [WindowID], into workspace: String) {
         for id in ids {
-            remove(id)
-            windowIDsByWorkspace[workspace, default: []].append(id)
+            workspaceByWindowID[id] = workspace
         }
     }
 
     mutating func remove(_ id: WindowID) {
-        for workspace in Array(windowIDsByWorkspace.keys) {
-            windowIDsByWorkspace[workspace]?.removeAll { $0 == id }
-            if windowIDsByWorkspace[workspace]?.isEmpty == true {
-                windowIDsByWorkspace[workspace] = nil
-            }
-        }
-    }
-
-    mutating func recordFocus(_ id: WindowID, in workspace: String) {
-        guard self.workspace(for: id) == workspace else {
-            return
-        }
-
-        remove(id)
-        windowIDsByWorkspace[workspace, default: []].insert(id, at: 0)
+        workspaceByWindowID[id] = nil
     }
 
     func windowIDs(in workspace: String) -> [WindowID] {
-        windowIDsByWorkspace[workspace] ?? []
+        workspaceByWindowID.compactMap { id, assignedWorkspace in
+            assignedWorkspace == workspace ? id : nil
+        }
     }
 }

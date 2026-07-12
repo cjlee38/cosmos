@@ -58,11 +58,9 @@ final class WindowThumbnailRefresher {
     }
 
     func refreshWorkspaceThumbnails(names: Set<String>) {
-        let windows = controller.currentWindows().windows
         let liveWorkspaceNames = Set(controller.workspaces)
         workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceNames)
         workspaceThumbnailCache.refresh(groups: workspaceGroups(
-            from: windows,
             names: names.intersection(liveWorkspaceNames)
         ))
     }
@@ -97,19 +95,14 @@ final class WindowThumbnailRefresher {
         }
     }
 
-    private func workspaceGroups(
-        from windows: [WindowSnapshot],
-        names: Set<String>
-    ) -> [WorkspaceSwitcherGroup] {
+    private func workspaceGroups(names: Set<String>) -> [WorkspaceSwitcherGroup] {
         controller.workspaces.compactMap { workspace in
             guard names.contains(workspace) else {
                 return nil
             }
             return WorkspaceSwitcherGroup(
                 name: workspace,
-                windows: windows
-                    .filter { controller.membership(for: $0.id) == workspace && !$0.isMinimized }
-                    .map(makeItem),
+                windows: controller.windows(in: workspace).map(makeItem),
                 preview: nil
             )
         }
