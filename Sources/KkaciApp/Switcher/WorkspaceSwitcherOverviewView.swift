@@ -2,28 +2,55 @@ import AppKit
 
 final class WorkspaceSwitcherListView: NSView {
     private var cardViewsByName: [String: WorkspacePreviewCardView] = [:]
+    private var recycledCardViews: [WorkspacePreviewCardView] = []
 
-    init(
-        groups: [WorkspaceSwitcherGroup],
-        selectedIndex: Int,
-        availableFrame: NSRect,
-        onHover: @escaping (String) -> Void,
-        onClick: @escaping (String) -> Void
-    ) {
-        let layout = WorkspaceOverviewLayout(groupCount: groups.count, availableFrame: availableFrame)
-        super.init(frame: NSRect(origin: .zero, size: layout.contentSize))
-        setup(
-            groups: groups,
-            selectedIndex: selectedIndex,
-            layout: layout,
-            onHover: onHover,
-            onClick: onClick
-        )
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
     }
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    func ensureCapacity(_ count: Int) {
+        let missingCount = max(0, count - cardViewsByName.count - recycledCardViews.count)
+        for _ in 0 ..< missingCount {
+            recycledCardViews.append(WorkspacePreviewCardView(frame: .zero))
+        }
+    }
+
+    func configure(
+        groups: [WorkspaceSwitcherGroup],
+        selectedName: String,
+        availableFrame: NSRect,
+        onHover: @escaping (String) -> Void,
+        onClick: @escaping (String) -> Void
+    ) {
+        let layout = WorkspaceOverviewLayout(groupCount: groups.count, availableFrame: availableFrame)
+        frame = NSRect(origin: .zero, size: layout.contentSize)
+        recycleMissingCards(keeping: Set(groups.map(\.name)))
+        ensureCapacity(groups.count)
+
+        let hoverGate = SwitcherHoverGate()
+        for (index, group) in groups.enumerated() {
+            let row = index / layout.columns
+            let column = index % layout.columns
+            let cell = layout.cellFrame(row: row, column: column)
+            let card = cardView(for: group.name)
+            card.configure(WorkspaceCardConfiguration(
+                group: group,
+                isSelected: group.name == selectedName,
+                cardSize: layout.cardSize,
+                hoverGate: hoverGate,
+                onHover: onHover,
+                onClick: onClick
+            ))
+            card.frame.origin = NSPoint(
+                x: cell.midX - layout.cardSize.width / 2,
+                y: cell.midY - layout.cardSize.height / 2
+            )
+        }
     }
 
     func updatePreviews(groups: [WorkspaceSwitcherGroup]) {
@@ -45,36 +72,28 @@ final class WorkspaceSwitcherListView: NSView {
                 return card
             }
         }
-
         return super.hitTest(point)
     }
 
-    private func setup(
-        groups: [WorkspaceSwitcherGroup],
-        selectedIndex: Int,
-        layout: WorkspaceOverviewLayout,
-        onHover: @escaping (String) -> Void,
-        onClick: @escaping (String) -> Void
-    ) {
-        let hoverGate = SwitcherHoverGate()
-        for (index, group) in groups.enumerated() {
-            let row = index / layout.columns
-            let column = index % layout.columns
-            let cell = layout.cellFrame(row: row, column: column)
-            let card = WorkspacePreviewCardView(
-                group: group,
-                isSelected: index == selectedIndex,
-                cardSize: layout.cardSize,
-                hoverGate: hoverGate,
-                onHover: onHover,
-                onClick: onClick
-            )
-            card.frame.origin = NSPoint(
-                x: cell.midX - layout.cardSize.width / 2,
-                y: cell.midY - layout.cardSize.height / 2
-            )
-            addSubview(card)
-            cardViewsByName[group.name] = card
+    private func cardView(for name: String) -> WorkspacePreviewCardView {
+        if let card = cardViewsByName[name] {
+            return card
+        }
+
+        let card = recycledCardViews.removeLast()
+        cardViewsByName[name] = card
+        addSubview(card)
+        return card
+    }
+
+    private func recycleMissingCards(keeping names: Set<String>) {
+        for name in Array(cardViewsByName.keys) where !names.contains(name) {
+            guard let card = cardViewsByName.removeValue(forKey: name) else {
+                continue
+            }
+            card.prepareForReuse()
+            card.removeFromSuperview()
+            recycledCardViews.append(card)
         }
     }
 }
@@ -139,31 +158,29 @@ private struct WorkspaceOverviewLayout {
     }
 }
 
+private struct WorkspaceCardConfiguration {
+    let group: WorkspaceSwitcherGroup
+    let isSelected: Bool
+    let cardSize: NSSize
+    let hoverGate: SwitcherHoverGate
+    let onHover: (String) -> Void
+    let onClick: (String) -> Void
+}
+
 private final class WorkspacePreviewCardView: NSView {
-    private let name: String
-    private let hoverGate: SwitcherHoverGate
-    private let onHover: (String) -> Void
-    private let onClick: (String) -> Void
+    private var name: String?
+    private var hoverGate: SwitcherHoverGate?
+    private var onHover: ((String) -> Void)?
+    private var onClick: ((String) -> Void)?
+    private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
+    private let previewSurface = NSView()
     private let previewImageView = NSImageView()
     private let fallbackLabel = NSTextField(labelWithString: "")
 
-    init(
-        group: WorkspaceSwitcherGroup,
-        isSelected: Bool,
-        cardSize: NSSize,
-        hoverGate: SwitcherHoverGate,
-        onHover: @escaping (String) -> Void,
-        onClick: @escaping (String) -> Void
-    ) {
-        name = group.name
-        self.hoverGate = hoverGate
-        self.onHover = onHover
-        self.onClick = onClick
-        super.init(frame: NSRect(origin: .zero, size: cardSize))
-        setupChrome()
-        setupContent(group: group)
-        updateSelection(isSelected)
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupViews()
     }
 
     @available(*, unavailable)
@@ -198,26 +215,44 @@ private final class WorkspacePreviewCardView: NSView {
     }
 
     override func mouseDown(with _: NSEvent) {
-        onClick(name)
+        commit()
     }
 
     override func rightMouseDown(with _: NSEvent) {
-        onClick(name)
+        commit()
     }
 
     override func otherMouseDown(with _: NSEvent) {
-        onClick(name)
+        commit()
     }
 
-    private func hover() {
-        guard hoverGate.allowHoverIfPointerMoved() else {
-            return
-        }
+    func configure(_ configuration: WorkspaceCardConfiguration) {
+        let group = configuration.group
+        name = group.name
+        hoverGate = configuration.hoverGate
+        onHover = configuration.onHover
+        onClick = configuration.onClick
+        frame.size = configuration.cardSize
+        titleLabel.stringValue = "Workspace \(group.name)"
+        layoutContent()
+        update(group: group)
+        updateSelection(configuration.isSelected)
+    }
 
-        onHover(name)
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        name = nil
+        hoverGate = nil
+        onHover = nil
+        onClick = nil
+        previewImageView.image = nil
     }
 
     func update(group: WorkspaceSwitcherGroup) {
+        guard group.name == name else {
+            return
+        }
+
         subtitleLabel.stringValue = metadataText(for: group.windows)
         previewImageView.image = group.preview
         previewImageView.isHidden = group.preview == nil
@@ -237,76 +272,77 @@ private final class WorkspacePreviewCardView: NSView {
         layer?.shadowRadius = isSelected ? 18 : 12
     }
 
-    private func setupChrome() {
+    private func hover() {
+        guard let name, hoverGate?.allowHoverIfPointerMoved() == true else {
+            return
+        }
+        onHover?(name)
+    }
+
+    private func commit() {
+        guard let name else {
+            return
+        }
+        onClick?(name)
+    }
+
+    private func setupViews() {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.shadowColor = NSColor.black.cgColor
         layer?.shadowOffset = NSSize(width: 0, height: -4)
-    }
 
-    private func setupContent(group: WorkspaceSwitcherGroup) {
-        let padding: CGFloat = 12
-        let titleHeight: CGFloat = 22
-        let subtitleHeight: CGFloat = 18
-        let title = label(
-            "Workspace \(group.name)",
-            font: .systemFont(ofSize: 15, weight: .semibold),
-            color: .white
-        )
-        title.frame = NSRect(
-            x: padding,
-            y: bounds.height - padding - titleHeight,
-            width: bounds.width - padding * 2,
-            height: titleHeight
-        )
-
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.maximumNumberOfLines = 1
+        titleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.font = .systemFont(ofSize: 12)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.maximumNumberOfLines = 1
         subtitleLabel.lineBreakMode = .byTruncatingTail
-        subtitleLabel.frame = NSRect(
-            x: padding,
-            y: title.frame.minY - subtitleHeight,
-            width: bounds.width - padding * 2,
-            height: subtitleHeight
-        )
 
-        let previewFrame = NSRect(
-            x: padding,
-            y: padding,
-            width: bounds.width - padding * 2,
-            height: subtitleLabel.frame.minY - padding * 1.35
-        )
-        let previewSurface = makePreviewSurface(frame: previewFrame)
+        previewSurface.wantsLayer = true
+        previewSurface.layer?.cornerRadius = 8
+        previewSurface.layer?.masksToBounds = true
+        previewSurface.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.36).cgColor
+        previewSurface.layer?.borderWidth = 1
+        previewSurface.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        previewImageView.imageScaling = .scaleAxesIndependently
+        fallbackLabel.alignment = .center
+        fallbackLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        fallbackLabel.textColor = .secondaryLabelColor
         previewSurface.addSubview(previewImageView)
         previewSurface.addSubview(fallbackLabel)
 
         addSubview(previewSurface)
         addSubview(subtitleLabel)
-        addSubview(title)
-        update(group: group)
+        addSubview(titleLabel)
     }
 
-    private func makePreviewSurface(frame: NSRect) -> NSView {
-        let surface = NSView(frame: frame)
-        surface.wantsLayer = true
-        surface.layer?.cornerRadius = 8
-        surface.layer?.masksToBounds = true
-        surface.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.36).cgColor
-        surface.layer?.borderWidth = 1
-        surface.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
-
-        previewImageView.frame = surface.bounds
-        previewImageView.autoresizingMask = [.width, .height]
-        previewImageView.imageScaling = .scaleAxesIndependently
-
-        fallbackLabel.frame = surface.bounds
-        fallbackLabel.autoresizingMask = [.width, .height]
-        fallbackLabel.alignment = .center
-        fallbackLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        fallbackLabel.textColor = .secondaryLabelColor
-
-        return surface
+    private func layoutContent() {
+        let padding: CGFloat = 12
+        let titleHeight: CGFloat = 22
+        let subtitleHeight: CGFloat = 18
+        titleLabel.frame = NSRect(
+            x: padding,
+            y: bounds.height - padding - titleHeight,
+            width: bounds.width - padding * 2,
+            height: titleHeight
+        )
+        subtitleLabel.frame = NSRect(
+            x: padding,
+            y: titleLabel.frame.minY - subtitleHeight,
+            width: bounds.width - padding * 2,
+            height: subtitleHeight
+        )
+        previewSurface.frame = NSRect(
+            x: padding,
+            y: padding,
+            width: bounds.width - padding * 2,
+            height: subtitleLabel.frame.minY - padding * 1.35
+        )
+        previewImageView.frame = previewSurface.bounds
+        fallbackLabel.frame = previewSurface.bounds
     }
 
     private func metadataText(for windows: [WindowSwitcherItem]) -> String {
@@ -326,14 +362,5 @@ private final class WorkspacePreviewCardView: NSView {
             : visibleAppNames
         let windowText = windows.count == 1 ? "1 window" : "\(windows.count) windows"
         return "\(appText) - \(windowText)"
-    }
-
-    private func label(_ text: String, font: NSFont, color: NSColor) -> NSTextField {
-        let field = NSTextField(labelWithString: text)
-        field.font = font
-        field.textColor = color
-        field.maximumNumberOfLines = 1
-        field.lineBreakMode = .byTruncatingTail
-        return field
     }
 }

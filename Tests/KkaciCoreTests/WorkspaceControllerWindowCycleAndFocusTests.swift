@@ -68,7 +68,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         XCTAssertEqual(result, .noWindowsInWorkspace("2"))
     }
 
-    func testWindowIDsByMostRecentFocusPutsFocusedWindowFirst() throws {
+    func testWindowOrderChangesOnlyWhenFocusIsRecordedInCoreState() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
@@ -81,6 +81,10 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         try controller.assignWindow(200, to: "1")
         try controller.assignWindow(300, to: "1")
         windowSystem.focusedWindow = 100
+
+        XCTAssertEqual(controller.windowIDsByMostRecentFocus(in: "1"), [300, 200, 100])
+
+        _ = try controller.syncWorkspaceToFocusedWindow()
 
         XCTAssertEqual(controller.windowIDsByMostRecentFocus(in: "1"), [100, 300, 200])
     }

@@ -153,7 +153,7 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertNil(state.nextWindow(in: "9", after: nil))
     }
 
-    func testWindowOrderUsesMostRecentFocusWithFocusedOverride() {
+    func testWindowOrderUsesMostRecentlyRecordedFocus() {
         var state = WorkspaceState()
         state.assign(100, to: "2")
         state.assign(200, to: "2")
@@ -161,7 +161,5 @@ final class WorkspaceStateTests: XCTestCase {
         state.recordFocus(100, in: "2")
 
         XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2"), [100, 300, 200])
-        XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2", currentFocused: 200), [200, 100, 300])
-        XCTAssertEqual(state.windowIDsByMostRecentFocus(in: "2", currentFocused: 999), [100, 300, 200])
     }
 }

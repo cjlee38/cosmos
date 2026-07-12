@@ -9,27 +9,26 @@ final class SwitcherContentProvider {
     init(
         controller: WorkspaceController,
         windowThumbnailCache: WindowThumbnailCache,
-        workspaceThumbnailCache: WorkspaceThumbnailCache
+        workspaceThumbnailCache: WorkspaceThumbnailCache,
+        applicationIconCache: ApplicationIconCache
     ) {
         self.controller = controller
-        previewProvider = WindowPreviewProvider(thumbnailCache: windowThumbnailCache)
+        previewProvider = WindowPreviewProvider(
+            thumbnailCache: windowThumbnailCache,
+            applicationIconCache: applicationIconCache
+        )
         self.workspaceThumbnailCache = workspaceThumbnailCache
     }
 
-    func windowItems(in workspace: String, from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
+    func windowItems(withIDs ids: [WindowID], from windows: [WindowSnapshot]) -> [WindowSwitcherItem] {
         let windowsByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
-        let orderedIDs = controller.windowIDsByMostRecentFocus(in: workspace)
-        let orderedWindows = orderedIDs.compactMap { windowsByID[$0] }
-        let orderedIDSet = Set(orderedIDs)
-        let remainingWindows = windows
-            .filter { controller.membership(for: $0.id) == workspace && !orderedIDSet.contains($0.id) }
-            .sorted { $0.id < $1.id }
-
-        return (orderedWindows + remainingWindows).map { window in
-            previewProvider.makeItem(
-                for: window,
-                frame: controller.workspaceFrame(for: window.id)
-            )
+        return ids.compactMap { id in
+            windowsByID[id].map { window in
+                previewProvider.makeItem(
+                    for: window,
+                    frame: controller.workspaceFrame(for: id)
+                )
+            }
         }
     }
 
@@ -43,10 +42,10 @@ final class SwitcherContentProvider {
         }
     }
 
-    func overlayAnchorFrame(from windows: [WindowSnapshot]) -> WindowFrame? {
-        if let focusedID = controller.focusedWindowID(),
-           let focusedFrame = windows.first(where: { $0.id == focusedID })?.frame {
-            return focusedFrame
+    func overlayAnchorFrame(from windows: [WindowSnapshot], preferredWindowID: WindowID?) -> WindowFrame? {
+        if let preferredWindowID,
+           let preferredFrame = windows.first(where: { $0.id == preferredWindowID })?.frame {
+            return preferredFrame
         }
 
         return windows.first {

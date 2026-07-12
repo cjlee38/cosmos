@@ -161,8 +161,8 @@ struct WorkspaceState {
         memberships.windowIDs(in: workspace)
     }
 
-    func windowIDsByMostRecentFocus(in workspace: String, currentFocused: WindowID? = nil) -> [WindowID] {
-        memberships.windowIDs(in: workspace, currentFocused: currentFocused)
+    func windowIDsByMostRecentFocus(in workspace: String) -> [WindowID] {
+        memberships.windowIDs(in: workspace)
     }
 
     func nextWindow(in workspace: String, after id: WindowID?) -> WindowID? {

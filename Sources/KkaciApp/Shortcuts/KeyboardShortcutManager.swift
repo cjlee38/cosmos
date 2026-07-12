@@ -113,9 +113,7 @@ final class KeyboardShortcutManager {
         if let releaseGroup = registration.registration.releaseGroup {
             activeHoldGroups.insert(releaseGroup)
         }
-        DispatchQueue.main.async {
-            registration.registration.onPress()
-        }
+        registration.registration.onPress()
     }
 
     private func handleModifierFlagsChanged(_ flags: NSEvent.ModifierFlags) {
@@ -137,9 +135,7 @@ final class KeyboardShortcutManager {
             }
 
             logInput("release group=\(group)")
-            DispatchQueue.main.async {
-                holdGroup.onRelease()
-            }
+            holdGroup.onRelease()
         }
     }
 

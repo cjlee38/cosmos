@@ -3,9 +3,11 @@ import KkaciCore
 
 final class WindowPreviewProvider {
     private let thumbnailCache: WindowThumbnailCache
+    private let applicationIconCache: ApplicationIconCache
 
-    init(thumbnailCache: WindowThumbnailCache) {
+    init(thumbnailCache: WindowThumbnailCache, applicationIconCache: ApplicationIconCache) {
         self.thumbnailCache = thumbnailCache
+        self.applicationIconCache = applicationIconCache
     }
 
     func makeItem(for window: WindowSnapshot, frame: WindowFrame?) -> WindowSwitcherItem {
@@ -15,11 +17,7 @@ final class WindowPreviewProvider {
             title: window.title,
             frame: frame,
             preview: thumbnailCache.thumbnail(for: window.id),
-            icon: icon(for: window.app.pid)
+            icon: applicationIconCache.icon(for: window.app.pid)
         )
-    }
-
-    private func icon(for pid: pid_t) -> NSImage? {
-        NSRunningApplication(processIdentifier: pid)?.icon
     }
 }

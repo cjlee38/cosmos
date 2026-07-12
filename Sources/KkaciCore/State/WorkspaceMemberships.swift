@@ -54,12 +54,4 @@ struct WorkspaceMemberships {
     func windowIDs(in workspace: String) -> [WindowID] {
         windowIDsByWorkspace[workspace] ?? []
     }
-
-    func windowIDs(in workspace: String, currentFocused: WindowID?) -> [WindowID] {
-        guard let currentFocused, self.workspace(for: currentFocused) == workspace else {
-            return windowIDs(in: workspace)
-        }
-
-        return [currentFocused] + windowIDs(in: workspace).filter { $0 != currentFocused }
-    }
 }

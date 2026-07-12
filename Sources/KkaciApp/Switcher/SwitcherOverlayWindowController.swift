@@ -25,6 +25,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         window.setAccessibilitySubrole(.unknown)
         super.init(window: window)
+        window.contentView = viewFactory.rootContentView
     }
 
     @available(*, unavailable)
@@ -36,9 +37,13 @@ final class SwitcherOverlayWindowController: NSWindowController {
         window?.isVisible == true
     }
 
+    func prepare(windowCount: Int, workspaceCount: Int) {
+        viewFactory.prepare(windowCount: windowCount, workspaceCount: workspaceCount)
+    }
+
     func showWindowSwitcher(
         items: [WindowSwitcherItem],
-        selectedIndex: Int,
+        selectedID: WindowID,
         anchorFrame: WindowFrame?,
         onHover: @escaping (WindowID) -> Void,
         onClick: @escaping (WindowID) -> Void
@@ -46,7 +51,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
         let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
         let listView = viewFactory.makeWindowList(
             items: items,
-            selectedIndex: selectedIndex,
+            selectedID: selectedID,
             availableFrame: screenFrame,
             onHover: onHover,
             onClick: onClick
@@ -62,7 +67,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
 
     func showWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedIndex: Int,
+        selectedName: String,
         anchorFrame: WindowFrame?,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
@@ -70,7 +75,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
         let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
         let listView = viewFactory.makeWorkspaceList(
             groups: groups,
-            selectedIndex: selectedIndex,
+            selectedName: selectedName,
             availableFrame: screenFrame,
             onHover: onHover,
             onClick: onClick
@@ -103,6 +108,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
     func hideOverlay() {
         windowListView = nil
         workspaceListView = nil
+        window?.alphaValue = 0
         window?.orderOut(nil)
     }
 
@@ -111,7 +117,6 @@ final class SwitcherOverlayWindowController: NSWindowController {
         let contentSize = root.frame.size
         window?.setContentSize(contentSize)
         root.frame = NSRect(origin: .zero, size: contentSize)
-        window?.contentView = root
     }
 
     private func showOverlay(in screenFrame: NSRect) {
@@ -124,6 +129,7 @@ final class SwitcherOverlayWindowController: NSWindowController {
             x: screenFrame.midX - size.width / 2,
             y: screenFrame.midY - size.height / 2
         ))
+        window.alphaValue = 1
         window.orderFrontRegardless()
         window.makeKey()
     }

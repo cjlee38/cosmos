@@ -80,6 +80,7 @@ final class AppRuntime {
         do {
             try configRuntime.reload(actions: statusMenuController)
             thumbnailRefresher.refreshAllThumbnails()
+            statusMenuController.prepareSwitcher()
             statusMenuController.refreshSurfaces()
             log.info("Config reloaded")
         } catch {
@@ -130,6 +131,7 @@ final class AppRuntime {
             let bootstrapResult = try controller.bootstrapWindowState(defaultWorkspace: "1")
             startWindowEventMonitor()
             thumbnailRefresher.refreshAllThumbnails()
+            statusMenuController.prepareSwitcher()
             statusMenuController.refreshSurfaces()
             let message = bootstrapMessage(for: bootstrapResult.hiddenRecords)
             log.info(message)

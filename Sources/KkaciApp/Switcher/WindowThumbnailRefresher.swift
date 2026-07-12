@@ -4,17 +4,20 @@ import KkaciCore
 final class WindowThumbnailRefresher {
     let windowThumbnailCache: WindowThumbnailCache
     let workspaceThumbnailCache: WorkspaceThumbnailCache
+    let applicationIconCache: ApplicationIconCache
     private let controller: WorkspaceController
     private var workspaceThumbnailRefreshScheduled = false
 
     init(
         controller: WorkspaceController,
         thumbnailCache windowThumbnailCache: WindowThumbnailCache,
-        workspaceThumbnailCache: WorkspaceThumbnailCache
+        workspaceThumbnailCache: WorkspaceThumbnailCache,
+        applicationIconCache: ApplicationIconCache
     ) {
         self.controller = controller
         self.windowThumbnailCache = windowThumbnailCache
         self.workspaceThumbnailCache = workspaceThumbnailCache
+        self.applicationIconCache = applicationIconCache
     }
 
     func refreshWindowThumbnails(
@@ -22,6 +25,7 @@ final class WindowThumbnailRefresher {
         onThumbnailUpdated: @escaping (WindowID) -> Void = { _ in }
     ) {
         let windows = controller.currentWindows().windows
+        refreshApplicationIcons(windows: windows, onWindowUpdated: onThumbnailUpdated)
         windowThumbnailCache.removeStaleThumbnails(keeping: Set(windows.map(\.id)))
         windowThumbnailCache.refresh(
             windows: windows,
@@ -81,11 +85,18 @@ final class WindowThumbnailRefresher {
             title: window.title,
             frame: controller.workspaceFrame(for: window.id),
             preview: windowThumbnailCache.thumbnail(for: window.id),
-            icon: icon(for: window.app.pid)
+            icon: applicationIconCache.icon(for: window.app.pid)
         )
     }
 
-    private func icon(for pid: pid_t) -> NSImage? {
-        NSRunningApplication(processIdentifier: pid)?.icon
+    private func refreshApplicationIcons(
+        windows: [WindowSnapshot],
+        onWindowUpdated: @escaping (WindowID) -> Void
+    ) {
+        let windowIDsByPID = Dictionary(grouping: windows, by: \.app.pid)
+            .mapValues { $0.map(\.id) }
+        applicationIconCache.refresh(pids: Set(windowIDsByPID.keys)) { pid in
+            windowIDsByPID[pid]?.forEach(onWindowUpdated)
+        }
     }
 }

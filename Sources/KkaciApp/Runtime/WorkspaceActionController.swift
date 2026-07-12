@@ -46,6 +46,10 @@ final class WorkspaceActionController {
         switcherCoordinator.cancel()
     }
 
+    func prepareSwitcher() {
+        switcherCoordinator.prepareOverlay()
+    }
+
     func switchToNextWorkspace() {
         cancelSwitcher()
         perform("Switched to next workspace") {
@@ -96,6 +100,7 @@ final class WorkspaceActionController {
         perform("Created workspace \(workspace)", shouldRefreshThumbnails: false) {
             _ = try controller.createWorkspace(named: workspace)
         }
+        prepareSwitcher()
     }
 
     func syncWorkspaceToFocusedWindow() {
@@ -125,6 +130,7 @@ final class WorkspaceActionController {
     func applyExternalWindowSetChange() {
         do {
             _ = try controller.applyExternalWindowSetChange()
+            prepareSwitcher()
             refreshThumbnails()
             refreshSurfaces()
         } catch {

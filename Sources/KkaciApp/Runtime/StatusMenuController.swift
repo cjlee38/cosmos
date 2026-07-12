@@ -85,6 +85,10 @@ final class StatusMenuController: NSObject {
         actionController.commitWorkspaceSwitcher()
     }
 
+    func prepareSwitcher() {
+        actionController.prepareSwitcher()
+    }
+
     func switchToNextWorkspace() {
         actionController.switchToNextWorkspace()
     }

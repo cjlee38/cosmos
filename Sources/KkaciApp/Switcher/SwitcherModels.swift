@@ -1,11 +1,6 @@
 import AppKit
 import KkaciCore
 
-enum SwitcherDirection {
-    case forward
-    case backward
-}
-
 struct WindowSwitcherItem {
     let windowID: WindowID
     let appName: String

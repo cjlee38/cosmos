@@ -127,7 +127,7 @@ public extension WorkspaceController {
     }
 
     func windowIDsByMostRecentFocus(in workspace: String) -> [WindowID] {
-        state.windowIDsByMostRecentFocus(in: workspace, currentFocused: windowSystem.focusedWindowID())
+        state.windowIDsByMostRecentFocus(in: workspace)
     }
 
     func isWorkspaceActive(_ workspace: String) -> Bool {
@@ -255,7 +255,6 @@ public extension WorkspaceController {
     }
 
     func focusWindow(_ id: WindowID) throws {
-        _ = syncWindows()
         guard windowSystem.contains(id) else {
             throw WorkspaceError.windowNotFound(id)
         }
