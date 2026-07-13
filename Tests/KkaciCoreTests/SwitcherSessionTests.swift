@@ -37,6 +37,54 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         XCTAssertEqual(session.selectedItem, 3)
     }
 
+    func testNonWrappingStepsStopAtTheEnds() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3],
+            currentItem: 1,
+            direction: .forward
+        ))
+
+        session.step(.forward, wraps: false)
+        session.step(.forward, wraps: false)
+        XCTAssertEqual(session.selectedItem, 3)
+
+        session.step(.backward, wraps: false)
+        session.step(.backward, wraps: false)
+        session.step(.backward, wraps: false)
+        XCTAssertEqual(session.selectedItem, 1)
+    }
+
+    func testHorizontalArrowKeysMoveOneItemAtATime() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3, 4, 5, 6],
+            currentItem: nil,
+            direction: .backward
+        ))
+
+        session.move(.right)
+        session.move(.right)
+        session.move(.right)
+        XCTAssertEqual(session.selectedItem, 4)
+        session.move(.left)
+        XCTAssertEqual(session.selectedItem, 3)
+    }
+
+    func testArrowKeysStopAtListBoundaries() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3],
+            currentItem: nil,
+            direction: .backward
+        ))
+
+        session.move(.left)
+        XCTAssertEqual(session.selectedItem, 1)
+
+        for _ in 0 ..< 10 {
+            session.move(.right)
+        }
+        XCTAssertEqual(session.selectedItem, 3)
+    }
+
     func testMouseSelectionChangesTheSameSessionState() throws {
         var session = try XCTUnwrap(SwitcherSession(
             items: ["1", "2", "3"],

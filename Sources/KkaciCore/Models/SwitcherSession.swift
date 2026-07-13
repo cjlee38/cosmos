@@ -5,6 +5,11 @@ public enum SwitcherDirection {
     case backward
 }
 
+public enum SwitcherArrowDirection {
+    case left
+    case right
+}
+
 public struct SwitcherSession<Item: Equatable>: Equatable {
     public let items: [Item]
     public private(set) var selectedIndex: Int
@@ -26,8 +31,22 @@ public struct SwitcherSession<Item: Equatable>: Equatable {
         items[selectedIndex]
     }
 
-    public mutating func step(_ direction: SwitcherDirection) {
-        selectedIndex = Self.advancedIndex(selectedIndex, count: items.count, direction: direction)
+    public mutating func step(_ direction: SwitcherDirection, wraps: Bool = true) {
+        selectedIndex = Self.advancedIndex(
+            selectedIndex,
+            count: items.count,
+            direction: direction,
+            wraps: wraps
+        )
+    }
+
+    public mutating func move(_ direction: SwitcherArrowDirection) {
+        switch direction {
+        case .left:
+            selectedIndex = max(selectedIndex - 1, 0)
+        case .right:
+            selectedIndex = min(selectedIndex + 1, items.count - 1)
+        }
     }
 
     @discardableResult
@@ -40,12 +59,17 @@ public struct SwitcherSession<Item: Equatable>: Equatable {
         return true
     }
 
-    private static func advancedIndex(_ index: Int, count: Int, direction: SwitcherDirection) -> Int {
+    private static func advancedIndex(
+        _ index: Int,
+        count: Int,
+        direction: SwitcherDirection,
+        wraps: Bool = true
+    ) -> Int {
         switch direction {
         case .forward:
-            (index + 1) % count
+            wraps ? (index + 1) % count : min(index + 1, count - 1)
         case .backward:
-            (index + count - 1) % count
+            wraps ? (index + count - 1) % count : max(index - 1, 0)
         }
     }
 }

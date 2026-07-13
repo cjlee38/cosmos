@@ -1,6 +1,7 @@
 import AppKit
 
 final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    private let secureInputControl = SecureInputFixtureControl()
     private var controlWindow: NSWindow?
     private var fixtureWindows: [NSWindow] = []
     private weak var activeModalWindow: NSWindow?
@@ -22,12 +23,16 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
         return true
     }
+
+    func applicationWillTerminate(_: Notification) {
+        secureInputControl.disable()
+    }
 }
 
 private extension FixtureAppDelegate {
     private func showControlWindow() {
         let window = NSWindow(
-            contentRect: NSRect(x: 120, y: 120, width: 480, height: 520),
+            contentRect: NSRect(x: 120, y: 120, width: 480, height: 560),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -61,6 +66,7 @@ private extension FixtureAppDelegate {
         stack.addArrangedSubview(title)
         stack.addArrangedSubview(description)
         stack.setCustomSpacing(18, after: description)
+        stack.addArrangedSubview(secureInputControl.makeView())
 
         for spec in buttonSpecs() {
             let button = NSButton(title: spec.title, target: self, action: spec.action)

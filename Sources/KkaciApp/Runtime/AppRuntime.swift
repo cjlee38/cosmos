@@ -46,8 +46,7 @@ final class AppRuntime {
         NSApp.setActivationPolicy(.accessory)
 
         statusMenuController.showDebugStatusWindow()
-        keyboardShortcutManager.start()
-        installInitialShortcuts()
+        startKeyboardShortcuts()
 
         let hasPermission = permissionController.checkAtLaunch()
         statusMenuController.updatePermissionStatus(hasPermission)
@@ -68,8 +67,9 @@ final class AppRuntime {
         controller.restoreHiddenWindowsForShutdown()
     }
 
-    private func installInitialShortcuts() {
+    private func startKeyboardShortcuts() {
         do {
+            try keyboardShortcutManager.start()
             try configRuntime.installInitialShortcuts(actions: statusMenuController)
         } catch {
             log.error("Hotkey registration failed: \(String(describing: error))")

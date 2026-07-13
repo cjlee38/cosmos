@@ -1,12 +1,12 @@
 import AppKit
 import Foundation
-import HotKey
 
 struct KeyboardShortcutRegistration {
     let key: String
     let name: String
     let releaseGroup: String?
     let onPress: () -> Void
+    let onRepeat: (() -> Void)?
     let onRelease: (() -> Void)?
 
     static func press(
@@ -19,6 +19,7 @@ struct KeyboardShortcutRegistration {
             name: name,
             releaseGroup: nil,
             onPress: onPress,
+            onRepeat: nil,
             onRelease: nil
         )
     }
@@ -28,6 +29,7 @@ struct KeyboardShortcutRegistration {
         name: String,
         releaseGroup: String,
         onPress: @escaping () -> Void,
+        onRepeat: (() -> Void)? = nil,
         onRelease: @escaping () -> Void
     ) -> KeyboardShortcutRegistration {
         KeyboardShortcutRegistration(
@@ -35,6 +37,7 @@ struct KeyboardShortcutRegistration {
             name: name,
             releaseGroup: releaseGroup,
             onPress: onPress,
+            onRepeat: onRepeat,
             onRelease: onRelease
         )
     }
@@ -44,88 +47,89 @@ final class KeyboardShortcutManager {
     private let log = Log(category: "keyboard")
 
     private let resolver = KeyboardShortcutResolver()
-    private var hotKeys: [String: HotKey] = [:]
+    private var shortcutsByID: [UInt32: ResolvedShortcut] = [:]
     private var holdGroups: [String: HoldGroup] = [:]
     private var activeHoldGroups: Set<String> = []
-    private lazy var modifierReleaseMonitor = ModifierReleaseMonitor { [weak self] flags in
-        self?.handleModifierFlagsChanged(flags)
+    private let repeatController = ShortcutRepeatController()
+    private var repeatingShortcutID: UInt32?
+    private lazy var backend = CarbonKeyboardBackend { [weak self] event in
+        self?.handle(event)
     }
 
-    deinit {
-        unregisterHotKeys()
-        modifierReleaseMonitor.stop()
+    private lazy var modifierFlagsMonitor = ModifierFlagsMonitor { [weak self] modifiers in
+        self?.handleModifierFlagsChanged(modifiers)
     }
 
-    func start() {
-        modifierReleaseMonitor.start()
-        log.debug("modifier release monitor started")
+    func start() throws {
+        try backend.start()
+        try modifierFlagsMonitor.start()
+        log.debug("Carbon hotkeys and modifier flags monitor started")
     }
 
     func replaceShortcuts(_ registrations: [KeyboardShortcutRegistration]) throws {
+        stopRepeatingShortcut()
         let resolvedRegistrations = try resolver.resolve(registrations)
-        unregisterHotKeys()
-        holdGroups.removeAll()
-        activeHoldGroups.removeAll()
-        register(resolvedRegistrations)
-    }
+        let idsByKeystroke = try backend.replaceHotKeys(resolvedRegistrations.map(\.keystroke))
 
-    private func register(_ registrations: [ResolvedShortcut]) {
-        for registration in registrations {
-            register(registration)
-        }
-    }
-
-    private func register(_ registration: ResolvedShortcut) {
-        if let releaseGroup = registration.registration.releaseGroup,
-           let onRelease = registration.registration.onRelease,
-           let holdModifier = registration.holdModifier {
-            holdGroups[releaseGroup] = HoldGroup(
-                modifier: holdModifier,
-                onRelease: onRelease
-            )
-        }
-
-        log.debug("register key=\(registration.registration.key) action=\(registration.registration.name)")
-        hotKeys[registration.keystroke.description] = HotKey(
-            key: registration.keystroke.key,
-            modifiers: registration.keystroke.modifiers,
-            keyDownHandler: { [weak self] in
-                self?.handleKeyDown(registration)
-            },
-            keyUpHandler: { [weak self] in
-                self?.logInput("up key=\(registration.registration.key) action=\(registration.registration.name)")
+        shortcutsByID = Dictionary(uniqueKeysWithValues: resolvedRegistrations.map { registration in
+            guard let id = idsByKeystroke[registration.keystroke.description] else {
+                preconditionFailure("Carbon backend omitted a registered keystroke")
             }
-        )
+            log.debug("register key=\(registration.registration.key) action=\(registration.registration.name)")
+            return (id, registration)
+        })
+        var nextHoldGroups: [String: HoldGroup] = [:]
+        for registration in resolvedRegistrations {
+            guard let releaseGroup = registration.registration.releaseGroup,
+                  let onRelease = registration.registration.onRelease,
+                  let holdModifier = registration.holdModifier
+            else {
+                continue
+            }
+            nextHoldGroups[releaseGroup] = HoldGroup(modifier: holdModifier, onRelease: onRelease)
+        }
+        holdGroups = nextHoldGroups
+        activeHoldGroups.removeAll()
     }
 
-    private func unregisterHotKeys() {
-        for hotKey in hotKeys.values {
-            hotKey.isPaused = true
+    private func handle(_ event: CarbonKeyboardEvent) {
+        switch event {
+        case let .hotKeyPressed(id):
+            guard let registration = shortcutsByID[id] else {
+                return
+            }
+            handleKeyDown(id: id, registration: registration)
+        case let .hotKeyReleased(id):
+            guard let registration = shortcutsByID[id] else {
+                return
+            }
+            if repeatingShortcutID == id {
+                stopRepeatingShortcut()
+            }
+            logInput("up key=\(registration.registration.key) action=\(registration.registration.name)")
         }
-        if !hotKeys.isEmpty {
-            log.debug("unregister count=\(hotKeys.count)")
-        }
-        hotKeys.removeAll()
     }
 
-    private func handleKeyDown(_ registration: ResolvedShortcut) {
+    private func handleKeyDown(id: UInt32, registration: ResolvedShortcut) {
         logInput("down key=\(registration.registration.key) action=\(registration.registration.name)")
         if let releaseGroup = registration.registration.releaseGroup {
             activeHoldGroups.insert(releaseGroup)
         }
         registration.registration.onPress()
+
+        guard let onRepeat = registration.registration.onRepeat else {
+            return
+        }
+        repeatingShortcutID = id
+        repeatController.start(action: onRepeat)
     }
 
-    private func handleModifierFlagsChanged(_ flags: NSEvent.ModifierFlags) {
+    private func handleModifierFlagsChanged(_ modifiers: UInt32) {
         let releasedGroups = activeHoldGroups.filter { group in
             guard let holdGroup = holdGroups[group] else {
                 return true
             }
-            return !flags.contains(holdGroup.modifier)
-        }
-
-        guard !releasedGroups.isEmpty else {
-            return
+            return modifiers & holdGroup.modifier != holdGroup.modifier
         }
 
         for group in releasedGroups {
@@ -134,9 +138,18 @@ final class KeyboardShortcutManager {
                 continue
             }
 
+            if let repeatingShortcutID,
+               shortcutsByID[repeatingShortcutID]?.registration.releaseGroup == group {
+                stopRepeatingShortcut()
+            }
             logInput("release group=\(group)")
             holdGroup.onRelease()
         }
+    }
+
+    private func stopRepeatingShortcut() {
+        repeatController.stop()
+        repeatingShortcutID = nil
     }
 
     private func logInput(_ message: String) {
@@ -145,6 +158,28 @@ final class KeyboardShortcutManager {
 }
 
 private struct HoldGroup {
-    let modifier: NSEvent.ModifierFlags
+    let modifier: UInt32
     let onRelease: () -> Void
+}
+
+private final class ShortcutRepeatController {
+    private var timer: DispatchSourceTimer?
+
+    func start(action: @escaping () -> Void) {
+        stop()
+
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(
+            deadline: .now() + NSEvent.keyRepeatDelay,
+            repeating: NSEvent.keyRepeatInterval
+        )
+        timer.setEventHandler(handler: action)
+        self.timer = timer
+        timer.resume()
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
+    }
 }

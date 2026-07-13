@@ -33,6 +33,17 @@ final class SwitcherCoordinator {
         )
         self.thumbnailRefresher = thumbnailRefresher
         self.refreshStatus = refreshStatus
+        overlay.setInteractionHandlers(
+            onArrowKey: { [weak self] direction in
+                self?.moveSelection(direction)
+            },
+            onOutsideClick: { [weak self] in
+                self?.cancel()
+            },
+            onWorkspaceKey: { [weak self] key in
+                self?.commitWorkspace(forShortcutKey: key) == true
+            }
+        )
         thumbnailRefresher.setWindowThumbnailUpdateHandler { [weak self] _ in
             self?.scheduleThumbnailViewUpdate()
         }
@@ -41,7 +52,7 @@ final class SwitcherCoordinator {
         }
     }
 
-    func stepWindow(direction: SwitcherDirection) {
+    func stepWindow(direction: SwitcherDirection, wraps: Bool) {
         log("step window direction=\(direction)")
         guard case let .windows(currentSelection, anchorFrame) = session else {
             startWindowSession(direction: direction)
@@ -49,7 +60,7 @@ final class SwitcherCoordinator {
         }
 
         var selection = currentSelection
-        selection.step(direction)
+        selection.step(direction, wraps: wraps)
         session = .windows(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
     }
@@ -288,6 +299,31 @@ private extension SwitcherCoordinator {
         case nil:
             return
         }
+    }
+
+    private func moveSelection(_ direction: SwitcherArrowDirection) {
+        guard case let .windows(currentSelection, anchorFrame) = session else {
+            return
+        }
+
+        var selection = currentSelection
+        selection.move(direction)
+        session = .windows(selection: selection, anchorFrame: anchorFrame)
+        updateVisibleSelection()
+    }
+
+    private func commitWorkspace(forShortcutKey key: String) -> Bool {
+        guard case let .workspaces(selection, _) = session else {
+            return false
+        }
+
+        let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.bindings)
+        guard let workspace = shortcuts.workspace(for: key), selection.items.contains(workspace) else {
+            return false
+        }
+
+        commitWorkspace(name: workspace)
+        return true
     }
 
     private func orderedWorkspaceGroups(names: [String]) -> [WorkspaceSwitcherGroup] {

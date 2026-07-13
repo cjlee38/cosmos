@@ -3,6 +3,19 @@ import Foundation
 import XCTest
 
 final class KkaciConfigTests: XCTestCase {
+    func testWorkspaceShortcutBindingsUseTheNonModifierKey() {
+        let shortcuts = WorkspaceShortcutBindings([
+            HotKeyBinding(key: "option+1", command: "workspace", workspace: "1"),
+            HotKeyBinding(key: "option+b", command: "workspace", workspace: "build"),
+            HotKeyBinding(key: "option+shift+c", command: "move-window-to-workspace", workspace: "build")
+        ])
+
+        XCTAssertEqual(shortcuts.key(for: "1"), "1")
+        XCTAssertEqual(shortcuts.key(for: "build"), "b")
+        XCTAssertEqual(shortcuts.workspace(for: "B"), "build")
+        XCTAssertNil(shortcuts.workspace(for: "c"))
+    }
+
     func testWorkspaceConfigNormalizesNames() {
         let config = WorkspaceConfig(names: ["1", " ", "2", "1", "dev"])
 

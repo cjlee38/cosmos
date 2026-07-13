@@ -69,8 +69,8 @@ final class StatusMenuController: NSObject {
         settingsWindowController?.show()
     }
 
-    func stepWindowSwitcher(direction: SwitcherDirection) {
-        actionController.stepWindowSwitcher(direction: direction)
+    func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool) {
+        actionController.stepWindowSwitcher(direction: direction, wraps: wraps)
     }
 
     func stepWorkspaceSwitcher(direction: SwitcherDirection) {

@@ -3,6 +3,7 @@ import AppKit
 final class WorkspaceSwitcherListView: NSView {
     private var cardViewsByName: [String: WorkspacePreviewCardView] = [:]
     private var recycledCardViews: [WorkspacePreviewCardView] = []
+    private(set) var columns = 1
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -28,6 +29,7 @@ final class WorkspaceSwitcherListView: NSView {
         onClick: @escaping (String) -> Void
     ) {
         let layout = WorkspaceOverviewLayout(groupCount: groups.count, availableFrame: availableFrame)
+        columns = layout.columns
         frame = NSRect(origin: .zero, size: layout.contentSize)
         recycleMissingCards(keeping: Set(groups.map(\.name)))
         ensureCapacity(groups.count)
@@ -177,6 +179,7 @@ private final class WorkspacePreviewCardView: NSView {
     private let previewSurface = NSView()
     private let previewImageView = NSImageView()
     private let fallbackLabel = NSTextField(labelWithString: "")
+    private let shortcutLabel = NSTextField(labelWithString: "")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -254,10 +257,12 @@ private final class WorkspacePreviewCardView: NSView {
         }
 
         subtitleLabel.stringValue = metadataText(for: group.windows)
+        shortcutLabel.stringValue = group.shortcutKey?.uppercased() ?? ""
+        shortcutLabel.isHidden = group.shortcutKey == nil
         previewImageView.image = group.preview
         previewImageView.isHidden = group.preview == nil
         fallbackLabel.stringValue = group.windows.isEmpty ? "No windows" : "Preview pending"
-        fallbackLabel.isHidden = group.preview != nil
+        fallbackLabel.isHidden = !group.windows.isEmpty && group.preview != nil
     }
 
     func updateSelection(_ isSelected: Bool) {
@@ -309,10 +314,22 @@ private final class WorkspacePreviewCardView: NSView {
         previewSurface.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
         previewImageView.imageScaling = .scaleAxesIndependently
         fallbackLabel.alignment = .center
-        fallbackLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        fallbackLabel.font = .systemFont(ofSize: 19.5, weight: .medium)
         fallbackLabel.textColor = .secondaryLabelColor
+        shortcutLabel.alignment = .center
+        shortcutLabel.textColor = NSColor.white.withAlphaComponent(0.5)
+        shortcutLabel.maximumNumberOfLines = 1
+        shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
+        fallbackLabel.translatesAutoresizingMaskIntoConstraints = false
         previewSurface.addSubview(previewImageView)
         previewSurface.addSubview(fallbackLabel)
+        previewSurface.addSubview(shortcutLabel)
+        NSLayoutConstraint.activate([
+            shortcutLabel.centerXAnchor.constraint(equalTo: previewSurface.centerXAnchor),
+            shortcutLabel.centerYAnchor.constraint(equalTo: previewSurface.centerYAnchor),
+            fallbackLabel.centerXAnchor.constraint(equalTo: previewSurface.centerXAnchor),
+            fallbackLabel.topAnchor.constraint(equalTo: shortcutLabel.bottomAnchor, constant: 8)
+        ])
 
         addSubview(previewSurface)
         addSubview(subtitleLabel)
@@ -342,7 +359,7 @@ private final class WorkspacePreviewCardView: NSView {
             height: subtitleLabel.frame.minY - padding * 1.35
         )
         previewImageView.frame = previewSurface.bounds
-        fallbackLabel.frame = previewSurface.bounds
+        shortcutLabel.font = .systemFont(ofSize: previewSurface.bounds.height * 0.5, weight: .semibold)
     }
 
     private func metadataText(for windows: [WindowSwitcherItem]) -> String {

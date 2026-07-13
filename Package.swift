@@ -14,8 +14,7 @@ let package = Package(
         .executable(name: "kkaci-fixture-app", targets: ["KkaciFixtureApp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.0"),
-        .package(url: "https://github.com/soffes/HotKey.git", exact: "0.2.1")
+        .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.0")
     ],
     targets: [
         .target(
@@ -41,8 +40,7 @@ let package = Package(
         .executableTarget(
             name: "KkaciApp",
             dependencies: [
-                "KkaciCore",
-                .product(name: "HotKey", package: "HotKey")
+                "KkaciCore"
             ],
             path: "Sources/KkaciApp"
         ),

@@ -120,9 +120,7 @@ private enum WorkspaceThumbnailRenderer {
         context.setFillColor(CGColor(gray: 0, alpha: 0.40))
         context.fill(imageRect)
 
-        if group.windows.isEmpty {
-            drawText("No windows", size: 28, color: CGColor(gray: 0.65, alpha: 1), in: imageRect, context: context)
-        } else {
+        if !group.windows.isEmpty {
             // Rendering note: if cost becomes noticeable, consider front-to-back occlusion culling.
             for window in group.windows.reversed() {
                 drawWindow(window, desktopBounds: group.desktopBounds, imageSize: size, context: context)

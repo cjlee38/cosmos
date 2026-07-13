@@ -4,7 +4,7 @@ import KkaciCore
 protocol KeyboardShortcutActionHandling: AnyObject {
     func stepWorkspaceSwitcher(direction: SwitcherDirection)
     func commitWorkspaceSwitcher()
-    func stepWindowSwitcher(direction: SwitcherDirection)
+    func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool)
     func commitWindowSwitcher()
     func switchWorkspace(named workspace: String)
     func moveFocusedWindow(to workspace: String)
@@ -94,7 +94,10 @@ final class KeyboardBindingMapper {
             name: name,
             releaseGroup: "window-switcher",
             onPress: { [weak actions] in
-                actions?.stepWindowSwitcher(direction: direction)
+                actions?.stepWindowSwitcher(direction: direction, wraps: true)
+            },
+            onRepeat: { [weak actions] in
+                actions?.stepWindowSwitcher(direction: direction, wraps: false)
             },
             onRelease: { [weak actions] in
                 actions?.commitWindowSwitcher()

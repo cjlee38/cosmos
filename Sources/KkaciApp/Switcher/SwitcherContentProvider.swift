@@ -33,11 +33,13 @@ final class SwitcherContentProvider {
     }
 
     func workspaceGroups() -> [WorkspaceSwitcherGroup] {
-        controller.workspaces.map { workspace in
+        let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.bindings)
+        return controller.workspaces.map { workspace in
             WorkspaceSwitcherGroup(
                 name: workspace,
                 windows: workspacePreviewItems(in: workspace),
-                preview: workspaceThumbnailCache.thumbnail(for: workspace)
+                preview: workspaceThumbnailCache.thumbnail(for: workspace),
+                shortcutKey: shortcuts.key(for: workspace)
             )
         }
     }

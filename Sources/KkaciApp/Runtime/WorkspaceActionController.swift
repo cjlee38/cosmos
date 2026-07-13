@@ -26,8 +26,8 @@ final class WorkspaceActionController {
         self.refreshSurfaces = refreshSurfaces
     }
 
-    func stepWindowSwitcher(direction: SwitcherDirection) {
-        switcherCoordinator.stepWindow(direction: direction)
+    func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool) {
+        switcherCoordinator.stepWindow(direction: direction, wraps: wraps)
     }
 
     func stepWorkspaceSwitcher(direction: SwitcherDirection) {
