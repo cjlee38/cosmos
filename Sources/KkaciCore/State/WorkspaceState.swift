@@ -100,16 +100,23 @@ struct WorkspaceState {
         catalog.apply(workspaces, keeping: referencedWorkspaces)
     }
 
+    mutating func restoreWorkspaceCatalog(from snapshot: WorkspaceState) {
+        catalog = snapshot.catalog
+    }
+
+    mutating func restoreLogicalState(from snapshot: WorkspaceState) {
+        catalog = snapshot.catalog
+        memberships = snapshot.memberships
+        liveWindows = snapshot.liveWindows
+        for id in snapshot.hiddenWindowIDs {
+            if let frame = snapshot.hiddenFrame(for: id) {
+                hiddenFrames.replace(frame, for: id)
+            }
+        }
+    }
+
     mutating func activate(_ workspace: String) {
         catalog.activate(workspace)
-    }
-
-    var activationSnapshot: WorkspaceActivationSnapshot {
-        catalog.activationSnapshot
-    }
-
-    mutating func restoreActivationSnapshot(_ snapshot: WorkspaceActivationSnapshot) {
-        catalog.restoreActivationSnapshot(snapshot)
     }
 
     func monitorSlot(for workspace: String) -> MonitorSlot {
@@ -124,10 +131,6 @@ struct WorkspaceState {
         memberships.assign(id, to: workspace)
     }
 
-    mutating func unassign(_ id: WindowID) {
-        memberships.unassign(id)
-    }
-
     mutating func capture(_ ids: [WindowID], into workspace: String) {
         memberships.capture(ids, into: workspace)
         liveWindows.recordKnown(ids)
@@ -135,6 +138,10 @@ struct WorkspaceState {
 
     mutating func storeHiddenFrameIfNeeded(_ frame: WindowFrame, for id: WindowID) {
         hiddenFrames.storeIfNeeded(frame, for: id)
+    }
+
+    mutating func replaceHiddenFrame(_ frame: WindowFrame, for id: WindowID) {
+        hiddenFrames.replace(frame, for: id)
     }
 
     mutating func clearHiddenFrame(for id: WindowID) {

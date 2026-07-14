@@ -5,25 +5,26 @@ final class WorkspaceActionController {
     private let log = Log(category: "workspace")
 
     private let controller: WorkspaceController
-    private let thumbnailRefresher: WindowThumbnailRefresher
+    private let previewService: SwitcherPreviewService
     private let refreshSurfaces: () -> Void
+    private let suppressNextFocusSync: (WindowID) -> Void
     private lazy var switcherCoordinator = SwitcherCoordinator(
         controller: controller,
-        thumbnailRefresher: thumbnailRefresher,
+        previewService: previewService,
         refreshStatus: { [weak self] in
             self?.refreshSurfaces()
         }
     )
-    private var suppressedFocusedWindowID: WindowID?
-
     init(
         controller: WorkspaceController,
-        thumbnailRefresher: WindowThumbnailRefresher,
-        refreshSurfaces: @escaping () -> Void
+        previewService: SwitcherPreviewService,
+        refreshSurfaces: @escaping () -> Void,
+        suppressNextFocusSync: @escaping (WindowID) -> Void
     ) {
         self.controller = controller
-        self.thumbnailRefresher = thumbnailRefresher
+        self.previewService = previewService
         self.refreshSurfaces = refreshSurfaces
+        self.suppressNextFocusSync = suppressNextFocusSync
     }
 
     func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool) {
@@ -46,8 +47,8 @@ final class WorkspaceActionController {
         switcherCoordinator.cancel()
     }
 
-    func prepareSwitcher() {
-        switcherCoordinator.prepareOverlay()
+    func refreshSwitcherContent() {
+        switcherCoordinator.handleContentChanged()
     }
 
     func switchToNextWorkspace() {
@@ -87,13 +88,14 @@ final class WorkspaceActionController {
             let previousWorkspace = controller.focusedWindowID().flatMap(controller.membership(for:))
             let result = try controller.moveFocusedWindow(to: workspace)
             if result.workspace != controller.activeWorkspace {
-                suppressedFocusedWindowID = result.windowID
+                suppressNextFocusSync(result.windowID)
             }
-            thumbnailRefresher.refreshThumbnails(
+            previewService.refresh(
                 windowIDs: [result.windowID],
                 workspaceNames: Set([previousWorkspace, result.workspace].compactMap { $0 }),
                 priorityIDs: [result.windowID]
             )
+            switcherCoordinator.handleContentChanged()
             refreshSurfaces()
             log.info("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
@@ -105,71 +107,18 @@ final class WorkspaceActionController {
         perform("Created workspace \(workspace)") {
             _ = try controller.createWorkspace(named: workspace)
         }
-        thumbnailRefresher.refreshWorkspaceThumbnails(names: [workspace])
-        prepareSwitcher()
-    }
-
-    func applyExternalWindowEvents(_ events: WindowRuntimeEventBatch) {
-        let previousMemberships = currentMemberships()
-        var shouldFollowFocusedWindow = shouldFollowFocusedWindow(for: events)
-        if let suppressedFocusedWindowID,
-           controller.focusedWindowID() == suppressedFocusedWindowID {
-            self.suppressedFocusedWindowID = nil
-            shouldFollowFocusedWindow = false
-        } else {
-            suppressedFocusedWindowID = nil
-        }
-
-        do {
-            let result = try controller.applyExternalWindowEvents(
-                followFocusedWindow: shouldFollowFocusedWindow
-            )
-            let windows = controller.currentWindows().windows
-            let liveWindowIDs = Set(windows.map(\.id))
-            let autoAssignedWindowIDs = Set(result.sync.autoAssigned.map(\.0))
-            var affectedWindowIDs = events.windowIDs
-                .union(autoAssignedWindowIDs)
-                .union(result.sync.removed)
-            if events.shouldFollowFocusedWindow, let focusedWindowID = controller.focusedWindowID() {
-                affectedWindowIDs.insert(focusedWindowID)
-            }
-
-            let windowIDs: Set<WindowID>
-            let workspaceNames: Set<String>
-            if events.needsFullThumbnailRefresh {
-                windowIDs = liveWindowIDs
-                workspaceNames = Set(controller.workspaces)
-            } else {
-                windowIDs = events.windowIDsNeedingCapture
-                    .union(autoAssignedWindowIDs)
-                    .intersection(liveWindowIDs)
-                workspaceNames = Set(affectedWindowIDs.compactMap { windowID in
-                    previousMemberships[windowID]
-                }).union(affectedWindowIDs.compactMap(controller.membership(for:)))
-            }
-
-            thumbnailRefresher.refreshThumbnails(
-                windowIDs: windowIDs,
-                workspaceNames: workspaceNames,
-                priorityIDs: controller.focusedWindowID().map { [$0] } ?? []
-            )
-            if !result.sync.autoAssigned.isEmpty || !result.sync.removed.isEmpty {
-                prepareSwitcher()
-            }
-            refreshSurfaces()
-            if case let .switched(windowID, workspace) = result.focusedWindowSync {
-                log.info("Switched to workspace \(workspace) for \(windowID)")
-            }
-        } catch {
-            log.error("Window update failed: \(String(describing: error))")
-        }
+        previewService.refreshWorkspaces(names: [workspace])
     }
 
     func restoreAllHiddenWindows() {
-        let result = controller.restoreAllHiddenWindows()
-        thumbnailRefresher.refreshWorkspaceThumbnails(names: Set(controller.workspaces))
+        do {
+            let result = try controller.restoreAllHiddenWindows()
+            log.info("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
+        } catch {
+            log.error("Emergency restore record flush failed: \(String(describing: error))")
+        }
+        previewService.refreshWorkspaces(names: Set(controller.workspaces))
         refreshSurfaces()
-        log.info("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
     }
 
     private func perform(
@@ -178,6 +127,7 @@ final class WorkspaceActionController {
     ) {
         do {
             try action()
+            switcherCoordinator.handleContentChanged()
             refreshSurfaces()
             log.info(successMessage)
         } catch {
@@ -194,20 +144,6 @@ final class WorkspaceActionController {
             log.info("No windows in workspace \(workspace)")
         }
     }
-
-    private func currentMemberships() -> [WindowID: String] {
-        Dictionary(uniqueKeysWithValues: controller.currentWindows().windows.compactMap { window in
-            controller.membership(for: window.id).map { (window.id, $0) }
-        })
-    }
-
-    private func shouldFollowFocusedWindow(for events: WindowRuntimeEventBatch) -> Bool {
-        if events.shouldFollowFocusedWindow {
-            return true
-        }
-        guard events.containsLayoutChange, let focusedWindowID = controller.focusedWindowID() else {
-            return false
-        }
-        return !controller.isHiddenByWorkspace(focusedWindowID)
-    }
 }
+
+extension WorkspaceActionController: KeyboardShortcutActionHandling {}

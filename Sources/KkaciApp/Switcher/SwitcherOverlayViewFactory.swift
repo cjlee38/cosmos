@@ -10,13 +10,8 @@ final class SwitcherOverlayViewFactory {
         rootView
     }
 
-    func prepare(windowCount: Int, workspaceCount: Int) {
-        windowListView.ensureCapacity(windowCount)
-        workspaceListView.ensureCapacity(workspaceCount)
-    }
-
-    func makeRootContent(title: String?, content: NSView) -> NSView {
-        rootView.configure(title: title, content: content)
+    func makeRootContent(content: NSView) -> NSView {
+        rootView.configure(content: content)
         return rootView
     }
 
@@ -99,7 +94,6 @@ final class SwitcherOverlayViewFactory {
 
 private final class SwitcherOverlayRootView: NSView {
     private let backgroundView = NSVisualEffectView()
-    private let titleLabel = NSTextField(labelWithString: "")
     private weak var currentContent: NSView?
 
     init() {
@@ -115,11 +109,6 @@ private final class SwitcherOverlayRootView: NSView {
         backgroundView.wantsLayer = true
         backgroundView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.32).cgColor
         addSubview(backgroundView)
-
-        titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        titleLabel.textColor = .white
-        titleLabel.maximumNumberOfLines = 1
-        addSubview(titleLabel)
     }
 
     @available(*, unavailable)
@@ -127,26 +116,16 @@ private final class SwitcherOverlayRootView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(title: String?, content: NSView) {
+    func configure(content: NSView) {
         let horizontalPadding: CGFloat = 20
         let verticalPadding: CGFloat = 18
-        let titleSpacing: CGFloat = title == nil ? 0 : 12
-        let titleHeight: CGFloat = title == nil ? 0 : 22
         let rootSize = NSSize(
             width: content.frame.width + horizontalPadding * 2,
-            height: content.frame.height + verticalPadding * 2 + titleSpacing + titleHeight
+            height: content.frame.height + verticalPadding * 2
         )
 
         frame.size = rootSize
         backgroundView.frame = bounds
-        titleLabel.stringValue = title ?? ""
-        titleLabel.isHidden = title == nil
-        titleLabel.frame = NSRect(
-            x: horizontalPadding,
-            y: verticalPadding + content.frame.height + titleSpacing,
-            width: content.frame.width,
-            height: titleHeight
-        )
 
         if currentContent !== content {
             currentContent?.removeFromSuperview()

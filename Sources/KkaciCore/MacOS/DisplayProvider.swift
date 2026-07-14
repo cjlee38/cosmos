@@ -23,7 +23,7 @@ public struct DisplayProvider: DisplayProviding {
     }
 
     func hidePoint(for frame: WindowFrame, displays: [DisplaySnapshot]) -> CGPoint? {
-        guard let display = display(containing: frame.center, among: displays) else {
+        guard let display = DisplayGeometry.display(containingOrNearest: frame.center, among: displays) else {
             return nil
         }
 
@@ -36,16 +36,6 @@ public struct DisplayProvider: DisplayProviding {
             )
         case .bottomRight:
             return bottomRight(of: visibleFrame)
-        }
-    }
-
-    private func display(containing point: CGPoint, among displays: [DisplaySnapshot]) -> DisplaySnapshot? {
-        if let containing = displays.first(where: { $0.frame.contains(point) }) {
-            return containing
-        }
-
-        return displays.min { lhs, rhs in
-            distanceSquared(from: lhs.frame.center, to: point) < distanceSquared(from: rhs.frame.center, to: point)
         }
     }
 
@@ -130,21 +120,9 @@ public struct DisplayProvider: DisplayProviding {
 
         return Array(displays.prefix(Int(count)))
     }
-
-    private func distanceSquared(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
-        return dx * dx + dy * dy
-    }
 }
 
 private enum HideCorner {
     case bottomLeft
     case bottomRight
-}
-
-private extension CGRect {
-    var center: CGPoint {
-        CGPoint(x: midX, y: midY)
-    }
 }

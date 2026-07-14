@@ -5,7 +5,7 @@ final class StatusMenuController: NSObject {
     private let log = Log(category: "menu")
 
     private let controller: WorkspaceController
-    private let thumbnailRefresher: WindowThumbnailRefresher
+    private let actions: WorkspaceActionController
     private let reloadConfigHandler: () -> Void
     private let requestAccessibilityPermissionHandler: () -> Bool
     private let settingsSnapshotProvider: () -> SettingsSnapshot
@@ -16,27 +16,20 @@ final class StatusMenuController: NSObject {
     private lazy var debugStatusWindowController = DebugStatusWindowController(
         controller: controller
     )
-    private lazy var actionController = WorkspaceActionController(
-        controller: controller,
-        thumbnailRefresher: thumbnailRefresher,
-        refreshSurfaces: { [weak self] in
-            self?.refreshSurfaces()
-        }
-    )
     private var settingsWindowController: SettingsWindowController?
     private var workspaceItems: [String: NSMenuItem] = [:]
     private var renderedWorkspaces: [String] = []
 
     init(
         controller: WorkspaceController,
-        thumbnailRefresher: WindowThumbnailRefresher,
+        actions: WorkspaceActionController,
         reloadConfigHandler: @escaping () -> Void,
         requestAccessibilityPermissionHandler: @escaping () -> Bool,
         settingsSnapshotProvider: @escaping () -> SettingsSnapshot,
         updateWorkspaceMonitorHandler: @escaping (String, MonitorSlot) -> Void
     ) {
         self.controller = controller
-        self.thumbnailRefresher = thumbnailRefresher
+        self.actions = actions
         self.reloadConfigHandler = reloadConfigHandler
         self.requestAccessibilityPermissionHandler = requestAccessibilityPermissionHandler
         self.settingsSnapshotProvider = settingsSnapshotProvider
@@ -67,54 +60,6 @@ final class StatusMenuController: NSObject {
             )
         }
         settingsWindowController?.show()
-    }
-
-    func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool) {
-        actionController.stepWindowSwitcher(direction: direction, wraps: wraps)
-    }
-
-    func stepWorkspaceSwitcher(direction: SwitcherDirection) {
-        actionController.stepWorkspaceSwitcher(direction: direction)
-    }
-
-    func commitWindowSwitcher() {
-        actionController.commitWindowSwitcher()
-    }
-
-    func commitWorkspaceSwitcher() {
-        actionController.commitWorkspaceSwitcher()
-    }
-
-    func prepareSwitcher() {
-        actionController.prepareSwitcher()
-    }
-
-    func switchToNextWorkspace() {
-        actionController.switchToNextWorkspace()
-    }
-
-    func switchToPreviousWorkspace() {
-        actionController.switchToPreviousWorkspace()
-    }
-
-    func focusNextWindow() {
-        actionController.focusNextWindow()
-    }
-
-    func focusPreviousWindow() {
-        actionController.focusPreviousWindow()
-    }
-
-    func switchWorkspace(named workspace: String) {
-        actionController.switchWorkspace(named: workspace)
-    }
-
-    func moveFocusedWindow(to workspace: String) {
-        actionController.moveFocusedWindow(to: workspace)
-    }
-
-    func applyExternalWindowEvents(_ events: WindowRuntimeEventBatch) {
-        actionController.applyExternalWindowEvents(events)
     }
 
     func refreshSurfaces() {
@@ -215,7 +160,7 @@ final class StatusMenuController: NSObject {
             return
         }
 
-        actionController.createWorkspace(named: input.stringValue)
+        actions.createWorkspace(named: input.stringValue)
     }
 
     @objc private func requestAccessibilityPermission() {
@@ -232,23 +177,23 @@ final class StatusMenuController: NSObject {
             log.error("Missing workspace for menu item")
             return
         }
-        switchWorkspace(named: workspace)
+        actions.switchWorkspace(named: workspace)
     }
 
     @objc private func nextWorkspace() {
-        switchToNextWorkspace()
+        actions.switchToNextWorkspace()
     }
 
     @objc private func previousWorkspace() {
-        switchToPreviousWorkspace()
+        actions.switchToPreviousWorkspace()
     }
 
     @objc private func nextWindow() {
-        focusNextWindow()
+        actions.focusNextWindow()
     }
 
     @objc private func previousWindow() {
-        focusPreviousWindow()
+        actions.focusPreviousWindow()
     }
 
     @objc private func showDebugStatus() {
@@ -275,7 +220,7 @@ final class StatusMenuController: NSObject {
             return
         }
 
-        actionController.restoreAllHiddenWindows()
+        actions.restoreAllHiddenWindows()
     }
 
     @objc private func reloadConfig() {
@@ -286,5 +231,3 @@ final class StatusMenuController: NSObject {
         NSApp.terminate(nil)
     }
 }
-
-extension StatusMenuController: KeyboardShortcutActionHandling {}

@@ -5,6 +5,8 @@ final class ApplicationIconCache {
     private let loadQueue = DispatchQueue(label: "kkaci.application-icons", qos: .userInitiated)
     private var iconsByPID: [pid_t: NSImage] = [:]
     private var inFlight: Set<pid_t> = []
+    private var livePIDs: Set<pid_t> = []
+    private var onIconUpdated: ((pid_t) -> Void)?
 
     init(loadIcon: @escaping (pid_t) -> NSImage? = { pid in
         NSRunningApplication(processIdentifier: pid)?.icon
@@ -16,10 +18,12 @@ final class ApplicationIconCache {
         iconsByPID[pid]
     }
 
-    func refresh(
-        pids: Set<pid_t>,
-        onIconUpdated: @escaping (pid_t) -> Void = { _ in }
-    ) {
+    func setUpdateHandler(_ handler: @escaping (pid_t) -> Void) {
+        onIconUpdated = handler
+    }
+
+    func refresh(pids: Set<pid_t>) {
+        livePIDs = pids
         iconsByPID = iconsByPID.filter { pids.contains($0.key) }
         inFlight = inFlight.intersection(pids)
 
@@ -35,12 +39,12 @@ final class ApplicationIconCache {
                     }
 
                     inFlight.remove(pid)
-                    guard let icon else {
+                    guard livePIDs.contains(pid), let icon else {
                         return
                     }
 
                     iconsByPID[pid] = icon
-                    onIconUpdated(pid)
+                    onIconUpdated?(pid)
                 }
             }
         }

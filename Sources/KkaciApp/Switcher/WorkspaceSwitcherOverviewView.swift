@@ -3,7 +3,6 @@ import AppKit
 final class WorkspaceSwitcherListView: NSView {
     private var cardViewsByName: [String: WorkspacePreviewCardView] = [:]
     private var recycledCardViews: [WorkspacePreviewCardView] = []
-    private(set) var columns = 1
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -29,7 +28,6 @@ final class WorkspaceSwitcherListView: NSView {
         onClick: @escaping (String) -> Void
     ) {
         let layout = WorkspaceOverviewLayout(groupCount: groups.count, availableFrame: availableFrame)
-        columns = layout.columns
         frame = NSRect(origin: .zero, size: layout.contentSize)
         recycleMissingCards(keeping: Set(groups.map(\.name)))
         ensureCapacity(groups.count)
@@ -364,7 +362,7 @@ private final class WorkspacePreviewCardView: NSView {
 
     private func metadataText(for windows: [WindowSwitcherItem]) -> String {
         guard !windows.isEmpty else {
-            return "No windows"
+            return ""
         }
 
         var appNames: [String] = []

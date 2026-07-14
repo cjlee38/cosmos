@@ -1,7 +1,50 @@
 import AppKit
 import KkaciCore
 
-final class SwitcherOverlayWindowController: NSWindowController {
+protocol SwitcherOverlayPresenting: AnyObject {
+    var isOverlayVisible: Bool { get }
+
+    func setInteractionHandlers(
+        onArrowKey: @escaping (SwitcherArrowDirection) -> Void,
+        onOutsideClick: @escaping () -> Void,
+        onWorkspaceKey: @escaping (String) -> Bool
+    )
+    func showWindowSwitcher(
+        items: [WindowSwitcherItem],
+        selectedID: WindowID,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (WindowID) -> Void,
+        onClick: @escaping (WindowID) -> Void
+    )
+    func rebindWindowSwitcher(
+        items: [WindowSwitcherItem],
+        selectedID: WindowID,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (WindowID) -> Void,
+        onClick: @escaping (WindowID) -> Void
+    )
+    func showWorkspaceSwitcher(
+        groups: [WorkspaceSwitcherGroup],
+        selectedName: String,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (String) -> Void,
+        onClick: @escaping (String) -> Void
+    )
+    func rebindWorkspaceSwitcher(
+        groups: [WorkspaceSwitcherGroup],
+        selectedName: String,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (String) -> Void,
+        onClick: @escaping (String) -> Void
+    )
+    func updateWindowSwitcher(items: [WindowSwitcherItem])
+    func updateWindowSelection(selectedID: WindowID)
+    func updateWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup])
+    func updateWorkspaceSelection(selectedName: String)
+    func hideOverlay()
+}
+
+final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlayPresenting {
     private let viewFactory = SwitcherOverlayViewFactory()
     private let screenLocator = SwitcherOverlayScreenLocator()
     private var windowListView: WindowSwitcherListView?
@@ -57,10 +100,6 @@ final class SwitcherOverlayWindowController: NSWindowController {
         self.onWorkspaceKey = onWorkspaceKey
     }
 
-    func prepare(windowCount: Int, workspaceCount: Int) {
-        viewFactory.prepare(windowCount: windowCount, workspaceCount: workspaceCount)
-    }
-
     func showWindowSwitcher(
         items: [WindowSwitcherItem],
         selectedID: WindowID,
@@ -68,22 +107,34 @@ final class SwitcherOverlayWindowController: NSWindowController {
         onHover: @escaping (WindowID) -> Void,
         onClick: @escaping (WindowID) -> Void
     ) {
-        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
-        let listView = viewFactory.makeWindowList(
+        let screenFrame = configureWindowSwitcher(
             items: items,
             selectedID: selectedID,
-            availableFrame: screenFrame,
+            anchorFrame: anchorFrame,
             onHover: onHover,
             onClick: onClick
         )
-        windowListView = listView
-        workspaceListView = nil
-        (window as? SwitcherOverlayPanel)?.acceptsWorkspaceKeys = false
-        setContent(
-            title: nil,
-            content: listView
-        )
         showOverlay(in: screenFrame)
+    }
+
+    func rebindWindowSwitcher(
+        items: [WindowSwitcherItem],
+        selectedID: WindowID,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (WindowID) -> Void,
+        onClick: @escaping (WindowID) -> Void
+    ) {
+        guard isOverlayVisible else {
+            return
+        }
+        let screenFrame = configureWindowSwitcher(
+            items: items,
+            selectedID: selectedID,
+            anchorFrame: anchorFrame,
+            onHover: onHover,
+            onClick: onClick
+        )
+        positionOverlay(in: screenFrame)
     }
 
     func showWorkspaceSwitcher(
@@ -93,22 +144,34 @@ final class SwitcherOverlayWindowController: NSWindowController {
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) {
-        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
-        let listView = viewFactory.makeWorkspaceList(
+        let screenFrame = configureWorkspaceSwitcher(
             groups: groups,
             selectedName: selectedName,
-            availableFrame: screenFrame,
+            anchorFrame: anchorFrame,
             onHover: onHover,
             onClick: onClick
         )
-        windowListView = nil
-        workspaceListView = listView
-        (window as? SwitcherOverlayPanel)?.acceptsWorkspaceKeys = true
-        setContent(
-            title: nil,
-            content: listView
-        )
         showOverlay(in: screenFrame)
+    }
+
+    func rebindWorkspaceSwitcher(
+        groups: [WorkspaceSwitcherGroup],
+        selectedName: String,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (String) -> Void,
+        onClick: @escaping (String) -> Void
+    ) {
+        guard isOverlayVisible else {
+            return
+        }
+        let screenFrame = configureWorkspaceSwitcher(
+            groups: groups,
+            selectedName: selectedName,
+            anchorFrame: anchorFrame,
+            onHover: onHover,
+            onClick: onClick
+        )
+        positionOverlay(in: screenFrame)
     }
 
     func updateWindowSwitcher(items: [WindowSwitcherItem]) {
@@ -135,11 +198,55 @@ final class SwitcherOverlayWindowController: NSWindowController {
         window?.orderOut(nil)
     }
 
-    private func setContent(title: String?, content: NSView) {
-        let root = viewFactory.makeRootContent(title: title, content: content)
+    private func setContent(_ content: NSView) {
+        let root = viewFactory.makeRootContent(content: content)
         let contentSize = root.frame.size
         window?.setContentSize(contentSize)
         root.frame = NSRect(origin: .zero, size: contentSize)
+    }
+
+    private func configureWindowSwitcher(
+        items: [WindowSwitcherItem],
+        selectedID: WindowID,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (WindowID) -> Void,
+        onClick: @escaping (WindowID) -> Void
+    ) -> NSRect {
+        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
+        let listView = viewFactory.makeWindowList(
+            items: items,
+            selectedID: selectedID,
+            availableFrame: screenFrame,
+            onHover: onHover,
+            onClick: onClick
+        )
+        windowListView = listView
+        workspaceListView = nil
+        (window as? SwitcherOverlayPanel)?.acceptsWorkspaceKeys = false
+        setContent(listView)
+        return screenFrame
+    }
+
+    private func configureWorkspaceSwitcher(
+        groups: [WorkspaceSwitcherGroup],
+        selectedName: String,
+        anchorFrame: WindowFrame?,
+        onHover: @escaping (String) -> Void,
+        onClick: @escaping (String) -> Void
+    ) -> NSRect {
+        let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
+        let listView = viewFactory.makeWorkspaceList(
+            groups: groups,
+            selectedName: selectedName,
+            availableFrame: screenFrame,
+            onHover: onHover,
+            onClick: onClick
+        )
+        windowListView = nil
+        workspaceListView = listView
+        (window as? SwitcherOverlayPanel)?.acceptsWorkspaceKeys = true
+        setContent(listView)
+        return screenFrame
     }
 
     private func showOverlay(in screenFrame: NSRect) {
@@ -147,17 +254,25 @@ final class SwitcherOverlayWindowController: NSWindowController {
             return
         }
 
-        let size = window.frame.size
-        window.setFrameOrigin(NSPoint(
-            x: screenFrame.midX - size.width / 2,
-            y: screenFrame.midY - size.height / 2
-        ))
+        positionOverlay(in: screenFrame)
         outsideClickMonitor.start(overlayFrame: window.frame) { [weak self] in
             self?.onOutsideClick?()
         }
         window.alphaValue = 1
         window.orderFrontRegardless()
         window.makeKey()
+    }
+
+    private func positionOverlay(in screenFrame: NSRect) {
+        guard let window else {
+            return
+        }
+        let size = window.frame.size
+        window.setFrameOrigin(NSPoint(
+            x: screenFrame.midX - size.width / 2,
+            y: screenFrame.midY - size.height / 2
+        ))
+        outsideClickMonitor.updateOverlayFrame(window.frame)
     }
 }
 
@@ -188,115 +303,4 @@ private final class SwitcherOverlayPanel: NSPanel {
         }
         super.keyDown(with: event)
     }
-}
-
-private final class SwitcherOutsideClickMonitor {
-    private let log = Log(category: "switcher")
-
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    private var overlayFrame = NSRect.zero
-    private var onOutsideClick: (() -> Void)?
-    private var isActive = false
-
-    deinit {
-        invalidate()
-    }
-
-    func start(overlayFrame: NSRect, onOutsideClick: @escaping () -> Void) {
-        self.overlayFrame = overlayFrame
-        self.onOutsideClick = onOutsideClick
-        isActive = true
-
-        if eventTap == nil {
-            createEventTap()
-        }
-        if let eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: true)
-        }
-    }
-
-    func stop() {
-        isActive = false
-        onOutsideClick = nil
-        if let eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-        }
-    }
-
-    fileprivate func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        switch type {
-        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            guard isActive, !overlayFrame.contains(NSEvent.mouseLocation) else {
-                return Unmanaged.passUnretained(event)
-            }
-
-            isActive = false
-            DispatchQueue.main.async { [weak self] in
-                self?.onOutsideClick?()
-            }
-            return nil
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            if isActive, let eventTap {
-                CGEvent.tapEnable(tap: eventTap, enable: true)
-            }
-            return Unmanaged.passUnretained(event)
-        default:
-            return Unmanaged.passUnretained(event)
-        }
-    }
-
-    private func createEventTap() {
-        let mouseDownMask = [
-            CGEventType.leftMouseDown,
-            .rightMouseDown,
-            .otherMouseDown
-        ].reduce(CGEventMask(0)) { mask, type in
-            mask | CGEventMask(1 << type.rawValue)
-        }
-
-        guard let eventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mouseDownMask,
-            callback: switcherOutsideClickEventTapCallback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            isActive = false
-            log.error("Failed to create outside-click event tap")
-            return
-        }
-
-        let runLoopSource = CFMachPortCreateRunLoopSource(nil, eventTap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        self.eventTap = eventTap
-        self.runLoopSource = runLoopSource
-    }
-
-    private func invalidate() {
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-            self.runLoopSource = nil
-        }
-        if let eventTap {
-            CFMachPortInvalidate(eventTap)
-            self.eventTap = nil
-        }
-    }
-}
-
-private func switcherOutsideClickEventTapCallback(
-    _: CGEventTapProxy,
-    type: CGEventType,
-    event: CGEvent,
-    userInfo: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-    guard let userInfo else {
-        return Unmanaged.passUnretained(event)
-    }
-    return Unmanaged<SwitcherOutsideClickMonitor>
-        .fromOpaque(userInfo)
-        .takeUnretainedValue()
-        .handle(type: type, event: event)
 }

@@ -3,7 +3,7 @@ import Foundation
 @testable import KkaciCore
 
 enum FakeWindowSystemError: Error, Equatable {
-    case setPosition(WindowID)
+    case frameWrite(WindowID)
 }
 
 final class FakeWindowSystem: WindowSystem {
@@ -20,7 +20,9 @@ final class FakeWindowSystem: WindowSystem {
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
     var operations: [Operation] = []
-    var setPositionFailures: Set<WindowID> = []
+    var frameWriteFailures: Set<WindowID> = []
+    var operationFailure: ((Operation) -> Error?)?
+    var operationFailureAfterMutation: ((Operation) -> Error?)?
     var refreshCount = 0
 
     init(windows: [WindowSnapshot]) {
@@ -57,9 +59,13 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
-        operations.append(.setPosition(id, point))
-        if setPositionFailures.contains(id) {
-            throw FakeWindowSystemError.setPosition(id)
+        let operation = Operation.setPosition(id, point)
+        operations.append(operation)
+        if let error = operationFailure?(operation) {
+            throw error
+        }
+        if frameWriteFailures.contains(id) {
+            throw FakeWindowSystemError.frameWrite(id)
         }
 
         positions[id] = point
@@ -67,16 +73,26 @@ final class FakeWindowSystem: WindowSystem {
             frame.origin = point
             frames[id] = frame
         }
+        if let error = operationFailureAfterMutation?(operation) {
+            throw error
+        }
     }
 
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
-        operations.append(.setFrame(id, frame))
-        if setPositionFailures.contains(id) {
-            throw FakeWindowSystemError.setPosition(id)
+        let operation = Operation.setFrame(id, frame)
+        operations.append(operation)
+        if let error = operationFailure?(operation) {
+            throw error
+        }
+        if frameWriteFailures.contains(id) {
+            throw FakeWindowSystemError.frameWrite(id)
         }
 
         positions[id] = frame.origin
         frames[id] = frame
+        if let error = operationFailureAfterMutation?(operation) {
+            throw error
+        }
     }
 
     func focus(_ id: WindowID) {

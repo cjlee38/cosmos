@@ -1,16 +1,16 @@
 # kkaci
 
-Prototype macOS workspace/window manager.
+macOS-only workspace/window manager prototype.
 
-This first spike verifies the core primitive:
+The current runtime supports:
 
 - enumerate macOS windows through Accessibility
 - identify windows by `CGWindowID`
 - move individual windows to a screen corner
 - restore their original frame
-- assign windows to in-memory workspaces
+- assign windows to runtime workspaces
 - auto-assign newly discovered windows to the active workspace on their monitor
-- prune closed/missing windows from in-memory state
+- prune closed/missing windows from runtime state
 - switch workspaces by hiding/restoring assigned windows
 - cycle configured workspaces and focus windows within the active workspace
 - configure workspaces and global hotkeys through TOML
@@ -21,7 +21,7 @@ This first spike verifies the core primitive:
 just run
 ```
 
-Grant Accessibility permission when prompted, then restart the executable if macOS requires it.
+Grant Accessibility permission when prompted. If it is granted after startup, relaunch the app or use `Request Accessibility Permission` from the menu bar. The menu bar runtime also requests Input Monitoring permission for modifier-release detection; after granting it, relaunch the app or use `Reload Config`.
 
 Run the menu bar runtime app with:
 
@@ -93,10 +93,13 @@ Workspace monitor slots are config-level roles. `monitor 1` is the current macOS
 ## REPL
 
 ```text
+help
+permission
 list
 focused
 assign 1
 assign 2 <window-id>
+capture <workspace>
 switch 1
 switch 2
 next-workspace
@@ -112,7 +115,7 @@ quit
 
 The first window scan is treated as the baseline. Windows discovered after that are assigned to the currently active workspace.
 
-The CLI REPL keeps the manual baseline flow. The menu bar app performs an initial capture into workspace `1`.
+The CLI REPL keeps the manual baseline flow. The menu bar app restores matching hidden-window records, then captures each still-unassigned visible window into the active workspace on that window's monitor.
 
 The acceptance test for the core primitive is two windows from the same app assigned to different workspaces, then switching workspaces so only the assigned window is restored.
 
@@ -124,8 +127,20 @@ The XCTest suite uses fake windows and does not move real macOS windows:
 just test
 ```
 
-Run the full local check with:
+Run the build-and-test check with:
 
 ```sh
 just check
+```
+
+Run SwiftLint and Periphery with:
+
+```sh
+just lint
+```
+
+Format Swift sources with:
+
+```sh
+just fmt
 ```

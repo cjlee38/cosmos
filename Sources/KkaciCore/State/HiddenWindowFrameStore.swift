@@ -21,6 +21,10 @@ struct HiddenWindowFrameStore {
         }
     }
 
+    mutating func replace(_ frame: WindowFrame, for id: WindowID) {
+        hiddenFrames[id] = frame
+    }
+
     mutating func clear(_ id: WindowID) {
         hiddenFrames[id] = nil
     }

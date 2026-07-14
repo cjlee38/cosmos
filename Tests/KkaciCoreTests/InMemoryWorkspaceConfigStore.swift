@@ -27,3 +27,25 @@ final class FailingLoadWorkspaceConfigStore: KkaciConfigStore {
         savedConfigs.append(config)
     }
 }
+
+final class FailingSaveWorkspaceConfigStore: KkaciConfigStore {
+    enum Error: Swift.Error, Equatable {
+        case saveFailed
+    }
+
+    let loadedConfig: KkaciConfig
+    private(set) var saveAttempts: [KkaciConfig] = []
+
+    init(loadedConfig: KkaciConfig = .default) {
+        self.loadedConfig = loadedConfig
+    }
+
+    func load() throws -> KkaciConfig {
+        loadedConfig
+    }
+
+    func save(_ config: KkaciConfig) throws {
+        saveAttempts.append(config)
+        throw Error.saveFailed
+    }
+}

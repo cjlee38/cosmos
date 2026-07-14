@@ -2,13 +2,30 @@ import Carbon
 import CoreGraphics
 import Foundation
 
+protocol ModifierFlagsMonitoring: AnyObject {
+    func start() throws
+    func stop()
+}
+
 final class ModifierFlagsMonitor {
     private let onModifiersChanged: (UInt32) -> Void
+    private let currentModifierFlags: () -> CGEventFlags
+    private let ensureListenEventAccess: () -> Bool
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    init(onModifiersChanged: @escaping (UInt32) -> Void) {
+    init(
+        onModifiersChanged: @escaping (UInt32) -> Void,
+        currentModifierFlags: @escaping () -> CGEventFlags = {
+            CGEvent(source: nil)?.flags ?? []
+        },
+        ensureListenEventAccess: @escaping () -> Bool = {
+            CGPreflightListenEventAccess() || CGRequestListenEventAccess()
+        }
+    ) {
         self.onModifiersChanged = onModifiersChanged
+        self.currentModifierFlags = currentModifierFlags
+        self.ensureListenEventAccess = ensureListenEventAccess
     }
 
     deinit {
@@ -18,6 +35,10 @@ final class ModifierFlagsMonitor {
     func start() throws {
         guard eventTap == nil else {
             return
+        }
+
+        guard ensureListenEventAccess() else {
+            throw ModifierFlagsMonitorError.listenEventAccessDenied
         }
 
         guard let eventTap = CGEvent.tapCreate(
@@ -49,20 +70,25 @@ final class ModifierFlagsMonitor {
         }
     }
 
-    fileprivate func handle(type: CGEventType, event: CGEvent) {
+    func handle(type: CGEventType, event: CGEvent) {
         switch type {
         case .flagsChanged:
-            let modifiers = carbonModifiers(from: event.flags)
-            // Commit may perform AX work, so return from the event-tap callback first.
-            DispatchQueue.main.async { [weak self] in
-                self?.onModifiersChanged(modifiers)
-            }
+            publishModifiers(event.flags)
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let eventTap {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
             }
+            publishModifiers(currentModifierFlags())
         default:
             break
+        }
+    }
+
+    private func publishModifiers(_ flags: CGEventFlags) {
+        let modifiers = carbonModifiers(from: flags)
+        // Commit may perform AX work, so return from the event-tap callback first.
+        DispatchQueue.main.async { [weak self] in
+            self?.onModifiersChanged(modifiers)
         }
     }
 
@@ -84,7 +110,10 @@ final class ModifierFlagsMonitor {
     }
 }
 
+extension ModifierFlagsMonitor: ModifierFlagsMonitoring {}
+
 private enum ModifierFlagsMonitorError: Error {
+    case listenEventAccessDenied
     case eventTapCreationFailed
 }
 

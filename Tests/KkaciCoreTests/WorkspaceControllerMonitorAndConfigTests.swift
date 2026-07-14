@@ -22,7 +22,7 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "a")
         windowSystem.focusedWindow = 100
@@ -54,13 +54,13 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "a")
         _ = try controller.switchWorkspace(to: "a")
         windowSystem.focusedWindow = 100
 
-        let result = try controller.syncWorkspaceToFocusedWindow()
+        let result = try controller.handleFocusedWindowChanged().focusedWindowSync
 
         XCTAssertEqual(result, .alreadyActive(windowID: 100, workspace: "1"))
         XCTAssertEqual(controller.activeWorkspace, "1")
@@ -89,7 +89,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
         try controller.assignWindow(201, to: "2")
@@ -107,7 +107,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
 
@@ -124,7 +124,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         let controller = makeController(windowSystem)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.hideWindow(100)
         try controller.hideWindow(100)
         let result = try controller.restoreWindow(100)
@@ -140,7 +140,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         let controller = makeController(windowSystem)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.hideWindow(100)
 
         XCTAssertEqual(windowSystem.frames[100]?.origin, hidePoint)
@@ -153,7 +153,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "2")
 
         XCTAssertEqual(controller.membership(for: 100), "2")
@@ -168,7 +168,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
 
@@ -200,7 +200,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
         try controller.assignWindow(300, to: "3")
@@ -235,11 +235,11 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
         try controller.assignWindow(300, to: "3")
-        windowSystem.setPositionFailures.insert(300)
+        windowSystem.frameWriteFailures.insert(300)
 
         XCTAssertThrowsError(try controller.switchWorkspace(to: "3"))
         XCTAssertEqual(controller.activeWorkspace, "1")
@@ -271,118 +271,5 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.membership(for: 200), "2")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
-    }
-}
-
-final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
-    func testPreviousWorkspaceWrapsToLastConfiguredWorkspace() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.listWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "2")
-
-        let result = try controller.switchToPreviousWorkspace()
-
-        XCTAssertEqual(result.workspace, "3")
-        XCTAssertEqual(controller.activeWorkspace, "3")
-    }
-
-    func testMissingWorkspaceIsCreatedAndPersisted() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One")
-        ])
-        let store = InMemoryWorkspaceConfigStore()
-        let controller = makeController(windowSystem, configStore: store)
-
-        _ = controller.listWindows()
-        try controller.assignWindow(100, to: "4")
-
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "4"])
-        XCTAssertEqual(controller.currentConfig.workspaces.names, ["1", "2", "3", "4"])
-        XCTAssertEqual(controller.membership(for: 100), "4")
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "4"])
-        XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
-    }
-
-    func testSwitchingToMissingWorkspaceCreatesIt() throws {
-        let windowSystem = FakeWindowSystem(windows: [])
-        let store = InMemoryWorkspaceConfigStore()
-        let controller = makeController(windowSystem, configStore: store)
-
-        _ = try controller.switchWorkspace(to: "dev")
-
-        XCTAssertEqual(controller.activeWorkspace, "dev")
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
-    }
-
-    func testDisabledConfigPersistenceDoesNotSaveCreatedWorkspaces() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One")
-        ])
-        let store = InMemoryWorkspaceConfigStore()
-        let controller = makeController(
-            windowSystem,
-            configStore: store,
-            isConfigPersistenceEnabled: false
-        )
-
-        _ = controller.listWindows()
-        try controller.assignWindow(100, to: "scratch")
-
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch"])
-        XCTAssertTrue(store.savedConfigs.isEmpty)
-    }
-
-    func testFailedStartupConfigLoadUsesDefaultsAndDisablesPersistence() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One")
-        ])
-        let store = FailingLoadWorkspaceConfigStore()
-        let controller = makeController(windowSystem, configStore: store)
-
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
-        XCTAssertEqual(controller.startupConfigLoadError as? FailingLoadWorkspaceConfigStore.Error, .loadFailed)
-
-        _ = controller.listWindows()
-        try controller.assignWindow(100, to: "scratch")
-
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch"])
-        XCTAssertTrue(store.savedConfigs.isEmpty)
-    }
-
-    func testApplyConfigEnablesPersistenceAndKeepsReferencedRuntimeWorkspaces() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One")
-        ])
-        let store = InMemoryWorkspaceConfigStore()
-        let controller = makeController(
-            windowSystem,
-            configStore: store,
-            isConfigPersistenceEnabled: false
-        )
-
-        _ = controller.listWindows()
-        try controller.assignWindow(100, to: "scratch")
-        try controller.applyConfig(
-            KkaciConfig(
-                workspaces: WorkspaceConfig(names: ["1", "2", "3"]),
-                bindings: [HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")]
-            ),
-            enablePersistence: true
-        )
-        try controller.createWorkspace(named: "dev")
-
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "scratch", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.bindings, [
-            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")
-        ])
     }
 }

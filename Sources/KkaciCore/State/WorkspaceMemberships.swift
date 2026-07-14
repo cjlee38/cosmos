@@ -19,10 +19,6 @@ struct WorkspaceMemberships {
         workspaceByWindowID[id] = workspace
     }
 
-    mutating func unassign(_ id: WindowID) {
-        workspaceByWindowID[id] = nil
-    }
-
     mutating func capture(_ ids: [WindowID], into workspace: String) {
         for id in ids {
             workspaceByWindowID[id] = workspace

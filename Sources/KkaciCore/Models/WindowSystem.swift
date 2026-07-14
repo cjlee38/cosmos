@@ -34,12 +34,37 @@ public protocol WindowSystem {
     func focus(_ id: WindowID)
 }
 
+struct WindowFrameTransactionError: Error, CustomStringConvertible {
+    let applyError: Error
+    let rollbackError: Error
+
+    var description: String {
+        "Window frame update failed: \(applyError); frame rollback failed: \(rollbackError)"
+    }
+}
+
 extension WindowSystem {
     func setFrameIfSizeChanged(_ targetFrame: WindowFrame, for id: WindowID) throws {
-        if let currentFrame = frame(for: id), currentFrame.size == targetFrame.size {
-            try setPosition(targetFrame.origin, for: id)
-        } else {
-            try setFrame(targetFrame, for: id)
+        let originalFrame = frame(for: id)
+        do {
+            if originalFrame?.size == targetFrame.size {
+                try setPosition(targetFrame.origin, for: id)
+            } else {
+                try setFrame(targetFrame, for: id)
+            }
+        } catch let applyError {
+            guard let originalFrame, frame(for: id) != originalFrame else {
+                throw applyError
+            }
+            do {
+                try setFrame(originalFrame, for: id)
+            } catch let rollbackError {
+                throw WindowFrameTransactionError(
+                    applyError: applyError,
+                    rollbackError: rollbackError
+                )
+            }
+            throw applyError
         }
     }
 }

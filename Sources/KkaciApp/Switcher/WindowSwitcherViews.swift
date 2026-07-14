@@ -24,7 +24,6 @@ final class WindowSwitcherListView: NSView {
     private var tileViewsByID: [WindowID: WindowSwitcherTileView] = [:]
     private var recycledTileViews: [WindowSwitcherTileView] = []
     private let emptyLabel = NSTextField(labelWithString: "No windows")
-    private(set) var columns = 1
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -54,7 +53,6 @@ final class WindowSwitcherListView: NSView {
         onHover: ((WindowID) -> Void)?,
         onClick: ((WindowID) -> Void)?
     ) {
-        columns = metrics.columns
         frame = NSRect(x: 0, y: 0, width: metrics.contentWidth, height: metrics.contentHeight)
         emptyLabel.frame = bounds
         emptyLabel.isHidden = !items.isEmpty

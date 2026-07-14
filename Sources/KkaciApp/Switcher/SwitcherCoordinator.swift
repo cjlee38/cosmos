@@ -4,35 +4,36 @@ import KkaciCore
 final class SwitcherCoordinator {
     private let log = Log(category: "switcher")
 
-    private enum Session {
-        case windows(selection: SwitcherSession<WindowID>, anchorFrame: WindowFrame?)
-        case workspaces(selection: SwitcherSession<String>, anchorFrame: WindowFrame?)
-    }
-
     private let controller: WorkspaceController
-    private let contentProvider: SwitcherContentProvider
-    private let thumbnailRefresher: WindowThumbnailRefresher
-    private let overlay = SwitcherOverlayWindowController()
+    private let previewService: SwitcherPreviewService
+    private let makeOverlay: () -> any SwitcherOverlayPresenting
     private let refreshStatus: () -> Void
-    private var session: Session?
+    private var overlay: (any SwitcherOverlayPresenting)?
+    private var session: ActiveSwitcherSession?
     private var sessionGeneration = 0
     private var pendingOverlayPresentation: DispatchWorkItem?
-    private var thumbnailViewUpdateScheduled = false
 
     init(
         controller: WorkspaceController,
-        thumbnailRefresher: WindowThumbnailRefresher,
-        refreshStatus: @escaping () -> Void
+        previewService: SwitcherPreviewService,
+        refreshStatus: @escaping () -> Void,
+        overlay: (any SwitcherOverlayPresenting)? = nil,
+        makeOverlay: @escaping () -> any SwitcherOverlayPresenting = { SwitcherOverlayWindowController() }
     ) {
         self.controller = controller
-        contentProvider = SwitcherContentProvider(
-            controller: controller,
-            windowThumbnailCache: thumbnailRefresher.windowThumbnailCache,
-            workspaceThumbnailCache: thumbnailRefresher.workspaceThumbnailCache,
-            applicationIconCache: thumbnailRefresher.applicationIconCache
-        )
-        self.thumbnailRefresher = thumbnailRefresher
+        self.previewService = previewService
         self.refreshStatus = refreshStatus
+        self.overlay = overlay
+        self.makeOverlay = makeOverlay
+        if let overlay {
+            configureInteractions(for: overlay)
+        }
+        previewService.setUpdateHandler { [weak self] update in
+            self?.applyPreviewUpdate(update)
+        }
+    }
+
+    private func configureInteractions(for overlay: any SwitcherOverlayPresenting) {
         overlay.setInteractionHandlers(
             onArrowKey: { [weak self] direction in
                 self?.moveSelection(direction)
@@ -44,65 +45,46 @@ final class SwitcherCoordinator {
                 self?.commitWorkspace(forShortcutKey: key) == true
             }
         )
-        thumbnailRefresher.setWindowThumbnailUpdateHandler { [weak self] _ in
-            self?.scheduleThumbnailViewUpdate()
-        }
-        thumbnailRefresher.workspaceThumbnailCache.setUpdateHandler { [weak self] in
-            self?.scheduleThumbnailViewUpdate()
-        }
     }
 
     func stepWindow(direction: SwitcherDirection, wraps: Bool) {
-        log("step window direction=\(direction)")
-        guard case let .windows(currentSelection, anchorFrame) = session else {
+        log.trace("step window direction=\(direction)")
+        guard session?.stepWindow(direction, wraps: wraps) == true else {
             startWindowSession(direction: direction)
             return
         }
-
-        var selection = currentSelection
-        selection.step(direction, wraps: wraps)
-        session = .windows(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
     }
 
     func stepWorkspace(direction: SwitcherDirection) {
-        log("step workspace direction=\(direction)")
-        guard case let .workspaces(currentSelection, anchorFrame) = session else {
+        log.trace("step workspace direction=\(direction)")
+        guard session?.stepWorkspace(direction) == true else {
             startWorkspaceSession(direction: direction)
             return
         }
-
-        var selection = currentSelection
-        selection.step(direction)
-        session = .workspaces(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
     }
 
     func cancel() {
-        if session != nil {
-            log("cancel session=\(describeSession())")
-        }
+        log.trace("cancel session=\(session?.description ?? "none")")
         endSession()
     }
 
-    func prepareOverlay() {
-        overlay.prepare(
-            windowCount: controller.currentWindows().windows.count,
-            workspaceCount: controller.workspaces.count
-        )
+    func handleContentChanged() {
+        reconcileActiveSession()
     }
 }
 
 extension SwitcherCoordinator {
     func commitWindowSelection() {
-        guard case let .windows(selection, _) = session else {
+        guard let selection = session?.windowSelection else {
             return
         }
 
         let windowID = selection.selectedItem
         endSession()
 
-        log("commit window id=\(windowID) selected=\(selection.selectedIndex)")
+        log.trace("commit window id=\(windowID) selected=\(selection.selectedIndex)")
         do {
             try controller.focusWindow(windowID)
             log.info("Focused \(windowID)")
@@ -112,7 +94,7 @@ extension SwitcherCoordinator {
     }
 
     func commitWorkspaceSelection() {
-        guard case let .workspaces(selection, _) = session else {
+        guard let selection = session?.workspaceSelection else {
             return
         }
 
@@ -122,7 +104,7 @@ extension SwitcherCoordinator {
 
 private extension SwitcherCoordinator {
     private func startWindowSession(direction: SwitcherDirection) {
-        let windows = controller.currentWindows().windows
+        let windows = controller.currentWindows()
         let windowIDs = controller.windows(in: controller.activeWorkspace).map(\.id)
 
         guard let selection = SwitcherSession(
@@ -134,21 +116,15 @@ private extension SwitcherCoordinator {
             return
         }
 
-        let anchorFrame = contentProvider.overlayAnchorFrame(
-            from: windows,
-            preferredWindowID: windowIDs.first
-        )
+        let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: windowIDs.first)
         beginSession(.windows(selection: selection, anchorFrame: anchorFrame))
-        log("start windows count=\(selection.items.count) selected=\(selection.selectedIndex)")
+        log.trace("start windows count=\(selection.items.count) selected=\(selection.selectedIndex)")
     }
 
     private func startWorkspaceSession(direction: SwitcherDirection) {
-        let windows = controller.currentWindows().windows
+        let windows = controller.currentWindows()
         let activeWindowID = controller.windows(in: controller.activeWorkspace).first?.id
-        let anchorFrame = contentProvider.overlayAnchorFrame(
-            from: windows,
-            preferredWindowID: activeWindowID
-        )
+        let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: activeWindowID)
 
         guard let selection = SwitcherSession(
             items: controller.workspaces,
@@ -160,10 +136,10 @@ private extension SwitcherCoordinator {
         }
 
         beginSession(.workspaces(selection: selection, anchorFrame: anchorFrame))
-        log("start workspaces count=\(selection.items.count) selected=\(selection.selectedIndex)")
+        log.trace("start workspaces count=\(selection.items.count) selected=\(selection.selectedIndex)")
     }
 
-    private func beginSession(_ session: Session) {
+    private func beginSession(_ session: ActiveSwitcherSession) {
         endSession()
         self.session = session
         scheduleOverlayPresentation()
@@ -174,15 +150,16 @@ private extension SwitcherCoordinator {
         pendingOverlayPresentation?.cancel()
         pendingOverlayPresentation = nil
         session = nil
-        overlay.hideOverlay()
+        overlay?.hideOverlay()
     }
 
     private func commitWorkspace(name: String) {
         endSession()
 
-        log("commit workspace=\(name)")
+        log.trace("commit workspace=\(name)")
         do {
             _ = try controller.switchWorkspace(to: name)
+            handleContentChanged()
             log.info("Switched to workspace \(name)")
             refreshStatus()
         } catch {
@@ -194,32 +171,18 @@ private extension SwitcherCoordinator {
 private extension SwitcherCoordinator {
     @discardableResult
     private func selectWindow(id: WindowID) -> Bool {
-        guard case let .windows(currentSelection, anchorFrame) = session else {
+        guard session?.selectWindow(id) == true else {
             return false
         }
-
-        var selection = currentSelection
-        guard selection.select(id) else {
-            return false
-        }
-
-        session = .windows(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
         return true
     }
 
     @discardableResult
     private func selectWorkspace(name: String) -> Bool {
-        guard case let .workspaces(currentSelection, anchorFrame) = session else {
+        guard session?.selectWorkspace(name) == true else {
             return false
         }
-
-        var selection = currentSelection
-        guard selection.select(name) else {
-            return false
-        }
-
-        session = .workspaces(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
         return true
     }
@@ -234,10 +197,7 @@ private extension SwitcherCoordinator {
     private func scheduleOverlayPresentation() {
         let generation = sessionGeneration
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self else {
-                return
-            }
-            guard sessionGeneration == generation else {
+            guard let self, sessionGeneration == generation else {
                 return
             }
 
@@ -249,12 +209,11 @@ private extension SwitcherCoordinator {
     }
 
     private func presentCurrentSession() {
-        let windows = controller.currentWindows().windows
+        let overlay = overlayForPresentation()
         switch session {
         case let .windows(selection, anchorFrame):
-            let items = contentProvider.windowItems(withIDs: selection.items, from: windows)
             overlay.showWindowSwitcher(
-                items: items,
+                items: previewService.windowItems(ids: selection.items),
                 selectedID: selection.selectedItem,
                 anchorFrame: anchorFrame,
                 onHover: { [weak self] id in
@@ -264,14 +223,14 @@ private extension SwitcherCoordinator {
                     self?.commitWindow(id: id)
                 }
             )
-            refreshManagedThumbnails(
+            previewService.refresh(
                 windowIDs: Set(selection.items),
+                workspaceNames: [controller.activeWorkspace],
                 priorityIDs: [selection.selectedItem]
             )
         case let .workspaces(selection, anchorFrame):
-            let groups = orderedWorkspaceGroups(names: selection.items)
             overlay.showWorkspaceSwitcher(
-                groups: groups,
+                groups: previewService.workspaceGroups(names: selection.items),
                 selectedName: selection.selectedItem,
                 anchorFrame: anchorFrame,
                 onHover: { [weak self] name in
@@ -281,13 +240,16 @@ private extension SwitcherCoordinator {
                     self?.commitWorkspace(name: name)
                 }
             )
+            previewService.refreshAll(
+                priorityIDs: controller.windows(in: controller.activeWorkspace).first.map { [$0.id] } ?? []
+            )
         case nil:
             return
         }
     }
 
     private func updateVisibleSelection() {
-        guard overlay.isOverlayVisible else {
+        guard let overlay, overlay.isOverlayVisible else {
             return
         }
 
@@ -302,18 +264,14 @@ private extension SwitcherCoordinator {
     }
 
     private func moveSelection(_ direction: SwitcherArrowDirection) {
-        guard case let .windows(currentSelection, anchorFrame) = session else {
+        guard session?.moveWindow(direction) == true else {
             return
         }
-
-        var selection = currentSelection
-        selection.move(direction)
-        session = .windows(selection: selection, anchorFrame: anchorFrame)
         updateVisibleSelection()
     }
 
     private func commitWorkspace(forShortcutKey key: String) -> Bool {
-        guard case let .workspaces(selection, _) = session else {
+        guard let selection = session?.workspaceSelection else {
             return false
         }
 
@@ -325,73 +283,118 @@ private extension SwitcherCoordinator {
         commitWorkspace(name: workspace)
         return true
     }
+}
 
-    private func orderedWorkspaceGroups(names: [String]) -> [WorkspaceSwitcherGroup] {
-        let groupsByName = Dictionary(
-            uniqueKeysWithValues: contentProvider.workspaceGroups().map { ($0.name, $0) }
-        )
-        return names.compactMap { groupsByName[$0] }
+private extension SwitcherCoordinator {
+    private func reconcileActiveSession() {
+        let windows = controller.currentWindows()
+        switch session {
+        case .windows:
+            let windowIDs = controller.windows(in: controller.activeWorkspace).map(\.id)
+            let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: windowIDs.first)
+            guard session?.reconcileWindows(windowIDs, anchorFrame: anchorFrame) == true else {
+                endSession()
+                return
+            }
+        case .workspaces:
+            let activeWindowID = controller.windows(in: controller.activeWorkspace).first?.id
+            let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: activeWindowID)
+            guard session?.reconcileWorkspaces(controller.workspaces, anchorFrame: anchorFrame) == true else {
+                endSession()
+                return
+            }
+        case nil:
+            return
+        }
+
+        rebindVisibleSession()
     }
 
-    private func refreshManagedThumbnails(
-        windowIDs: Set<WindowID>,
-        priorityIDs: [WindowID]
-    ) {
-        thumbnailRefresher.refreshThumbnails(
-            windowIDs: windowIDs,
-            workspaceNames: [controller.activeWorkspace],
-            priorityIDs: priorityIDs
-        )
+    private func rebindVisibleSession() {
+        guard let overlay, overlay.isOverlayVisible else {
+            return
+        }
+
+        switch session {
+        case let .windows(selection, anchorFrame):
+            overlay.rebindWindowSwitcher(
+                items: previewService.windowItems(ids: selection.items),
+                selectedID: selection.selectedItem,
+                anchorFrame: anchorFrame,
+                onHover: { [weak self] id in
+                    _ = self?.selectWindow(id: id)
+                },
+                onClick: { [weak self] id in
+                    self?.commitWindow(id: id)
+                }
+            )
+        case let .workspaces(selection, anchorFrame):
+            overlay.rebindWorkspaceSwitcher(
+                groups: previewService.workspaceGroups(names: selection.items),
+                selectedName: selection.selectedItem,
+                anchorFrame: anchorFrame,
+                onHover: { [weak self] name in
+                    _ = self?.selectWorkspace(name: name)
+                },
+                onClick: { [weak self] name in
+                    self?.commitWorkspace(name: name)
+                }
+            )
+        case nil:
+            return
+        }
+    }
+
+    private func overlayAnchorFrame(
+        from windows: [WindowSnapshot],
+        preferredWindowID: WindowID?
+    ) -> WindowFrame? {
+        if let preferredWindowID,
+           let preferredFrame = windows.first(where: { $0.id == preferredWindowID })?.frame {
+            return preferredFrame
+        }
+
+        return windows.first {
+            controller.membership(for: $0.id) == controller.activeWorkspace
+                && !controller.isHiddenByWorkspace($0.id)
+                && !$0.isMinimized
+                && $0.frame != nil
+        }?.frame
     }
 }
 
 private extension SwitcherCoordinator {
-    private func scheduleThumbnailViewUpdate() {
-        guard session != nil, !thumbnailViewUpdateScheduled else {
+    private func applyPreviewUpdate(_ update: SwitcherPreviewUpdate) {
+        guard let overlay, overlay.isOverlayVisible else {
             return
         }
 
-        thumbnailViewUpdateScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
+        switch session {
+        case let .windows(selection, _):
+            let changedIDs = selection.items.filter(update.windowIDs.contains)
+            guard !changedIDs.isEmpty else {
                 return
             }
-
-            thumbnailViewUpdateScheduled = false
-            updateActiveSessionThumbnails()
-        }
-    }
-
-    private func updateActiveSessionThumbnails() {
-        guard overlay.isOverlayVisible else {
-            return
-        }
-
-        let windows = controller.currentWindows().windows
-        switch session {
-        case let .windows(selection, _):
-            let items = contentProvider.windowItems(withIDs: selection.items, from: windows)
-            overlay.updateWindowSwitcher(items: items)
+            overlay.updateWindowSwitcher(items: previewService.windowItems(ids: changedIDs))
         case let .workspaces(selection, _):
-            let groups = orderedWorkspaceGroups(names: selection.items)
-            overlay.updateWorkspaceSwitcher(groups: groups)
+            let changedNames = selection.items.filter(update.workspaceNames.contains)
+            guard !changedNames.isEmpty else {
+                return
+            }
+            overlay.updateWorkspaceSwitcher(groups: previewService.workspaceGroups(names: changedNames))
         case nil:
             return
         }
     }
 
-    private func describeSession() -> String {
-        switch session {
-        case let .windows(selection, _):
-            "windows selected=\(selection.selectedIndex)"
-        case let .workspaces(selection, _):
-            "workspaces selected=\(selection.selectedIndex)"
-        case nil:
-            "none"
+    private func overlayForPresentation() -> any SwitcherOverlayPresenting {
+        if let overlay {
+            return overlay
         }
-    }
 
-    private func log(_ message: String) {
-        log.trace(message)
+        let overlay = makeOverlay()
+        configureInteractions(for: overlay)
+        self.overlay = overlay
+        return overlay
     }
 }

@@ -8,13 +8,13 @@ final class WorkspaceThumbnailCache {
     private var pendingGroups: [String: WorkspaceThumbnailRenderGroup] = [:]
     private var liveWorkspaceNames: Set<String> = []
     private var isRendering = false
-    private var onThumbnailsUpdated: (() -> Void)?
+    private var onThumbnailsUpdated: ((Set<String>) -> Void)?
 
     func thumbnail(for workspace: String) -> NSImage? {
         thumbnails[workspace]
     }
 
-    func setUpdateHandler(_ handler: @escaping () -> Void) {
+    func setUpdateHandler(_ handler: @escaping (Set<String>) -> Void) {
         onThumbnailsUpdated = handler
     }
 
@@ -24,8 +24,8 @@ final class WorkspaceThumbnailCache {
         pendingGroups = pendingGroups.filter { workspaceNames.contains($0.key) }
     }
 
-    func refresh(groups: [WorkspaceSwitcherGroup]) {
-        for group in WorkspaceThumbnailRenderer.makeRenderGroups(groups) {
+    func refresh(groups: [WorkspaceSwitcherGroup], displayBounds: [CGRect]) {
+        for group in WorkspaceThumbnailRenderer.makeRenderGroups(groups, displayBounds: displayBounds) {
             pendingGroups[group.name] = group
         }
         startPendingRender()
@@ -53,7 +53,7 @@ final class WorkspaceThumbnailCache {
                     }
                 self.thumbnails.merge(images) { _, new in new }
                 self.isRendering = false
-                self.onThumbnailsUpdated?()
+                self.onThumbnailsUpdated?(Set(images.keys))
                 self.startPendingRender()
             }
         }
@@ -74,9 +74,11 @@ private struct WorkspaceThumbnailRenderWindow {
 }
 
 private enum WorkspaceThumbnailRenderer {
-    static func makeRenderGroups(_ groups: [WorkspaceSwitcherGroup]) -> [WorkspaceThumbnailRenderGroup] {
-        let displays = activeDisplayBounds()
-        return groups.map { group in
+    static func makeRenderGroups(
+        _ groups: [WorkspaceSwitcherGroup],
+        displayBounds: [CGRect]
+    ) -> [WorkspaceThumbnailRenderGroup] {
+        groups.map { group in
             let windows = group.windows.compactMap { item -> WorkspaceThumbnailRenderWindow? in
                 guard let frame = item.frame?.rect else {
                     return nil
@@ -90,7 +92,7 @@ private enum WorkspaceThumbnailRenderer {
             }
             return WorkspaceThumbnailRenderGroup(
                 name: group.name,
-                desktopBounds: desktopBounds(windowFrames: windows.map(\.frame), displays: displays),
+                desktopBounds: desktopBounds(windowFrames: windows.map(\.frame), displays: displayBounds),
                 windows: windows
             )
         }
@@ -235,20 +237,6 @@ private enum WorkspaceThumbnailRenderer {
         return union(matchingDisplays)
             ?? union(displays)
             ?? CGRect(x: 0, y: 0, width: 1280, height: 720)
-    }
-
-    private static func activeDisplayBounds() -> [CGRect] {
-        var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else {
-            return []
-        }
-
-        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &displays, &count) == .success else {
-            return []
-        }
-
-        return displays.prefix(Int(count)).map(CGDisplayBounds)
     }
 
     private static func imageSize(for desktopBounds: CGRect) -> CGSize {

@@ -54,6 +54,14 @@ let package = Package(
                 "KkaciCore"
             ],
             path: "Tests/KkaciCoreTests"
+        ),
+        .testTarget(
+            name: "KkaciAppTests",
+            dependencies: [
+                "KkaciApp",
+                "KkaciCore"
+            ],
+            path: "Tests/KkaciAppTests"
         )
     ]
 )

@@ -3,6 +3,10 @@ import Foundation
 @testable import KkaciCore
 import XCTest
 
+private enum HiddenWindowRecordTestError: Error {
+    case flushFailed
+}
+
 class WorkspaceHiddenWindowRecordTestCase: XCTestCase {
     let hidePoint = CGPoint(x: -1, y: -1)
 
@@ -40,7 +44,7 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let controller = makeController(windowSystem, recordStore: recordStore)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "2")
 
         XCTAssertEqual(recordStore.records, [
@@ -62,7 +66,7 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.hideWindow(100)
         XCTAssertEqual(recordStore.records.map(\.windowID), [100])
 
@@ -78,12 +82,12 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
-        windowSystem.setPositionFailures.insert(100)
+        windowSystem.frameWriteFailures.insert(100)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
 
         XCTAssertThrowsError(try controller.assignWindow(100, to: "2")) { error in
-            XCTAssertEqual(error as? FakeWindowSystemError, .setPosition(100))
+            XCTAssertEqual(error as? FakeWindowSystemError, .frameWrite(100))
         }
         XCTAssertNil(controller.membership(for: 100))
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
@@ -98,14 +102,14 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(recordStore.records.map(\.windowID), [100])
 
-        windowSystem.setPositionFailures.insert(100)
+        windowSystem.frameWriteFailures.insert(100)
         XCTAssertThrowsError(try controller.restoreWindow(100)) { error in
-            XCTAssertEqual(error as? FakeWindowSystemError, .setPosition(100))
+            XCTAssertEqual(error as? FakeWindowSystemError, .frameWrite(100))
         }
 
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
@@ -113,26 +117,52 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         XCTAssertEqual(recordStore.records.map(\.windowID), [100])
     }
 
-    func testFileRecordStoreFlushesPendingWrites() throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kkaci-record-tests-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
+    func testNormalHideDoesNotSynchronouslyFlushRecords() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7)
+        ])
+        let recordStore = InMemoryHiddenWindowRecordStore()
+        let controller = makeController(windowSystem, recordStore: recordStore)
 
-        let url = directory.appendingPathComponent("hidden-window-records.json")
-        let store = FileHiddenWindowRecordStore(url: url)
-        let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "2")
+        _ = controller.discoverWindows()
+        try controller.assignWindow(100, to: "2")
 
-        store.upsertRecord(record)
-        store.flushPendingWrites()
+        XCTAssertEqual(recordStore.flushCallCount, 0)
+    }
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-        XCTAssertEqual(try store.loadRecords().map(\.windowID), [100])
+    func testShutdownRestoresWindowBeforeReportingRecordFlushFailure() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7)
+        ])
+        let recordStore = InMemoryHiddenWindowRecordStore()
+        let controller = makeController(windowSystem, recordStore: recordStore)
+        let originalFrame = try XCTUnwrap(windowSystem.frames[100])
 
-        store.removeRecord(windowID: 100, pid: 7)
-        store.flushPendingWrites()
+        _ = controller.discoverWindows()
+        try controller.assignWindow(100, to: "2")
+        recordStore.flushError = HiddenWindowRecordTestError.flushFailed
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
-        XCTAssertTrue(try store.loadRecords().isEmpty)
+        XCTAssertThrowsError(try controller.restoreHiddenWindowsForShutdown())
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertEqual(recordStore.flushCallCount, 1)
+    }
+
+    func testEmergencyRestoreRestoresWindowBeforeReportingRecordFlushFailure() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7)
+        ])
+        let recordStore = InMemoryHiddenWindowRecordStore()
+        let controller = makeController(windowSystem, recordStore: recordStore)
+        let originalFrame = try XCTUnwrap(windowSystem.frames[100])
+
+        _ = controller.discoverWindows()
+        try controller.assignWindow(100, to: "2")
+        recordStore.flushError = HiddenWindowRecordTestError.flushFailed
+
+        XCTAssertThrowsError(try controller.restoreAllHiddenWindows())
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertEqual(recordStore.flushCallCount, 1)
     }
 
     func testEmergencyUnhideRestoresAllHiddenWindowsAndRemovesRecords() throws {
@@ -146,12 +176,12 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let frame100 = try XCTUnwrap(windowSystem.frames[100])
         let frame200 = try XCTUnwrap(windowSystem.frames[200])
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
         try controller.assignWindow(300, to: "3")
 
-        let result = controller.restoreAllHiddenWindows()
+        let result = try controller.restoreAllHiddenWindows()
 
         XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [200, 300], skipped: []))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
@@ -169,11 +199,11 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(200, to: "2")
         windowSystem.windows.removeAll { $0.id == 200 }
 
-        let result = controller.restoreAllHiddenWindows()
+        let result = try controller.restoreAllHiddenWindows()
 
         XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [], skipped: [200]))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
@@ -188,12 +218,12 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(200, to: "2")
         XCTAssertEqual(recordStore.records.map(\.windowID), [200])
 
         windowSystem.windows.removeAll { $0.id == 200 }
-        _ = try controller.applyExternalWindowSetChange()
+        _ = try controller.handleWindowSetChanged()
 
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertTrue(recordStore.records.isEmpty)
@@ -207,11 +237,11 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let controller = makeController(windowSystem, recordStore: recordStore)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "2")
         XCTAssertEqual(windowSystem.positions[100], hidePoint)
 
-        controller.restoreHiddenWindowsForShutdown()
+        try controller.restoreHiddenWindowsForShutdown()
 
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
         XCTAssertEqual(recordStore.records.map(\.windowID), [100])
@@ -224,10 +254,10 @@ final class WorkspaceHiddenWindowRecordTests: WorkspaceHiddenWindowRecordTestCas
         let recordStore = InMemoryHiddenWindowRecordStore()
         let controller = makeController(windowSystem, recordStore: recordStore)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "2")
 
-        controller.restoreHiddenWindowsForShutdown()
+        try controller.restoreHiddenWindowsForShutdown()
 
         XCTAssertEqual(
             windowSystem.frames[100],

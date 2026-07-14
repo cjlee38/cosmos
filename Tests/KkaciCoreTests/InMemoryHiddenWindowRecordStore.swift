@@ -3,6 +3,8 @@ import Foundation
 
 final class InMemoryHiddenWindowRecordStore: HiddenWindowRecordStore {
     private(set) var records: [HiddenWindowRecord]
+    private(set) var flushCallCount = 0
+    var flushError: Error?
 
     init(records: [HiddenWindowRecord] = []) {
         self.records = records
@@ -25,5 +27,10 @@ final class InMemoryHiddenWindowRecordStore: HiddenWindowRecordStore {
         }
     }
 
-    func flushPendingWrites() {}
+    func flushPendingWrites() throws {
+        flushCallCount += 1
+        if let flushError {
+            throw flushError
+        }
+    }
 }

@@ -66,20 +66,20 @@ struct MonitorSlotResolver {
             y: targetFrame.minY + (frame.origin.y - sourceFrame.minY) * scale.height
         )
         return WindowFrame(
-            origin: clamp(origin, size: size, inside: targetFrame),
+            origin: DisplayGeometry.clamp(origin, size: size, inside: targetFrame),
             size: size
         )
     }
 
     private func slot(containing point: CGPoint) -> MonitorSlot {
         let slots = slots()
-        if let containing = slots.first(where: { $0.display.frame.contains(point) }) {
-            return containing.slot
+        guard let display = DisplayGeometry.display(
+            containingOrNearest: point,
+            among: slots.map(\.display)
+        ) else {
+            return 1
         }
-
-        return slots.min { lhs, rhs in
-            distanceSquared(from: point, to: lhs.display.frame) < distanceSquared(from: point, to: rhs.display.frame)
-        }?.slot ?? 1
+        return slots.first(where: { $0.display.id == display.id })?.slot ?? 1
     }
 
     private func orderedDisplays() -> [DisplaySnapshot] {
@@ -91,8 +91,8 @@ struct MonitorSlotResolver {
         let others = displays
             .filter { $0.id != main.id }
             .sorted { lhs, rhs in
-                let lhsDistance = distanceSquared(from: main.frame.center, to: lhs.frame.center)
-                let rhsDistance = distanceSquared(from: main.frame.center, to: rhs.frame.center)
+                let lhsDistance = DisplayGeometry.distanceSquared(from: main.frame.center, to: lhs.frame.center)
+                let rhsDistance = DisplayGeometry.distanceSquared(from: main.frame.center, to: rhs.frame.center)
                 if lhsDistance != rhsDistance {
                     return lhsDistance < rhsDistance
                 }
@@ -103,37 +103,5 @@ struct MonitorSlotResolver {
             }
 
         return [main] + others
-    }
-
-    private func clamp(_ origin: CGPoint, size: CGSize, inside rect: CGRect) -> CGPoint {
-        CGPoint(
-            x: clamp(origin.x, length: size.width, min: rect.minX, max: rect.maxX),
-            y: clamp(origin.y, length: size.height, min: rect.minY, max: rect.maxY)
-        )
-    }
-
-    private func clamp(_ value: CGFloat, length: CGFloat, min minValue: CGFloat, max maxValue: CGFloat) -> CGFloat {
-        guard length <= maxValue - minValue else {
-            return minValue
-        }
-        return min(max(value, minValue), maxValue - length)
-    }
-
-    private func distanceSquared(from point: CGPoint, to rect: CGRect) -> CGFloat {
-        let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
-        let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
-        return dx * dx + dy * dy
-    }
-
-    private func distanceSquared(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
-        return dx * dx + dy * dy
-    }
-}
-
-private extension CGRect {
-    var center: CGPoint {
-        CGPoint(x: midX, y: midY)
     }
 }

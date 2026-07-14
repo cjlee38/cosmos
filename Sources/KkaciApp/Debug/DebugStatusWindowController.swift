@@ -29,13 +29,20 @@ final class DebugStatusWindowController: NSWindowController {
     }
 
     func show() {
-        refresh()
+        render()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func refresh() {
+        guard window?.isVisible == true else {
+            return
+        }
+        render()
+    }
+
+    private func render() {
         textView.string = renderer.render()
     }
 

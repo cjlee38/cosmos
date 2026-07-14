@@ -5,17 +5,20 @@ final class HiddenWindowOperator {
     private let displayProvider: any HidePointProviding
     private let restorableFrameResolver: RestorableFrameResolver
     private let windowStore: WindowRuntimeStore
+    private let recordRepository: HiddenWindowRecordRepository
 
     init(
         windowSystem: any WindowSystem,
         displayProvider: any HidePointProviding,
         restorableFrameResolver: RestorableFrameResolver,
-        windowStore: WindowRuntimeStore
+        windowStore: WindowRuntimeStore,
+        recordRepository: HiddenWindowRecordRepository
     ) {
         self.windowSystem = windowSystem
         self.displayProvider = displayProvider
         self.restorableFrameResolver = restorableFrameResolver
         self.windowStore = windowStore
+        self.recordRepository = recordRepository
     }
 
     func hide(
@@ -27,24 +30,40 @@ final class HiddenWindowOperator {
         guard windowSystem.contains(id) else {
             throw WorkspaceError.windowNotFound(id)
         }
+        guard let window = windowStore.snapshot(for: id) else {
+            throw WorkspaceError.windowNotFound(id)
+        }
 
         let frame = try preferredFrame ?? currentOrStoredFrame(for: id, state: state)
         let wasAlreadyHidden = state.isHidden(id)
-        state.storeHiddenFrameIfNeeded(frame, for: id)
+        if preferredFrame == nil {
+            state.storeHiddenFrameIfNeeded(frame, for: id)
+        } else {
+            state.replaceHiddenFrame(frame, for: id)
+        }
 
         let point = displayProvider.hidePoint(for: frame)
-        windowStore.saveHiddenRecord(
-            windowID: id,
-            workspace: state.membership(for: id) ?? activeWorkspace,
-            originalFrame: frame,
-            hiddenPosition: point
+        recordRepository.upsertRecord(
+            HiddenWindowRecordPolicy.makeRecord(
+                window: window,
+                workspace: state.membership(for: id) ?? activeWorkspace,
+                originalFrame: frame,
+                hiddenPosition: point
+            )
         )
 
         do {
             try windowSystem.setPosition(point, for: id)
+            windowStore.updateFrame(
+                WindowFrame(origin: point, size: frame.size),
+                for: id
+            )
         } catch {
             if !wasAlreadyHidden {
-                windowStore.removeHiddenRecord(for: id)
+                recordRepository.removeRecord(
+                    windowID: id,
+                    pid: window.app.pid
+                )
                 state.clearHiddenFrame(for: id)
             }
             throw error
@@ -58,40 +77,61 @@ final class HiddenWindowOperator {
     ) throws -> RestoreResult {
         guard windowSystem.contains(id) else {
             state.clearHiddenFrame(for: id)
-            windowStore.removeAllHiddenRecords(for: id)
+            recordRepository.removeAllRecords(for: id)
             throw WorkspaceError.windowNotFound(id)
         }
 
         guard let frame = state.hiddenFrame(for: id) else {
             if let preferredFrame {
-                try windowSystem.setFrameIfSizeChanged(
-                    restorableFrameResolver.frameForRestore(preferredFrame),
-                    for: id
-                )
+                let targetFrame = restorableFrameResolver.frameForRestore(preferredFrame)
+                try windowSystem.setFrameIfSizeChanged(targetFrame, for: id)
+                windowStore.updateFrame(targetFrame, for: id)
             }
             return .alreadyVisible
         }
 
-        try windowSystem.setFrameIfSizeChanged(
-            restorableFrameResolver.frameForRestore(preferredFrame ?? frame),
-            for: id
-        )
+        let targetFrame = restorableFrameResolver.frameForRestore(preferredFrame ?? frame)
+        try windowSystem.setFrameIfSizeChanged(targetFrame, for: id)
+        windowStore.updateFrame(targetFrame, for: id)
         state.clearHiddenFrame(for: id)
-        windowStore.removeHiddenRecord(for: id)
+        recordRepository.removeRecord(
+            windowID: id,
+            pid: windowStore.snapshot(for: id)?.app.pid
+        )
         return .restored
     }
 
-    func restoreForShutdown(state: WorkspaceState) {
+    func restoreForShutdown(state: WorkspaceState) throws {
+        var failedWindowIDs: [WindowID] = []
         for id in state.hiddenWindowIDs {
             guard let frame = state.hiddenFrame(for: id), windowSystem.contains(id) else {
                 continue
             }
-            try? windowSystem.setFrameIfSizeChanged(
-                restorableFrameResolver.frameForRestore(frame),
-                for: id
+            let targetFrame = restorableFrameResolver.frameForRestore(frame)
+            do {
+                try windowSystem.setFrameIfSizeChanged(targetFrame, for: id)
+                windowStore.updateFrame(targetFrame, for: id)
+            } catch {
+                failedWindowIDs.append(id)
+            }
+        }
+
+        var recordFlushError: Error?
+        do {
+            try recordRepository.flushPendingWrites()
+        } catch {
+            recordFlushError = error
+        }
+
+        if failedWindowIDs.isEmpty, let recordFlushError {
+            throw recordFlushError
+        }
+        if !failedWindowIDs.isEmpty {
+            throw ShutdownRestoreError(
+                failedWindowIDs: failedWindowIDs,
+                recordFlushError: recordFlushError
             )
         }
-        windowStore.flushHiddenRecordWrites()
     }
 
     private func currentOrStoredFrame(for id: WindowID, state: WorkspaceState) throws -> WindowFrame {

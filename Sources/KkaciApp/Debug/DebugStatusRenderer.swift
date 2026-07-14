@@ -10,9 +10,8 @@ final class DebugStatusRenderer {
     }
 
     func render() -> String {
-        let result = controller.refreshWindows()
-        let focused = controller.focusedWindowID()
-        let cgWindowOrder = CGWindowOrderSnapshot()
+        let windows = controller.currentWindows()
+        let focused = controller.currentFocusedWindowID()
 
         var lines: [String] = [
             "kkaci debug status",
@@ -31,22 +30,11 @@ final class DebugStatusRenderer {
         }
         lines.append("")
 
-        if !result.sync.isEmpty {
-            lines.append("sync:")
-            for (id, workspace) in result.sync.autoAssigned {
-                lines.append("  auto-assigned \(id) -> \(workspace)")
-            }
-            for id in result.sync.removed {
-                lines.append("  removed \(id)")
-            }
-            lines.append("")
-        }
-
         lines.append("windows:")
-        if result.windows.isEmpty {
+        if windows.isEmpty {
             lines.append("  (none)")
         } else {
-            for window in result.windows {
+            for (zOrder, window) in windows.enumerated() {
                 let marker = window.id == focused ? "*" : " "
                 let workspace = controller.membership(for: window.id) ?? "-"
                 let monitor = controller.membership(for: window.id)
@@ -55,8 +43,7 @@ final class DebugStatusRenderer {
                 let minimized = window.isMinimized ? "minimized" : "normal"
                 let title = window.title.isEmpty ? "(untitled)" : window.title
                 let frame = window.frame.map(formatFrame) ?? "frame=?"
-                let cgOrder = cgWindowOrder.format(window.id)
-                let identity = "id=\(window.id) \(cgOrder) ws=\(workspace) monitor=\(monitor)"
+                let identity = "id=\(window.id) z=\(zOrder) ws=\(workspace) monitor=\(monitor)"
                 let state = "\(hidden) \(minimized) pid=\(window.app.pid)"
                 lines.append("\(marker) \(identity) \(state) \(window.app.name) :: \(title) \(frame)")
             }
@@ -79,41 +66,5 @@ final class DebugStatusRenderer {
 
     private func format(_ value: CGFloat) -> String {
         String(format: "%.0f", Double(value))
-    }
-}
-
-private struct CGWindowOrderSnapshot {
-    private let allIndexByID: [WindowID: Int]
-    private let screenIndexByID: [WindowID: Int]
-
-    init() {
-        allIndexByID = Self.indexByWindowID(options: [.optionAll, .excludeDesktopElements])
-        screenIndexByID = Self.indexByWindowID(options: [.optionOnScreenOnly, .excludeDesktopElements])
-    }
-
-    func format(_ id: WindowID) -> String {
-        "cgAll=\(format(allIndexByID[id])) cgScreen=\(format(screenIndexByID[id]))"
-    }
-
-    private func format(_ index: Int?) -> String {
-        index.map(String.init) ?? "-"
-    }
-
-    private static func indexByWindowID(options: CGWindowListOption) -> [WindowID: Int] {
-        guard let rawList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
-            return [:]
-        }
-
-        var indexByID: [WindowID: Int] = [:]
-        for (index, info) in rawList.enumerated() {
-            guard (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
-                  let number = info[kCGWindowNumber as String] as? NSNumber
-            else {
-                continue
-            }
-
-            indexByID[WindowID(number.uint32Value)] = index
-        }
-        return indexByID
     }
 }

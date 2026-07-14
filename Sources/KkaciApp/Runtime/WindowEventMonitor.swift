@@ -14,6 +14,25 @@ enum WindowRuntimeEventKind: Hashable {
     var needsThumbnailCapture: Bool {
         self == .thumbnailChanged
     }
+
+    static func kinds(forAXNotification notification: String) -> Set<Self> {
+        switch notification {
+        case kAXFocusedWindowChangedNotification:
+            [.focusChanged]
+        case kAXWindowResizedNotification:
+            [.thumbnailChanged, .layoutChanged]
+        case kAXWindowCreatedNotification,
+             kAXWindowMiniaturizedNotification,
+             kAXWindowDeminiaturizedNotification,
+             kAXTitleChangedNotification:
+            [.thumbnailChanged]
+        case kAXUIElementDestroyedNotification,
+             kAXWindowMovedNotification:
+            [.layoutChanged]
+        default:
+            []
+        }
+    }
 }
 
 struct WindowRuntimeEvent: Hashable {
@@ -155,13 +174,17 @@ final class WindowEventMonitor {
     }
 
     private func handleAXNotification(element: AXUIElement, notification: CFString) {
-        guard let kind = eventKind(for: notification) else {
+        let kinds = WindowRuntimeEventKind.kinds(forAXNotification: notification as String)
+        guard !kinds.isEmpty else {
             return
         }
         if isMouseDrivenLayoutNotification(notification), isLeftMouseButtonDown {
             startWindowDragIfNeeded()
         }
-        schedule(.init(kind: kind, windowID: AXClient.windowID(for: element)))
+        let windowID = AXClient.windowID(for: element)
+        for kind in kinds {
+            schedule(.init(kind: kind, windowID: windowID))
+        }
     }
 
     private func isMouseDrivenLayoutNotification(_ notification: CFString) -> Bool {
@@ -199,24 +222,6 @@ final class WindowEventMonitor {
         }
         NSEvent.removeMonitor(mouseUpMonitor)
         self.mouseUpMonitor = nil
-    }
-
-    private func eventKind(for notification: CFString) -> WindowRuntimeEventKind? {
-        switch notification as String {
-        case kAXFocusedWindowChangedNotification:
-            .focusChanged
-        case kAXWindowCreatedNotification,
-             kAXWindowResizedNotification,
-             kAXWindowMiniaturizedNotification,
-             kAXWindowDeminiaturizedNotification,
-             kAXTitleChangedNotification:
-            .thumbnailChanged
-        case kAXUIElementDestroyedNotification,
-             kAXWindowMovedNotification:
-            .layoutChanged
-        default:
-            nil
-        }
     }
 
     private func schedule(_ event: WindowRuntimeEvent) {

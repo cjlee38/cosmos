@@ -12,6 +12,8 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
     private let fileManager: FileManager
     private let queue = DispatchQueue(label: "kkaci.hidden-window-record-store")
     private var recordsByKey: [RecordKey: HiddenWindowRecord]?
+    private var pendingMutations: [RecordMutation] = []
+    private var pendingWriteError: Error?
 
     public init(url: URL, fileManager: FileManager = .default) {
         self.url = url
@@ -20,83 +22,102 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
 
     public func loadRecords() throws -> [HiddenWindowRecord] {
         try queue.sync {
-            try loadRecordsIfNeeded()
-            return sortedRecords()
+            if let pendingWriteError {
+                throw pendingWriteError
+            }
+            return try sortedRecords(records())
         }
     }
 
     public func upsertRecord(_ record: HiddenWindowRecord) {
-        queue.async { [self] in
-            loadRecordsForAsyncMutation()
-            recordsByKey?[RecordKey(record)] = record
-            writeRecordsIgnoringErrors()
-        }
+        enqueue(.upsert(record))
     }
 
     public func removeRecord(windowID: WindowID, pid: pid_t?) {
-        queue.async { [self] in
-            loadRecordsForAsyncMutation()
-            guard recordsByKey != nil else {
-                return
-            }
+        enqueue(.remove(windowID: windowID, pid: pid))
+    }
 
-            if let pid {
-                recordsByKey?[RecordKey(windowID: windowID, pid: pid)] = nil
-            } else {
-                for key in recordsByKey?.keys.filter({ $0.matches(windowID: windowID) }) ?? [] {
-                    recordsByKey?[key] = nil
-                }
+    public func flushPendingWrites() throws {
+        try queue.sync {
+            do {
+                try persistPendingMutations()
+            } catch {
+                pendingWriteError = error
+                throw error
             }
-            writeRecordsIgnoringErrors()
         }
     }
 
-    public func flushPendingWrites() {
-        queue.sync {}
-    }
-
-    private func loadRecordsIfNeeded() throws {
-        guard recordsByKey == nil else {
-            return
+    private func records() throws -> [RecordKey: HiddenWindowRecord] {
+        if let recordsByKey {
+            return recordsByKey
         }
 
         guard fileManager.fileExists(atPath: url.path) else {
             recordsByKey = [:]
-            return
+            return [:]
         }
 
         let data = try Data(contentsOf: url)
         let document = try JSONDecoder().decode(RecordDocument.self, from: data)
-        recordsByKey = Dictionary(uniqueKeysWithValues: document.records.map {
-            (RecordKey($0), $0)
-        })
-    }
-
-    private func loadRecordsForAsyncMutation() {
-        if recordsByKey == nil {
-            try? loadRecordsIfNeeded()
-        }
-        if recordsByKey == nil {
-            recordsByKey = [:]
-        }
-    }
-
-    private func writeRecordsIgnoringErrors() {
-        do {
-            let directory = url.deletingLastPathComponent()
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-
-            let records = sortedRecords()
-            guard !records.isEmpty else {
-                try removePersistedRecordFiles()
-                return
+        var records: [RecordKey: HiddenWindowRecord] = [:]
+        for record in document.records {
+            let key = RecordKey(record)
+            guard records[key] == nil else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: [],
+                        debugDescription: "Duplicate hidden-window record for \(record.windowID), pid \(record.pid)"
+                    )
+                )
             }
-
-            let data = try JSONEncoder().encode(RecordDocument(records: records))
-            try data.write(to: url, options: .atomic)
-        } catch {
-            // Record persistence must not block or fail window manipulation.
+            records[key] = record
         }
+        recordsByKey = records
+        return records
+    }
+
+    private func enqueue(_ mutation: RecordMutation) {
+        queue.async { [self] in
+            pendingMutations.append(mutation)
+            do {
+                try persistPendingMutations()
+            } catch {
+                pendingWriteError = error
+            }
+        }
+    }
+
+    private func persistPendingMutations() throws {
+        guard !pendingMutations.isEmpty else {
+            if let pendingWriteError {
+                throw pendingWriteError
+            }
+            return
+        }
+
+        var records = try records()
+        for mutation in pendingMutations {
+            mutation.apply(to: &records)
+        }
+        recordsByKey = records
+        try writeRecords(records)
+        pendingMutations.removeAll()
+        pendingWriteError = nil
+    }
+
+    private func writeRecords(_ recordsByKey: [RecordKey: HiddenWindowRecord]) throws {
+        let directory = url.deletingLastPathComponent()
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let records = sortedRecords(recordsByKey)
+        guard !records.isEmpty else {
+            try removePersistedRecordFiles()
+            return
+        }
+
+        let data = try JSONEncoder().encode(RecordDocument(records: records))
+        try data.write(to: url, options: .atomic)
     }
 
     private func removePersistedRecordFiles() throws {
@@ -105,8 +126,10 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
         }
     }
 
-    private func sortedRecords() -> [HiddenWindowRecord] {
-        (recordsByKey ?? [:])
+    private func sortedRecords(
+        _ recordsByKey: [RecordKey: HiddenWindowRecord]
+    ) -> [HiddenWindowRecord] {
+        recordsByKey
             .values
             .sorted {
                 if $0.pid == $1.pid {
@@ -114,6 +137,26 @@ public final class FileHiddenWindowRecordStore: HiddenWindowRecordStore {
                 }
                 return $0.pid < $1.pid
             }
+    }
+}
+
+private enum RecordMutation {
+    case upsert(HiddenWindowRecord)
+    case remove(windowID: WindowID, pid: pid_t?)
+
+    func apply(to records: inout [RecordKey: HiddenWindowRecord]) {
+        switch self {
+        case let .upsert(record):
+            records[RecordKey(record)] = record
+        case let .remove(windowID, pid):
+            if let pid {
+                records[RecordKey(windowID: windowID, pid: pid)] = nil
+            } else {
+                for key in records.keys.filter({ $0.matches(windowID: windowID) }) {
+                    records[key] = nil
+                }
+            }
+        }
     }
 }
 

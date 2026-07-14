@@ -19,7 +19,6 @@ final class WindowAssignmentCoordinator {
     }
 
     func assignFocused(to workspace: String, state: inout WorkspaceState) throws -> WindowID {
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         guard let id = windowSystem.focusedWindowID() else {
             throw WorkspaceError.noFocusedWindow
         }
@@ -29,24 +28,32 @@ final class WindowAssignmentCoordinator {
     }
 
     func assignWindow(_ id: WindowID, to workspace: String, state: inout WorkspaceState) throws {
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         guard windowSystem.contains(id) else {
             throw WorkspaceError.windowNotFound(id)
         }
 
-        let previousWorkspace = state.membership(for: id)
+        let previousState = state
+        let previousFocusedWindowID = windowSystem.focusedWindowID()
+        let previousConfig = configuration.currentConfig(workspaces: state.workspaceConfig)
+        let createdWorkspace = !state.containsWorkspace(workspace.trimmingCharacters(in: .whitespacesAndNewlines))
+        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
         state.assign(id, to: workspace)
 
         do {
-            try visibilityCoordinator.applyActiveWorkspace(
+            try visibilityCoordinator.applyActiveWorkspaces(
                 state: &state,
-                strictWindowIDs: [id],
-                preferredFramesByWindowID: dictionary(for: id, frame: preferredFrame)
+                requiredWindowIDs: [id],
+                targetFrames: dictionary(for: id, frame: preferredFrame)
             )
         } catch {
-            restoreMembership(id, to: previousWorkspace, state: &state)
-            try? visibilityCoordinator.applyActiveWorkspace(state: &state)
+            try rollback(
+                error,
+                previousState: previousState,
+                previousConfig: createdWorkspace ? previousConfig : nil,
+                focusedWindowID: previousFocusedWindowID,
+                state: &state
+            )
             throw error
         }
     }
@@ -58,19 +65,7 @@ final class WindowAssignmentCoordinator {
     ) throws {
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let visibleIDs = windows
-            .filter { !$0.isMinimized }
-            .map(\.id)
-        state.capture(visibleIDs, into: workspace)
-    }
-
-    func captureUnassignedVisibleWindows(
-        _ windows: [WindowSnapshot],
-        into workspace: String,
-        state: inout WorkspaceState
-    ) throws {
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
-        let visibleIDs = windows
-            .filter { !$0.isMinimized && state.membership(for: $0.id) == nil }
+            .filter { !$0.isMinimized && !state.isHidden($0.id) }
             .map(\.id)
         state.capture(visibleIDs, into: workspace)
     }
@@ -109,8 +104,11 @@ final class WindowAssignmentCoordinator {
             )
         }
 
+        let previousState = state
+        let previousFocusedWindowID = windowSystem.focusedWindowID()
+        let previousConfig = configuration.currentConfig(workspaces: state.workspaceConfig)
+        let createdWorkspace = !state.containsWorkspace(workspace.trimmingCharacters(in: .whitespacesAndNewlines))
         let workspace = try configuration.ensureWorkspace(workspace, state: &state)
-        let previousActivation = state.activationSnapshot
         let destinationIsActive = state.activeWorkspaces.contains(workspace)
         let replacementFocus = workspace == currentWorkspace || destinationIsActive
             ? nil
@@ -122,18 +120,21 @@ final class WindowAssignmentCoordinator {
         }
 
         do {
-            try visibilityCoordinator.applyActiveWorkspace(
+            try visibilityCoordinator.applyActiveWorkspaces(
                 state: &state,
-                focusActiveWorkspace: replacementFocus != nil,
-                preferredFocus: replacementFocus,
-                strictWindowIDs: [id],
-                preferredFramesByWindowID: dictionary(for: id, frame: preferredFrame)
+                focusWindowID: replacementFocus,
+                requiredWindowIDs: [id],
+                targetFrames: dictionary(for: id, frame: preferredFrame)
             )
             return WindowMoveResult(windowID: id, workspace: workspace)
         } catch {
-            restoreMembership(id, to: currentWorkspace, state: &state)
-            state.restoreActivationSnapshot(previousActivation)
-            try? visibilityCoordinator.applyActiveWorkspace(state: &state)
+            try rollback(
+                error,
+                previousState: previousState,
+                previousConfig: createdWorkspace ? previousConfig : nil,
+                focusedWindowID: previousFocusedWindowID,
+                state: &state
+            )
             throw error
         }
     }
@@ -157,11 +158,35 @@ final class WindowAssignmentCoordinator {
         return [id: frame]
     }
 
-    private func restoreMembership(_ id: WindowID, to workspace: String?, state: inout WorkspaceState) {
-        if let workspace {
-            state.assign(id, to: workspace)
-        } else {
-            state.unassign(id)
+    private func rollback(
+        _ applyError: Error,
+        previousState: WorkspaceState,
+        previousConfig: KkaciConfig?,
+        focusedWindowID: WindowID?,
+        state: inout WorkspaceState
+    ) throws {
+        var rollbackError: Error?
+        if let previousConfig {
+            do {
+                try configuration.persist(previousConfig)
+            } catch {
+                rollbackError = error
+            }
+        }
+        do {
+            try visibilityCoordinator.rollback(
+                to: previousState,
+                focusedWindowID: focusedWindowID,
+                state: &state
+            )
+        } catch {
+            rollbackError = rollbackError ?? error
+        }
+        if let rollbackError {
+            throw WorkspaceTransactionError(
+                applyError: applyError,
+                rollbackError: rollbackError
+            )
         }
     }
 }

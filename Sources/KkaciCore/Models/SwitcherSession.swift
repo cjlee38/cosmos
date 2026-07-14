@@ -11,7 +11,7 @@ public enum SwitcherArrowDirection {
 }
 
 public struct SwitcherSession<Item: Equatable>: Equatable {
-    public let items: [Item]
+    public private(set) var items: [Item]
     public private(set) var selectedIndex: Int
 
     public init?(items: [Item], currentItem: Item?, direction: SwitcherDirection) {
@@ -56,6 +56,20 @@ public struct SwitcherSession<Item: Equatable>: Equatable {
         }
 
         selectedIndex = index
+        return true
+    }
+
+    @discardableResult
+    public mutating func reconcile(with newItems: [Item]) -> Bool {
+        guard !newItems.isEmpty else {
+            return false
+        }
+
+        let previousItem = selectedItem
+        let previousIndex = selectedIndex
+        items = newItems
+        selectedIndex = newItems.firstIndex(of: previousItem)
+            ?? min(previousIndex, newItems.count - 1)
         return true
     }
 

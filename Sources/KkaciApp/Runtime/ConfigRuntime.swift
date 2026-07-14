@@ -1,52 +1,92 @@
 import Foundation
 import KkaciCore
 
+protocol RuntimeConfigControlling: AnyObject {
+    var currentConfig: KkaciConfig { get }
+
+    @discardableResult
+    func applyConfig(_ config: KkaciConfig, enablePersistence: Bool) throws -> WorkspaceSyncSummary
+
+    @discardableResult
+    func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws -> WorkspaceSyncSummary
+}
+
+extension WorkspaceController: RuntimeConfigControlling {}
+
+protocol KeyboardShortcutInstalling: AnyObject {
+    func replaceShortcuts(_ registrations: [KeyboardShortcutRegistration]) throws
+}
+
+extension KeyboardShortcutManager: KeyboardShortcutInstalling {}
+
 final class ConfigRuntime {
     let configURL: URL?
     private let configStore: any KkaciConfigStore
-    private let controller: WorkspaceController
-    private let keyboardShortcutManager: KeyboardShortcutManager
+    private let controller: any RuntimeConfigControlling
+    private let shortcutInstaller: any KeyboardShortcutInstalling
     private let keyboardBindingMapper: KeyboardBindingMapper
+    private var installedRegistrations: [KeyboardShortcutRegistration] = []
 
     init(
         configStore: any KkaciConfigStore,
         configURL: URL?,
-        controller: WorkspaceController,
-        keyboardShortcutManager: KeyboardShortcutManager,
+        controller: any RuntimeConfigControlling,
+        keyboardShortcutManager: any KeyboardShortcutInstalling,
         keyboardBindingMapper: KeyboardBindingMapper
     ) {
         self.configStore = configStore
         self.configURL = configURL
         self.controller = controller
-        self.keyboardShortcutManager = keyboardShortcutManager
+        shortcutInstaller = keyboardShortcutManager
         self.keyboardBindingMapper = keyboardBindingMapper
     }
 
     func installInitialShortcuts(actions: any KeyboardShortcutActionHandling) throws {
-        try installShortcuts(for: controller.currentConfig.bindings, actions: actions)
+        let registrations = try registrations(for: controller.currentConfig.bindings, actions: actions)
+        try shortcutInstaller.replaceShortcuts(registrations)
+        installedRegistrations = registrations
     }
 
     func reload(actions: any KeyboardShortcutActionHandling) throws {
         let loadedConfig = try configStore.load()
-        try installShortcuts(for: loadedConfig.bindings, actions: actions)
-        try controller.applyConfig(loadedConfig, enablePersistence: true)
+        let previousRegistrations = installedRegistrations
+        let loadedRegistrations = try registrations(for: loadedConfig.bindings, actions: actions)
+
+        try shortcutInstaller.replaceShortcuts(loadedRegistrations)
+        installedRegistrations = loadedRegistrations
+        do {
+            try controller.applyConfig(loadedConfig, enablePersistence: true)
+        } catch let applyError {
+            do {
+                try shortcutInstaller.replaceShortcuts(previousRegistrations)
+                installedRegistrations = previousRegistrations
+            } catch let rollbackError {
+                throw ConfigReloadTransactionError(
+                    applyError: applyError,
+                    rollbackError: rollbackError
+                )
+            }
+            throw applyError
+        }
     }
 
     func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws {
-        let updatedConfig = controller.currentConfig.assigningWorkspace(workspace, toMonitorSlot: monitorSlot)
-        try configStore.save(updatedConfig)
-        try controller.applyConfig(updatedConfig, enablePersistence: true)
+        try controller.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
     }
 
-    private func installShortcuts(
+    private func registrations(
         for bindings: [HotKeyBinding],
         actions: any KeyboardShortcutActionHandling
-    ) throws {
-        try keyboardShortcutManager.replaceShortcuts(
-            keyboardBindingMapper.registrations(
-                for: bindings,
-                actions: actions
-            )
-        )
+    ) throws -> [KeyboardShortcutRegistration] {
+        try keyboardBindingMapper.registrations(for: bindings, actions: actions)
+    }
+}
+
+struct ConfigReloadTransactionError: Error, CustomStringConvertible {
+    let applyError: Error
+    let rollbackError: Error
+
+    var description: String {
+        "Config apply failed: \(applyError); shortcut rollback failed: \(rollbackError)"
     }
 }

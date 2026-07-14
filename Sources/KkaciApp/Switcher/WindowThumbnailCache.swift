@@ -67,11 +67,15 @@ final class WindowThumbnailCache {
 
     private func completeCapture(windowID: WindowID, image: CGImage?) {
         capturingWindowIDs.remove(windowID)
-        if liveWindowIDs.contains(windowID), let image {
-            thumbnails[windowID] = NSImage(
-                cgImage: image,
-                size: NSSize(width: image.width, height: image.height)
-            )
+        if liveWindowIDs.contains(windowID) {
+            if let image {
+                thumbnails[windowID] = NSImage(
+                    cgImage: image,
+                    size: NSSize(width: image.width, height: image.height)
+                )
+            } else {
+                thumbnails[windowID] = nil
+            }
             onThumbnailUpdated?(windowID)
         }
 

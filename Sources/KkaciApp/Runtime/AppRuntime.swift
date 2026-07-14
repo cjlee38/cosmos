@@ -8,12 +8,34 @@ final class AppRuntime {
     private let configRuntime: ConfigRuntime
     private let permissionController: AccessibilityPermissionController
     private let keyboardShortcutManager: KeyboardShortcutManager
-    private let thumbnailRefresher: WindowThumbnailRefresher
+    private let previewService: SwitcherPreviewService
     private var windowEventMonitor: WindowEventMonitor?
+
+    private lazy var actionController = WorkspaceActionController(
+        controller: controller,
+        previewService: previewService,
+        refreshSurfaces: { [weak self] in
+            self?.refreshSurfaces()
+        },
+        suppressNextFocusSync: { [weak self] windowID in
+            self?.suppressNextFocusSync(for: windowID)
+        }
+    )
+
+    private lazy var windowRuntimeEventHandler = WindowRuntimeEventHandler(
+        controller: controller,
+        previewService: previewService,
+        refreshSwitcherContent: { [weak self] in
+            self?.refreshSwitcherContent()
+        },
+        refreshSurfaces: { [weak self] in
+            self?.refreshSurfaces()
+        }
+    )
 
     private lazy var statusMenuController = StatusMenuController(
         controller: controller,
-        thumbnailRefresher: thumbnailRefresher,
+        actions: actionController,
         reloadConfigHandler: { [unowned self] in
             reloadConfig()
         },
@@ -33,13 +55,13 @@ final class AppRuntime {
         configRuntime: ConfigRuntime,
         permissionController: AccessibilityPermissionController,
         keyboardShortcutManager: KeyboardShortcutManager,
-        thumbnailRefresher: WindowThumbnailRefresher
+        previewService: SwitcherPreviewService
     ) {
         self.controller = controller
         self.configRuntime = configRuntime
         self.permissionController = permissionController
         self.keyboardShortcutManager = keyboardShortcutManager
-        self.thumbnailRefresher = thumbnailRefresher
+        self.previewService = previewService
     }
 
     func start() {
@@ -64,13 +86,17 @@ final class AppRuntime {
     }
 
     func shutdown() {
-        controller.restoreHiddenWindowsForShutdown()
+        do {
+            try controller.restoreHiddenWindowsForShutdown()
+        } catch {
+            log.error("Hidden-window shutdown restore failed: \(String(describing: error))")
+        }
     }
 
     private func startKeyboardShortcuts() {
         do {
             try keyboardShortcutManager.start()
-            try configRuntime.installInitialShortcuts(actions: statusMenuController)
+            try configRuntime.installInitialShortcuts(actions: actionController)
         } catch {
             log.error("Hotkey registration failed: \(String(describing: error))")
         }
@@ -78,9 +104,10 @@ final class AppRuntime {
 
     private func reloadConfig() {
         do {
-            try configRuntime.reload(actions: statusMenuController)
-            thumbnailRefresher.refreshAllThumbnails()
-            statusMenuController.prepareSwitcher()
+            try keyboardShortcutManager.start()
+            try configRuntime.reload(actions: actionController)
+            previewService.refreshAll()
+            actionController.refreshSwitcherContent()
             statusMenuController.refreshSurfaces()
             log.info("Config reloaded")
         } catch {
@@ -92,7 +119,8 @@ final class AppRuntime {
     private func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) {
         do {
             try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
-            thumbnailRefresher.refreshAllThumbnails()
+            previewService.refreshAll()
+            actionController.refreshSwitcherContent()
             statusMenuController.refreshSurfaces()
             log.info("Workspace \(workspace) uses monitor \(monitorSlot)")
         } catch {
@@ -108,13 +136,25 @@ final class AppRuntime {
         return isGranted
     }
 
+    private func refreshSurfaces() {
+        statusMenuController.refreshSurfaces()
+    }
+
+    private func refreshSwitcherContent() {
+        actionController.refreshSwitcherContent()
+    }
+
+    private func suppressNextFocusSync(for windowID: WindowID) {
+        windowRuntimeEventHandler.suppressNextFocusSync(for: windowID)
+    }
+
     private func startWindowEventMonitor() {
         guard windowEventMonitor == nil else {
             return
         }
 
         let monitor = WindowEventMonitor { [weak self] events in
-            self?.statusMenuController.applyExternalWindowEvents(events)
+            self?.windowRuntimeEventHandler.handle(events)
         }
         monitor.start()
         windowEventMonitor = monitor
@@ -123,12 +163,12 @@ final class AppRuntime {
     @discardableResult
     private func bootstrapWindowStateAfterPermission() -> Bool {
         do {
-            let bootstrapResult = try controller.bootstrapWindowState(defaultWorkspace: "1")
+            let hiddenRecords = try controller.bootstrapWindowState(defaultWorkspace: "1")
             startWindowEventMonitor()
-            thumbnailRefresher.refreshAllThumbnails()
-            statusMenuController.prepareSwitcher()
+            previewService.refreshAll()
+            actionController.refreshSwitcherContent()
             statusMenuController.refreshSurfaces()
-            let message = bootstrapMessage(for: bootstrapResult.hiddenRecords)
+            let message = bootstrapMessage(for: hiddenRecords)
             log.info(message)
             return true
         } catch {

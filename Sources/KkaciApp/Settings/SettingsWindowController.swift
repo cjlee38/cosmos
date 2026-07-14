@@ -214,17 +214,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func monitorOptions(from snapshot: SettingsSnapshot) -> [MonitorSlotSnapshot] {
-        if !snapshot.monitorSlots.isEmpty {
-            return snapshot.monitorSlots
-        }
-
-        let slots = Set(snapshot.monitorSlotsByWorkspace.values).sorted()
-        return slots.map { slot in
-            MonitorSlotSnapshot(
-                slot: slot,
-                display: DisplaySnapshot(id: UInt32(slot), frame: .zero, isMain: slot == 1)
-            )
-        }
+        snapshot.monitorSlots
     }
 
     private func monitorDescription(_ monitor: MonitorSlotSnapshot) -> String {

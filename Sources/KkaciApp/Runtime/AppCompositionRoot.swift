@@ -12,9 +12,9 @@ struct AppCompositionRoot {
             configStore: configStore,
             recordStore: recordStore
         )
-        let thumbnailRefresher = WindowThumbnailRefresher(
+        let previewService = SwitcherPreviewService(
             controller: controller,
-            thumbnailCache: WindowThumbnailCache(),
+            windowThumbnailCache: WindowThumbnailCache(),
             workspaceThumbnailCache: WorkspaceThumbnailCache(),
             applicationIconCache: ApplicationIconCache()
         )
@@ -31,7 +31,7 @@ struct AppCompositionRoot {
             ),
             permissionController: AccessibilityPermissionController(axClient: axClient),
             keyboardShortcutManager: keyboardShortcutManager,
-            thumbnailRefresher: thumbnailRefresher
+            previewService: previewService
         )
     }
 }

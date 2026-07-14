@@ -23,6 +23,28 @@ enum WorkspaceError: Error, Equatable, CustomStringConvertible {
     }
 }
 
+struct WorkspaceTransactionError: Error, CustomStringConvertible {
+    let applyError: Error
+    let rollbackError: Error
+
+    var description: String {
+        "Workspace operation failed: \(applyError); rollback failed: \(rollbackError)"
+    }
+}
+
+struct ShutdownRestoreError: Error, CustomStringConvertible {
+    let failedWindowIDs: [WindowID]
+    let recordFlushError: Error?
+
+    var description: String {
+        let windows = failedWindowIDs.map(String.init).joined(separator: ", ")
+        guard let recordFlushError else {
+            return "Failed to restore windows during shutdown: \(windows)"
+        }
+        return "Failed to restore windows during shutdown: \(windows); record flush failed: \(recordFlushError)"
+    }
+}
+
 public enum RestoreResult: Equatable {
     case restored
     case alreadyVisible
@@ -61,8 +83,6 @@ public struct WindowMoveResult: Equatable {
 }
 
 public struct WorkspaceSyncSummary {
-    public static let empty = WorkspaceSyncSummary(autoAssigned: [], removed: [])
-
     public let autoAssigned: [(WindowID, String)]
     public let removed: [WindowID]
 
@@ -76,14 +96,9 @@ public struct WorkspaceSyncSummary {
     }
 }
 
-public struct WindowListResult {
-    public let windows: [WindowSnapshot]
-    public let sync: WorkspaceSyncSummary
-
-    public init(windows: [WindowSnapshot], sync: WorkspaceSyncSummary) {
-        self.windows = windows
-        self.sync = sync
-    }
+struct WindowDiscoveryResult {
+    let windows: [WindowSnapshot]
+    let sync: WorkspaceSyncSummary
 }
 
 public struct ExternalWindowEventResult {
@@ -106,13 +121,5 @@ public struct RestoreAllHiddenWindowsResult: Equatable {
     public init(restored: [WindowID], skipped: [WindowID]) {
         self.restored = restored
         self.skipped = skipped
-    }
-}
-
-public struct WindowBootstrapResult {
-    public let hiddenRecords: HiddenWindowRecordStartupApplyResult
-
-    public init(hiddenRecords: HiddenWindowRecordStartupApplyResult) {
-        self.hiddenRecords = hiddenRecords
     }
 }

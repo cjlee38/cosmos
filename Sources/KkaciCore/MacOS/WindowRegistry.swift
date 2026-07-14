@@ -19,7 +19,7 @@ public final class WindowRegistry: WindowSystem {
         }
     }
 
-    public func handle(for id: WindowID) -> WindowHandle? {
+    func handle(for id: WindowID) -> WindowHandle? {
         handlesByID[id]
     }
 

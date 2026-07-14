@@ -4,7 +4,7 @@ import CoreGraphics
 import Foundation
 import PrivateApi
 
-public final class WindowHandle {
+final class WindowHandle {
     let id: WindowID
     let app: RunningAppInfo
     let runningApp: NSRunningApplication
@@ -48,7 +48,7 @@ public final class AXClient {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    public func enumerateWindows() -> [WindowHandle] {
+    func enumerateWindows() -> [WindowHandle] {
         NSWorkspace.shared.runningApplications
             .filter { app in
                 app.activationPolicy == .regular && app.processIdentifier != getpid()
@@ -56,7 +56,7 @@ public final class AXClient {
             .flatMap(enumerateWindows)
     }
 
-    public func focusedWindowID() -> WindowID? {
+    func focusedWindowID() -> WindowID? {
         guard let app = NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != getpid()
         else {
@@ -72,7 +72,7 @@ public final class AXClient {
         return focusedWindow.containingWindowID()
     }
 
-    public func snapshot(for handle: WindowHandle) -> WindowSnapshot {
+    func snapshot(for handle: WindowHandle) -> WindowSnapshot {
         WindowSnapshot(
             id: handle.id,
             app: handle.app,
@@ -82,7 +82,7 @@ public final class AXClient {
         )
     }
 
-    public func frame(for window: AXUIElement) -> WindowFrame? {
+    func frame(for window: AXUIElement) -> WindowFrame? {
         guard let origin = pointAttribute(kAXPositionAttribute, from: window),
               let size = sizeAttribute(kAXSizeAttribute, from: window)
         else {
@@ -91,7 +91,7 @@ public final class AXClient {
         return WindowFrame(origin: origin, size: size)
     }
 
-    public func setPosition(_ point: CGPoint, for window: AXUIElement) throws {
+    func setPosition(_ point: CGPoint, for window: AXUIElement) throws {
         var mutablePoint = point
         guard let value = AXValueCreate(.cgPoint, &mutablePoint) else {
             throw AXClientError.attributeUnavailable(kAXPositionAttribute)
@@ -103,7 +103,7 @@ public final class AXClient {
         }
     }
 
-    public func setFrame(_ frame: WindowFrame, for window: AXUIElement) throws {
+    func setFrame(_ frame: WindowFrame, for window: AXUIElement) throws {
         // AX has no atomic frame setter. Resize before and after the move so
         // cross-display transfers work whether the target display is smaller or larger.
         try setSize(frame.size, for: window)
@@ -123,7 +123,7 @@ public final class AXClient {
         }
     }
 
-    public func focus(_ handle: WindowHandle) {
+    func focus(_ handle: WindowHandle) {
         AXUIElementSetAttributeValue(handle.axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(handle.axWindow, kAXRaiseAction as CFString)
         handle.runningApp.activate(options: [.activateIgnoringOtherApps])

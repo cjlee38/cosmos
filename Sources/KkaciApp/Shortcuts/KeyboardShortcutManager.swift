@@ -52,17 +52,37 @@ final class KeyboardShortcutManager {
     private var activeHoldGroups: Set<String> = []
     private let repeatController = ShortcutRepeatController()
     private var repeatingShortcutID: UInt32?
-    private lazy var backend = CarbonKeyboardBackend { [weak self] event in
+    private let makeBackend: (@escaping (CarbonKeyboardEvent) -> Void) -> any CarbonKeyboardHandling
+    private let makeModifierFlagsMonitor: (@escaping (UInt32) -> Void) -> any ModifierFlagsMonitoring
+    private lazy var backend = makeBackend { [weak self] event in
         self?.handle(event)
     }
 
-    private lazy var modifierFlagsMonitor = ModifierFlagsMonitor { [weak self] modifiers in
+    private lazy var modifierFlagsMonitor = makeModifierFlagsMonitor { [weak self] modifiers in
         self?.handleModifierFlagsChanged(modifiers)
     }
 
+    init(
+        makeBackend: @escaping (@escaping (CarbonKeyboardEvent) -> Void) -> any CarbonKeyboardHandling = {
+            CarbonKeyboardBackend(onEvent: $0)
+        },
+        makeModifierFlagsMonitor: @escaping (@escaping (UInt32) -> Void) -> any ModifierFlagsMonitoring = {
+            ModifierFlagsMonitor(onModifiersChanged: $0)
+        }
+    ) {
+        self.makeBackend = makeBackend
+        self.makeModifierFlagsMonitor = makeModifierFlagsMonitor
+    }
+
     func start() throws {
-        try backend.start()
-        try modifierFlagsMonitor.start()
+        do {
+            try backend.start()
+            try modifierFlagsMonitor.start()
+        } catch {
+            modifierFlagsMonitor.stop()
+            backend.stop()
+            throw error
+        }
         log.debug("Carbon hotkeys and modifier flags monitor started")
     }
 

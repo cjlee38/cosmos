@@ -142,7 +142,7 @@ private extension REPL {
 
 private extension REPL {
     private func printWindows() {
-        let result = controller.listWindows()
+        let result = controller.discoverWindows()
         printSyncSummary(result.sync)
         let windows = result.windows
         guard !windows.isEmpty else {
@@ -274,7 +274,7 @@ private extension REPL {
     }
 
     private func printWorkspaces() {
-        let result = controller.listWindows()
+        let result = controller.discoverWindows()
         printSyncSummary(result.sync)
         let windows = result.windows
         let grouped = Dictionary(grouping: windows) { controller.membership(for: $0.id) ?? "-" }

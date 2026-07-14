@@ -98,6 +98,65 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         XCTAssertEqual(session.selectedItem, "3")
     }
 
+    func testReconcilePreservesSelectedItemAcrossReorderingAndAdditions() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3],
+            currentItem: 1,
+            direction: .forward
+        ))
+
+        XCTAssertTrue(session.reconcile(with: [4, 3, 2, 1]))
+
+        XCTAssertEqual(session.items, [4, 3, 2, 1])
+        XCTAssertEqual(session.selectedItem, 2)
+    }
+
+    func testReconcilePreservesSelectionWhenAnotherItemIsRemoved() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3, 4],
+            currentItem: 2,
+            direction: .forward
+        ))
+
+        XCTAssertTrue(session.reconcile(with: [1, 3, 4]))
+
+        XCTAssertEqual(session.selectedItem, 3)
+    }
+
+    func testReconcileSelectedRemovalKeepsItsOrdinalWhenPossible() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3, 4],
+            currentItem: 1,
+            direction: .forward
+        ))
+
+        XCTAssertTrue(session.reconcile(with: [1, 3, 4]))
+
+        XCTAssertEqual(session.selectedItem, 3)
+    }
+
+    func testReconcileSelectedLastItemUsesNewLastItem() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1, 2, 3],
+            currentItem: 2,
+            direction: .forward
+        ))
+
+        XCTAssertTrue(session.reconcile(with: [1, 2]))
+
+        XCTAssertEqual(session.selectedItem, 2)
+    }
+
+    func testReconcileEmptyItemsEndsTheSession() throws {
+        var session = try XCTUnwrap(SwitcherSession(
+            items: [1],
+            currentItem: nil,
+            direction: .forward
+        ))
+
+        XCTAssertFalse(session.reconcile(with: []))
+    }
+
     func testEmptyItemsDoNotCreateASession() {
         XCTAssertNil(SwitcherSession<Int>(
             items: [],
@@ -114,7 +173,7 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(200, to: "1")
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(300, to: "1")
@@ -126,7 +185,7 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
             .window(id: 100, title: "One"),
             .window(id: 300, title: "Three", isMinimized: true)
         ]
-        _ = controller.refreshWindows()
+        _ = controller.discoverWindows()
 
         XCTAssertEqual(controller.windows(in: "1").map(\.id), [200, 100])
     }
@@ -139,7 +198,7 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.listWindows()
+        _ = controller.discoverWindows()
         try controller.assignWindow(3, to: "1")
         try controller.assignWindow(2, to: "1")
         try controller.assignWindow(1, to: "1")
@@ -158,7 +217,7 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
             .window(id: 1, title: "One"),
             .window(id: 3, title: "Three")
         ]
-        _ = controller.refreshWindows()
+        _ = controller.discoverWindows()
 
         let secondOrder = controller.windows(in: "1").map(\.id)
         let secondSession = try XCTUnwrap(SwitcherSession(

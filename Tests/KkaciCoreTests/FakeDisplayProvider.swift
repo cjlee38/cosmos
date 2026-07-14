@@ -1,9 +1,10 @@
 import CoreGraphics
 @testable import KkaciCore
 
-struct FakeDisplayProvider: DisplayProviding {
+final class FakeDisplayProvider: DisplayProviding {
     let point: CGPoint
     var snapshots: [DisplaySnapshot]
+    private(set) var displayQueryCount = 0
 
     init(
         point: CGPoint = CGPoint(x: 999, y: 999),
@@ -20,6 +21,7 @@ struct FakeDisplayProvider: DisplayProviding {
     }
 
     func displays() -> [DisplaySnapshot] {
-        snapshots
+        displayQueryCount += 1
+        return snapshots
     }
 }

@@ -2,23 +2,24 @@ import Foundation
 
 final class WorkspaceConfigurationRuntime {
     private let configStore: (any KkaciConfigStore)?
-    private var config: KkaciConfig
+    private var bindings: [HotKeyBinding]
     private var isPersistenceEnabled: Bool
     let startupLoadError: Error?
 
     init(
         configStore: (any KkaciConfigStore)?,
-        isPersistenceEnabled: Bool
+        bindings: [HotKeyBinding],
+        isPersistenceEnabled: Bool,
+        startupLoadError: Error?
     ) {
         self.configStore = configStore
-        let startupConfig = Self.loadStartupConfig(from: configStore)
-        config = startupConfig.config
-        startupLoadError = startupConfig.loadError
-        self.isPersistenceEnabled = configStore != nil && isPersistenceEnabled && startupConfig.loadError == nil
+        self.bindings = bindings
+        self.isPersistenceEnabled = configStore != nil && isPersistenceEnabled
+        self.startupLoadError = startupLoadError
     }
 
-    var currentConfig: KkaciConfig {
-        config
+    func currentConfig(workspaces: WorkspaceConfig) -> KkaciConfig {
+        KkaciConfig(workspaces: workspaces, bindings: bindings)
     }
 
     func ensureWorkspace(
@@ -36,43 +37,113 @@ final class WorkspaceConfigurationRuntime {
         }
 
         let monitorSlot = monitorSlot ?? state.monitorSlot(for: state.activeWorkspace)
-        let nextConfig = config.addingWorkspace(named: workspace, monitorSlot: monitorSlot)
+        let nextConfig = currentConfig(workspaces: state.workspaceConfig)
+            .addingWorkspace(named: workspace, monitorSlot: monitorSlot)
         if isPersistenceEnabled {
             try configStore?.save(nextConfig)
         }
 
-        config = nextConfig
         state.addWorkspace(workspace, monitorSlot: monitorSlot)
         return workspace
     }
 
-    func apply(
+    private func apply(
         _ config: KkaciConfig,
-        enablePersistence: Bool,
+        enablePersistence: Bool?,
         state: inout WorkspaceState
     ) {
-        isPersistenceEnabled = configStore != nil && enablePersistence
+        if let enablePersistence {
+            isPersistenceEnabled = configStore != nil && enablePersistence
+        }
         state.applyWorkspaces(config.workspaces)
-        self.config = KkaciConfig(
-            workspaces: state.workspaceConfig,
-            bindings: config.bindings
+        bindings = config.bindings
+    }
+
+    func applyTransaction(
+        _ config: KkaciConfig,
+        enablePersistence: Bool?,
+        saveConfig: Bool,
+        state: inout WorkspaceState,
+        applyVisibility: (inout WorkspaceState) throws -> Void
+    ) throws {
+        let previousState = state
+        let previousConfiguration = snapshot
+
+        apply(config, enablePersistence: enablePersistence, state: &state)
+        do {
+            try applyVisibility(&state)
+            if saveConfig {
+                try saveIfEnabled(currentConfig(workspaces: state.workspaceConfig))
+            }
+        } catch let applyError {
+            restore(previousConfiguration)
+            state.restoreWorkspaceCatalog(from: previousState)
+            do {
+                try applyVisibility(&state)
+            } catch let rollbackError {
+                throw WorkspaceTransactionError(
+                    applyError: applyError,
+                    rollbackError: rollbackError
+                )
+            }
+            state = previousState
+            throw applyError
+        }
+    }
+
+    private func saveIfEnabled(_ config: KkaciConfig) throws {
+        if isPersistenceEnabled {
+            try configStore?.save(config)
+        }
+    }
+
+    func persist(_ config: KkaciConfig) throws {
+        try saveIfEnabled(config)
+    }
+
+    private var snapshot: WorkspaceConfigurationSnapshot {
+        WorkspaceConfigurationSnapshot(
+            bindings: bindings,
+            isPersistenceEnabled: isPersistenceEnabled
         )
     }
 
-    private static func loadStartupConfig(from configStore: (any KkaciConfigStore)?) -> StartupConfigLoad {
-        guard let configStore else {
-            return StartupConfigLoad(config: .default, loadError: nil)
+    private func restore(_ snapshot: WorkspaceConfigurationSnapshot) {
+        bindings = snapshot.bindings
+        isPersistenceEnabled = snapshot.isPersistenceEnabled
+    }
+
+    static func bootstrap(
+        from configStore: (any KkaciConfigStore)?,
+        isPersistenceEnabled: Bool
+    ) -> WorkspaceConfigurationBootstrap {
+        let startup: (config: KkaciConfig, loadError: Error?)
+        if let configStore {
+            do {
+                startup = try (configStore.load(), nil)
+            } catch {
+                startup = (.default, error)
+            }
+        } else {
+            startup = (.default, nil)
         }
 
-        do {
-            return try StartupConfigLoad(config: configStore.load(), loadError: nil)
-        } catch {
-            return StartupConfigLoad(config: .default, loadError: error)
-        }
+        let runtime = WorkspaceConfigurationRuntime(
+            configStore: configStore,
+            bindings: startup.config.bindings,
+            isPersistenceEnabled: isPersistenceEnabled && startup.loadError == nil,
+            startupLoadError: startup.loadError
+        )
+        return WorkspaceConfigurationBootstrap(config: startup.config, runtime: runtime)
     }
 }
 
-private struct StartupConfigLoad {
+struct WorkspaceConfigurationBootstrap {
     let config: KkaciConfig
-    let loadError: Error?
+    let runtime: WorkspaceConfigurationRuntime
+}
+
+private struct WorkspaceConfigurationSnapshot {
+    let bindings: [HotKeyBinding]
+    let isPersistenceEnabled: Bool
 }

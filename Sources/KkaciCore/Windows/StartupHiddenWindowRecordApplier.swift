@@ -3,23 +3,26 @@ import Foundation
 final class StartupHiddenWindowRecordApplier {
     private let windowSystem: any WindowSystem
     private let windowStore: WindowRuntimeStore
+    private let recordRepository: HiddenWindowRecordRepository
     private let configuration: WorkspaceConfigurationRuntime
     private let restorableFrameResolver: RestorableFrameResolver
 
     init(
         windowSystem: any WindowSystem,
         windowStore: WindowRuntimeStore,
+        recordRepository: HiddenWindowRecordRepository,
         configuration: WorkspaceConfigurationRuntime,
         restorableFrameResolver: RestorableFrameResolver
     ) {
         self.windowSystem = windowSystem
         self.windowStore = windowStore
+        self.recordRepository = recordRepository
         self.configuration = configuration
         self.restorableFrameResolver = restorableFrameResolver
     }
 
     func loadRecords() throws -> [HiddenWindowRecord] {
-        try windowStore.loadHiddenRecords()
+        try recordRepository.loadRecords()
     }
 
     func apply(
@@ -33,7 +36,7 @@ final class StartupHiddenWindowRecordApplier {
         for record in records {
             let action = HiddenWindowRecordPolicy.startupAction(
                 for: record,
-                liveWindow: windowStore.windowSnapshotByID[record.windowID]
+                liveWindow: windowStore.snapshot(for: record.windowID)
             )
             guard let targetWorkspace = action.workspace else {
                 ignored.append(record)
@@ -51,10 +54,10 @@ final class StartupHiddenWindowRecordApplier {
 
             state.assign(record.windowID, to: workspace)
             reassigned.append(HiddenWindowRecordAssignment(windowID: record.windowID, workspace: workspace))
-            windowStore.removeHiddenRecord(windowID: record.windowID, pid: record.pid)
+            recordRepository.removeRecord(windowID: record.windowID, pid: record.pid)
         }
 
-        windowStore.flushHiddenRecordWrites()
+        try recordRepository.flushPendingWrites()
         return HiddenWindowRecordStartupApplyResult(restored: restored, reassigned: reassigned, ignored: ignored)
     }
 }

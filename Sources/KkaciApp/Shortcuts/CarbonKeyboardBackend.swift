@@ -6,6 +6,12 @@ enum CarbonKeyboardEvent {
     case hotKeyReleased(UInt32)
 }
 
+protocol CarbonKeyboardHandling: AnyObject {
+    func start() throws
+    func replaceHotKeys(_ keystrokes: [Keystroke]) throws -> [String: UInt32]
+    func stop()
+}
+
 final class CarbonKeyboardBackend {
     private static let hotKeySignature = "kkac".utf16.reduce(0) { ($0 << 8) + OSType($1) }
 
@@ -177,6 +183,8 @@ final class CarbonKeyboardBackend {
         handler = nil
     }
 }
+
+extension CarbonKeyboardBackend: CarbonKeyboardHandling {}
 
 private struct CarbonHotKeyRegistration {
     let id: UInt32

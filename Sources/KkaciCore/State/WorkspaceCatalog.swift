@@ -62,20 +62,6 @@ struct WorkspaceCatalog {
         activeWorkspaceByMonitorSlot[monitorSlot(for: workspace)] = workspace
     }
 
-    var activationSnapshot: WorkspaceActivationSnapshot {
-        WorkspaceActivationSnapshot(
-            activeWorkspace: activeWorkspace,
-            activeWorkspaceByMonitorSlot: activeWorkspaceByMonitorSlot
-        )
-    }
-
-    mutating func restoreActivationSnapshot(_ snapshot: WorkspaceActivationSnapshot) {
-        activeWorkspace = snapshot.activeWorkspace
-        activeWorkspaceByMonitorSlot = snapshot.activeWorkspaceByMonitorSlot
-        pruneActiveWorkspaces()
-        seedActiveWorkspaces()
-    }
-
     var workspaceConfig: WorkspaceConfig {
         WorkspaceConfig(names: workspaceOrder, monitorSlotsByName: monitorSlotsByWorkspace)
     }
@@ -120,9 +106,4 @@ struct WorkspaceCatalog {
             }
         }
     }
-}
-
-struct WorkspaceActivationSnapshot {
-    let activeWorkspace: String
-    let activeWorkspaceByMonitorSlot: [MonitorSlot: String]
 }

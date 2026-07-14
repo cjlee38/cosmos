@@ -19,19 +19,16 @@ final class SwitcherOverlayScreenLocator {
             return NSScreen.main
         }
 
-        if let containing = screens.first(where: { cgBounds(for: $0)?.contains(point) == true }) {
-            return containing
+        let screensWithBounds = screens.compactMap { screen in
+            cgBounds(for: screen).map { (screen, $0) }
         }
-
-        return screens.min { lhs, rhs in
-            guard let lhsBounds = cgBounds(for: lhs),
-                  let rhsBounds = cgBounds(for: rhs)
-            else {
-                return false
-            }
-            return distanceSquared(from: lhsBounds.center, to: point)
-                < distanceSquared(from: rhsBounds.center, to: point)
-        } ?? NSScreen.main ?? screens[0]
+        guard let index = DisplayGeometry.index(
+            containingOrNearest: point,
+            among: screensWithBounds.map(\.1)
+        ) else {
+            return NSScreen.main ?? screens[0]
+        }
+        return screensWithBounds[index].0
     }
 
     private func fallbackVisibleFrame() -> NSRect {
@@ -45,17 +42,5 @@ final class SwitcherOverlayScreenLocator {
             return nil
         }
         return CGDisplayBounds(CGDirectDisplayID(number.uint32Value))
-    }
-
-    private func distanceSquared(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
-        return dx * dx + dy * dy
-    }
-}
-
-private extension CGRect {
-    var center: CGPoint {
-        CGPoint(x: midX, y: midY)
     }
 }
