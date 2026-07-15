@@ -10,8 +10,4 @@ final class AccessibilityPermissionController {
     func checkAtLaunch() -> Bool {
         axClient.ensureAccessibilityPermission(prompt: true)
     }
-
-    func requestFromUser() -> Bool {
-        axClient.ensureAccessibilityPermission(prompt: true)
-    }
 }

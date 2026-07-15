@@ -2,46 +2,43 @@ import AppKit
 import KkaciCore
 
 final class StatusMenuController: NSObject {
+    private struct WorkspaceMenuEntry {
+        let name: String
+        let monitorSlot: MonitorSlot
+    }
+
     private let log = Log(category: "menu")
 
     private let controller: WorkspaceController
     private let actions: WorkspaceActionController
     private let reloadConfigHandler: () -> Void
-    private let requestAccessibilityPermissionHandler: () -> Bool
     private let settingsSnapshotProvider: () -> SettingsSnapshot
     private let updateWorkspaceMonitorHandler: (String, MonitorSlot) -> Void
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
-    private let permissionItem = NSMenuItem()
+    private let workspaceItem = NSMenuItem()
     private lazy var debugStatusWindowController = DebugStatusWindowController(
         controller: controller
     )
     private var settingsWindowController: SettingsWindowController?
     private var workspaceItems: [String: NSMenuItem] = [:]
-    private var renderedWorkspaces: [String] = []
+    private var renderedWorkspaceEntries: [WorkspaceMenuEntry] = []
 
     init(
         controller: WorkspaceController,
         actions: WorkspaceActionController,
         reloadConfigHandler: @escaping () -> Void,
-        requestAccessibilityPermissionHandler: @escaping () -> Bool,
         settingsSnapshotProvider: @escaping () -> SettingsSnapshot,
         updateWorkspaceMonitorHandler: @escaping (String, MonitorSlot) -> Void
     ) {
         self.controller = controller
         self.actions = actions
         self.reloadConfigHandler = reloadConfigHandler
-        self.requestAccessibilityPermissionHandler = requestAccessibilityPermissionHandler
         self.settingsSnapshotProvider = settingsSnapshotProvider
         self.updateWorkspaceMonitorHandler = updateWorkspaceMonitorHandler
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         buildMenu()
-        refreshMenu()
-    }
-
-    func updatePermissionStatus(_ isGranted: Bool) {
-        permissionItem.title = isGranted ? "Accessibility: Granted" : "Accessibility: Missing"
         refreshMenu()
     }
 
@@ -71,54 +68,56 @@ final class StatusMenuController: NSObject {
     private func buildMenu() {
         menu.removeAllItems()
         workspaceItems.removeAll()
-        renderedWorkspaces = controller.workspaces
+        renderedWorkspaceEntries = workspaceMenuEntries()
 
         statusItem.button?.title = "kkaci 1"
         statusItem.menu = menu
 
-        permissionItem.isEnabled = false
-        menu.addItem(permissionItem)
-
-        let requestPermission = NSMenuItem(
-            title: "Request Accessibility Permission",
-            action: #selector(requestAccessibilityPermission),
-            keyEquivalent: ""
-        )
-        requestPermission.target = self
-        menu.addItem(requestPermission)
-        menu.addItem(.separator())
-
-        for workspace in controller.workspaces {
-            let item = NSMenuItem(
-                title: workspaceMenuTitle(for: workspace),
-                action: #selector(switchWorkspace(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.representedObject = workspace
-            workspaceItems[workspace] = item
-            menu.addItem(item)
-        }
-
-        menu.addItem(commandItem(title: "Add Workspace...", action: #selector(addWorkspace)))
-        menu.addItem(.separator())
-        menu.addItem(commandItem(title: "Next Workspace", action: #selector(nextWorkspace)))
-        menu.addItem(commandItem(title: "Previous Workspace", action: #selector(previousWorkspace)))
-        menu.addItem(.separator())
-        menu.addItem(commandItem(title: "Next Window", action: #selector(nextWindow)))
-        menu.addItem(commandItem(title: "Previous Window", action: #selector(previousWindow)))
-        menu.addItem(.separator())
-        let hotKeyHelp = NSMenuItem(title: "Hotkeys: configured in config.toml", action: nil, keyEquivalent: "")
-        hotKeyHelp.isEnabled = false
-        menu.addItem(hotKeyHelp)
+        buildWorkspaceItems()
         menu.addItem(commandItem(title: "Reload Config", action: #selector(reloadConfig)))
         menu.addItem(.separator())
         menu.addItem(commandItem(title: "Settings...", action: #selector(showSettings)))
-        menu.addItem(commandItem(title: "Show Debug Status", action: #selector(showDebugStatus)))
+        menu.addItem(diagnosticsItem())
         menu.addItem(.separator())
-        menu.addItem(commandItem(title: "Emergency Unhide All", action: #selector(emergencyUnhideAll)))
-        menu.addItem(.separator())
-        menu.addItem(commandItem(title: "Quit", action: #selector(quit)))
+        menu.addItem(commandItem(title: "Quit kkaci", action: #selector(quit)))
+    }
+
+    private func buildWorkspaceItems() {
+        workspaceItem.title = "Workspace: \(controller.activeWorkspace)"
+        workspaceItem.isEnabled = false
+        menu.addItem(workspaceItem)
+
+        let workspacesByMonitor = Dictionary(grouping: controller.workspaces, by: controller.monitorSlot)
+
+        for monitorSlot in workspacesByMonitor.keys.sorted() {
+            let monitorItem = NSMenuItem(title: "Monitor \(monitorSlot)", action: nil, keyEquivalent: "")
+            monitorItem.isEnabled = false
+            monitorItem.indentationLevel = 1
+            menu.addItem(monitorItem)
+
+            for workspace in workspacesByMonitor[monitorSlot, default: []] {
+                let item = NSMenuItem(
+                    title: workspace,
+                    action: #selector(switchWorkspace(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = workspace
+                item.indentationLevel = 2
+                workspaceItems[workspace] = item
+                menu.addItem(item)
+            }
+        }
+    }
+
+    private func diagnosticsItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Diagnostics", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.addItem(commandItem(title: "Show Debug Status", action: #selector(showDebugStatus)))
+        submenu.addItem(.separator())
+        submenu.addItem(commandItem(title: "Emergency Unhide All...", action: #selector(emergencyUnhideAll)))
+        item.submenu = submenu
+        return item
     }
 
     private func commandItem(title: String, action: Selector) -> NSMenuItem {
@@ -128,47 +127,30 @@ final class StatusMenuController: NSObject {
     }
 
     private func refreshMenu() {
-        if renderedWorkspaces != controller.workspaces {
+        if !hasSameWorkspaceMenuEntries(as: workspaceMenuEntries()) {
             buildMenu()
         }
 
         statusItem.button?.title = "kkaci \(controller.activeWorkspace)"
+        workspaceItem.title = "Workspace: \(controller.activeWorkspace)"
         for (workspace, item) in workspaceItems {
             item.state = controller.isWorkspaceActive(workspace) ? .on : .off
-            item.title = workspaceMenuTitle(for: workspace)
         }
     }
 
-    private func workspaceMenuTitle(for workspace: String) -> String {
-        "Workspace \(workspace) -> Monitor \(controller.monitorSlot(for: workspace))"
+    private func workspaceMenuEntries() -> [WorkspaceMenuEntry] {
+        controller.workspaces.map {
+            WorkspaceMenuEntry(name: $0, monitorSlot: controller.monitorSlot(for: $0))
+        }
     }
 
-    @objc private func addWorkspace() {
-        NSApp.activate(ignoringOtherApps: true)
-
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        input.placeholderString = "workspace name"
-
-        let alert = NSAlert()
-        alert.messageText = "Add Workspace"
-        alert.informativeText = "Enter a workspace name."
-        alert.accessoryView = input
-        alert.addButton(withTitle: "Add")
-        alert.addButton(withTitle: "Cancel")
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            return
+    private func hasSameWorkspaceMenuEntries(as entries: [WorkspaceMenuEntry]) -> Bool {
+        guard renderedWorkspaceEntries.count == entries.count else {
+            return false
         }
 
-        actions.createWorkspace(named: input.stringValue)
-    }
-
-    @objc private func requestAccessibilityPermission() {
-        let isGranted = requestAccessibilityPermissionHandler()
-        updatePermissionStatus(isGranted)
-        guard isGranted else {
-            log.warning("Grant permission in System Settings")
-            return
+        return zip(renderedWorkspaceEntries, entries).allSatisfy { current, updated in
+            current.name == updated.name && current.monitorSlot == updated.monitorSlot
         }
     }
 
@@ -178,22 +160,6 @@ final class StatusMenuController: NSObject {
             return
         }
         actions.switchWorkspace(named: workspace)
-    }
-
-    @objc private func nextWorkspace() {
-        actions.switchToNextWorkspace()
-    }
-
-    @objc private func previousWorkspace() {
-        actions.switchToPreviousWorkspace()
-    }
-
-    @objc private func nextWindow() {
-        actions.focusNextWindow()
-    }
-
-    @objc private func previousWindow() {
-        actions.focusPreviousWindow()
     }
 
     @objc private func showDebugStatus() {

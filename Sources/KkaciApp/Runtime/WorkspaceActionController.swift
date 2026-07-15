@@ -51,30 +51,6 @@ final class WorkspaceActionController {
         switcherCoordinator.handleContentChanged()
     }
 
-    func switchToNextWorkspace() {
-        cancelSwitcher()
-        perform("Switched to next workspace") {
-            _ = try controller.switchToNextWorkspace()
-        }
-    }
-
-    func switchToPreviousWorkspace() {
-        cancelSwitcher()
-        perform("Switched to previous workspace") {
-            _ = try controller.switchToPreviousWorkspace()
-        }
-    }
-
-    func focusNextWindow() {
-        cancelSwitcher()
-        showWindowFocusResult(controller.focusNextWindow())
-    }
-
-    func focusPreviousWindow() {
-        cancelSwitcher()
-        showWindowFocusResult(controller.focusPreviousWindow())
-    }
-
     func switchWorkspace(named workspace: String) {
         cancelSwitcher()
         perform("Switched to workspace \(workspace)") {
@@ -103,13 +79,6 @@ final class WorkspaceActionController {
         }
     }
 
-    func createWorkspace(named workspace: String) {
-        perform("Created workspace \(workspace)") {
-            _ = try controller.createWorkspace(named: workspace)
-        }
-        previewService.refreshWorkspaces(names: [workspace])
-    }
-
     func restoreAllHiddenWindows() {
         do {
             let result = try controller.restoreAllHiddenWindows()
@@ -132,16 +101,6 @@ final class WorkspaceActionController {
             log.info(successMessage)
         } catch {
             log.error("Workspace action failed: \(String(describing: error))")
-        }
-    }
-
-    private func showWindowFocusResult(_ result: WindowFocusResult) {
-        switch result {
-        case let .focused(id):
-            refreshSurfaces()
-            log.info("Focused \(id)")
-        case let .noWindowsInWorkspace(workspace):
-            log.info("No windows in workspace \(workspace)")
         }
     }
 }

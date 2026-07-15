@@ -39,9 +39,6 @@ final class AppRuntime {
         reloadConfigHandler: { [unowned self] in
             reloadConfig()
         },
-        requestAccessibilityPermissionHandler: { [unowned self] in
-            requestAccessibilityPermissionFromMenu()
-        },
         settingsSnapshotProvider: { [unowned self] in
             settingsSnapshot()
         },
@@ -71,7 +68,6 @@ final class AppRuntime {
         startKeyboardShortcuts()
 
         let hasPermission = permissionController.checkAtLaunch()
-        statusMenuController.updatePermissionStatus(hasPermission)
 
         guard hasPermission else {
             log.warning("Accessibility permission required")
@@ -126,14 +122,6 @@ final class AppRuntime {
         } catch {
             log.error("Workspace monitor update failed: \(String(describing: error))")
         }
-    }
-
-    private func requestAccessibilityPermissionFromMenu() -> Bool {
-        let isGranted = permissionController.requestFromUser()
-        if isGranted {
-            _ = bootstrapWindowStateAfterPermission()
-        }
-        return isGranted
     }
 
     private func refreshSurfaces() {
