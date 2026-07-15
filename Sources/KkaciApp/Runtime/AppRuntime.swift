@@ -7,9 +7,11 @@ final class AppRuntime {
     private let controller: WorkspaceController
     private let configRuntime: ConfigRuntime
     private let permissionController: AccessibilityPermissionController
+    private let generalSettingsService: GeneralSettingsService
     private let keyboardShortcutManager: KeyboardShortcutManager
     private let previewService: SwitcherPreviewService
     private var windowEventMonitor: WindowEventMonitor?
+    private var settingsWindowController: SettingsWindowController?
 
     private lazy var actionController = WorkspaceActionController(
         controller: controller,
@@ -39,11 +41,8 @@ final class AppRuntime {
         reloadConfigHandler: { [unowned self] in
             reloadConfig()
         },
-        settingsSnapshotProvider: { [unowned self] in
-            settingsSnapshot()
-        },
-        updateWorkspaceMonitorHandler: { [unowned self] workspace, monitorSlot in
-            updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+        showSettingsHandler: { [unowned self] in
+            showSettingsWindow()
         }
     )
 
@@ -51,12 +50,14 @@ final class AppRuntime {
         controller: WorkspaceController,
         configRuntime: ConfigRuntime,
         permissionController: AccessibilityPermissionController,
+        generalSettingsService: GeneralSettingsService,
         keyboardShortcutManager: KeyboardShortcutManager,
         previewService: SwitcherPreviewService
     ) {
         self.controller = controller
         self.configRuntime = configRuntime
         self.permissionController = permissionController
+        self.generalSettingsService = generalSettingsService
         self.keyboardShortcutManager = keyboardShortcutManager
         self.previewService = previewService
     }
@@ -104,7 +105,7 @@ final class AppRuntime {
             try configRuntime.reload(actions: actionController)
             previewService.refreshAll()
             actionController.refreshSwitcherContent()
-            statusMenuController.refreshSurfaces()
+            refreshSurfaces()
             log.info("Config reloaded")
         } catch {
             let errorMessage = String(describing: error)
@@ -112,20 +113,27 @@ final class AppRuntime {
         }
     }
 
-    private func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) {
-        do {
-            try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
-            previewService.refreshAll()
-            actionController.refreshSwitcherContent()
-            statusMenuController.refreshSurfaces()
-            log.info("Workspace \(workspace) uses monitor \(monitorSlot)")
-        } catch {
-            log.error("Workspace monitor update failed: \(String(describing: error))")
-        }
-    }
-
     private func refreshSurfaces() {
         statusMenuController.refreshSurfaces()
+        settingsWindowController?.refresh()
+    }
+
+    private func showSettingsWindow() {
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(
+                generalSettingsService: generalSettingsService,
+                configURLProvider: { [unowned self] in
+                    configRuntime.configURL
+                },
+                configStatusProvider: { [unowned self] in
+                    configRuntime.status
+                },
+                reloadConfigHandler: { [unowned self] in
+                    reloadConfig()
+                }
+            )
+        }
+        settingsWindowController?.show()
     }
 
     private func refreshSwitcherContent() {
@@ -171,19 +179,5 @@ final class AppRuntime {
         }
 
         return "Applied \(recordResult.reassigned.count) records, restored \(recordResult.restored.count)"
-    }
-
-    private func settingsSnapshot() -> SettingsSnapshot {
-        SettingsSnapshot(
-            config: controller.currentConfig,
-            configURL: configRuntime.configURL,
-            activeWorkspace: controller.activeWorkspace,
-            activeWorkspaces: controller.activeWorkspaces,
-            runtimeWorkspaces: controller.workspaces,
-            monitorSlots: controller.monitorSlots,
-            monitorSlotsByWorkspace: Dictionary(uniqueKeysWithValues: controller.workspaces.map { workspace in
-                (workspace, controller.monitorSlot(for: workspace))
-            })
-        )
     }
 }

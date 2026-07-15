@@ -12,15 +12,13 @@ final class StatusMenuController: NSObject {
     private let controller: WorkspaceController
     private let actions: WorkspaceActionController
     private let reloadConfigHandler: () -> Void
-    private let settingsSnapshotProvider: () -> SettingsSnapshot
-    private let updateWorkspaceMonitorHandler: (String, MonitorSlot) -> Void
+    private let showSettingsHandler: () -> Void
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
     private let workspaceItem = NSMenuItem()
     private lazy var debugStatusWindowController = DebugStatusWindowController(
         controller: controller
     )
-    private var settingsWindowController: SettingsWindowController?
     private var workspaceItems: [String: NSMenuItem] = [:]
     private var renderedWorkspaceEntries: [WorkspaceMenuEntry] = []
 
@@ -28,14 +26,12 @@ final class StatusMenuController: NSObject {
         controller: WorkspaceController,
         actions: WorkspaceActionController,
         reloadConfigHandler: @escaping () -> Void,
-        settingsSnapshotProvider: @escaping () -> SettingsSnapshot,
-        updateWorkspaceMonitorHandler: @escaping (String, MonitorSlot) -> Void
+        showSettingsHandler: @escaping () -> Void
     ) {
         self.controller = controller
         self.actions = actions
         self.reloadConfigHandler = reloadConfigHandler
-        self.settingsSnapshotProvider = settingsSnapshotProvider
-        self.updateWorkspaceMonitorHandler = updateWorkspaceMonitorHandler
+        self.showSettingsHandler = showSettingsHandler
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         buildMenu()
@@ -46,23 +42,9 @@ final class StatusMenuController: NSObject {
         debugStatusWindowController.show()
     }
 
-    func showSettingsWindow() {
-        if settingsWindowController == nil {
-            settingsWindowController = SettingsWindowController(
-                settingsSnapshotProvider: settingsSnapshotProvider,
-                reloadConfigHandler: reloadConfigHandler,
-                updateWorkspaceMonitorHandler: { [weak self] workspace, monitorSlot in
-                    self?.updateWorkspaceMonitorHandler(workspace, monitorSlot)
-                }
-            )
-        }
-        settingsWindowController?.show()
-    }
-
     func refreshSurfaces() {
         refreshMenu()
         debugStatusWindowController.refresh()
-        settingsWindowController?.refresh()
     }
 
     private func buildMenu() {
@@ -167,7 +149,7 @@ final class StatusMenuController: NSObject {
     }
 
     @objc private func showSettings() {
-        showSettingsWindow()
+        showSettingsHandler()
     }
 
     @objc private func emergencyUnhideAll() {

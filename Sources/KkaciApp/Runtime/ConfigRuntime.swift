@@ -19,8 +19,14 @@ protocol KeyboardShortcutInstalling: AnyObject {
 
 extension KeyboardShortcutManager: KeyboardShortcutInstalling {}
 
+enum ConfigRuntimeStatus: Equatable {
+    case valid
+    case invalid(String)
+}
+
 final class ConfigRuntime {
     let configURL: URL?
+    private(set) var status: ConfigRuntimeStatus
     private let configStore: any KkaciConfigStore
     private let controller: any RuntimeConfigControlling
     private let shortcutInstaller: any KeyboardShortcutInstalling
@@ -32,22 +38,39 @@ final class ConfigRuntime {
         configURL: URL?,
         controller: any RuntimeConfigControlling,
         keyboardShortcutManager: any KeyboardShortcutInstalling,
-        keyboardBindingMapper: KeyboardBindingMapper
+        keyboardBindingMapper: KeyboardBindingMapper,
+        initialLoadError: Error? = nil
     ) {
         self.configStore = configStore
         self.configURL = configURL
         self.controller = controller
         shortcutInstaller = keyboardShortcutManager
         self.keyboardBindingMapper = keyboardBindingMapper
+        status = initialLoadError.map { .invalid(String(describing: $0)) } ?? .valid
     }
 
     func installInitialShortcuts(actions: any KeyboardShortcutActionHandling) throws {
-        let registrations = try registrations(for: controller.currentConfig.bindings, actions: actions)
-        try shortcutInstaller.replaceShortcuts(registrations)
-        installedRegistrations = registrations
+        do {
+            let registrations = try registrations(for: controller.currentConfig.bindings, actions: actions)
+            try shortcutInstaller.replaceShortcuts(registrations)
+            installedRegistrations = registrations
+        } catch {
+            status = .invalid(String(describing: error))
+            throw error
+        }
     }
 
     func reload(actions: any KeyboardShortcutActionHandling) throws {
+        do {
+            try performReload(actions: actions)
+            status = .valid
+        } catch {
+            status = .invalid(String(describing: error))
+            throw error
+        }
+    }
+
+    private func performReload(actions: any KeyboardShortcutActionHandling) throws {
         let loadedConfig = try configStore.load()
         let previousRegistrations = installedRegistrations
         let loadedRegistrations = try registrations(for: loadedConfig.bindings, actions: actions)

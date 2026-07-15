@@ -27,9 +27,11 @@ struct AppCompositionRoot {
                 configURL: configStore.url,
                 controller: controller,
                 keyboardShortcutManager: keyboardShortcutManager,
-                keyboardBindingMapper: KeyboardBindingMapper()
+                keyboardBindingMapper: KeyboardBindingMapper(),
+                initialLoadError: controller.startupConfigLoadError
             ),
             permissionController: AccessibilityPermissionController(axClient: axClient),
+            generalSettingsService: GeneralSettingsService(axClient: axClient),
             keyboardShortcutManager: keyboardShortcutManager,
             previewService: previewService
         )

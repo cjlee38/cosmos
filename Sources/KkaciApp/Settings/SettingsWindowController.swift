@@ -1,38 +1,65 @@
 import AppKit
-import KkaciCore
 
-final class SettingsWindowController: NSWindowController {
-    private let settingsSnapshotProvider: () -> SettingsSnapshot
-    private let reloadConfigHandler: () -> Void
-    private let updateWorkspaceMonitorHandler: (String, MonitorSlot) -> Void
-    private let renderer = SettingsRenderer()
-    private let textView = NSTextView()
-    private let monitorSummaryLabel = NSTextField(labelWithString: "")
-    private let workspaceMonitorRows = NSStackView()
-    private var workspaceByPopupID: [ObjectIdentifier: String] = [:]
-    private var isRefreshingControls = false
+final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+    private let generalViewController: GeneralSettingsViewController
 
     init(
-        settingsSnapshotProvider: @escaping () -> SettingsSnapshot,
-        reloadConfigHandler: @escaping () -> Void,
-        updateWorkspaceMonitorHandler: @escaping (String, MonitorSlot) -> Void
+        generalSettingsService: GeneralSettingsService,
+        configURLProvider: @escaping () -> URL?,
+        configStatusProvider: @escaping () -> ConfigRuntimeStatus,
+        reloadConfigHandler: @escaping () -> Void
     ) {
-        self.settingsSnapshotProvider = settingsSnapshotProvider
-        self.reloadConfigHandler = reloadConfigHandler
-        self.updateWorkspaceMonitorHandler = updateWorkspaceMonitorHandler
+        let generalViewController = GeneralSettingsViewController(
+            service: generalSettingsService,
+            configURLProvider: configURLProvider,
+            configStatusProvider: configStatusProvider,
+            reloadConfigHandler: reloadConfigHandler
+        )
+        self.generalViewController = generalViewController
+
+        let sidebar = SettingsSidebarViewController()
+        let content = SettingsContentViewController()
+        let viewControllers: [SettingsSection: NSViewController] = [
+            .general: generalViewController,
+            .appearance: Self.emptyViewController(),
+            .workspaces: Self.emptyViewController()
+        ]
+        sidebar.onSelectionChanged = { section in
+            guard let viewController = viewControllers[section] else {
+                return
+            }
+            content.show(viewController)
+        }
+
+        let splitViewController = NSSplitViewController()
+        splitViewController.splitView.dividerStyle = .thin
+        let sidebarItem = NSSplitViewItem(viewController: sidebar)
+        sidebarItem.canCollapse = false
+        sidebarItem.minimumThickness = 180
+        sidebarItem.maximumThickness = 220
+        splitViewController.addSplitViewItem(sidebarItem)
+        splitViewController.addSplitViewItem(NSSplitViewItem(viewController: content))
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
-            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 790, height: 560),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "kkaci Settings"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
+        window.minSize = NSSize(width: 720, height: 520)
+        window.contentViewController = splitViewController
 
         super.init(window: window)
-        buildContent()
+        window.delegate = self
+        content.show(generalViewController)
+        sidebar.select(.general)
     }
 
     @available(*, unavailable)
@@ -43,236 +70,197 @@ final class SettingsWindowController: NSWindowController {
     func show() {
         refresh()
         showWindow(nil)
+        window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func buildContent() {
-        guard let contentView = window?.contentView else {
+    func refresh() {
+        generalViewController.refresh()
+    }
+
+    func windowDidBecomeKey(_: Notification) {
+        refresh()
+    }
+
+    private static func emptyViewController() -> NSViewController {
+        let viewController = NSViewController()
+        viewController.view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
+        return viewController
+    }
+}
+
+private final class SettingsContentViewController: NSViewController {
+    private var currentViewController: NSViewController?
+
+    override func loadView() {
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
+    }
+
+    func show(_ viewController: NSViewController) {
+        _ = view
+        guard currentViewController !== viewController else {
             return
         }
 
-        configureTextView()
-        let scrollView = makeScrollView()
-        let monitorSection = makeMonitorSection()
-        let buttons = makeButtonRow()
-        let root = NSStackView(views: [monitorSection, scrollView, buttons])
-        root.translatesAutoresizingMaskIntoConstraints = false
-        root.orientation = .vertical
-        root.alignment = .leading
-        root.spacing = 12
+        if let currentViewController {
+            currentViewController.view.removeFromSuperview()
+            currentViewController.removeFromParent()
+        }
 
-        contentView.addSubview(root)
-
+        addChild(viewController)
+        let contentView = viewController.view
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(contentView)
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
-            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
-            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+            contentView.topAnchor.constraint(equalTo: view.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        currentViewController = viewController
+    }
+}
 
-            monitorSection.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.widthAnchor.constraint(equalTo: root.widthAnchor),
-            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 240)
+enum SettingsControlFactory {
+    static func filledButtonRow(
+        actions: [(button: NSButton, action: Selector)],
+        target: AnyObject
+    ) -> NSStackView {
+        for (button, action) in actions {
+            button.target = target
+            button.action = action
+            button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        }
+
+        let buttons = actions.map(\.button)
+        let row = NSStackView(views: buttons)
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.distribution = .fillEqually
+        row.spacing = 8
+        return row
+    }
+
+    static func actionGroup(details: NSView, actions: NSView) -> NSView {
+        let detailsContainer = padded(details)
+        let divider = separator()
+        let actionsContainer = padded(actions, vertical: 6, horizontal: 6)
+        let content = NSStackView(views: [detailsContainer, divider, actionsContainer])
+        content.orientation = .vertical
+        content.alignment = .leading
+        content.spacing = 0
+        for arrangedView in [detailsContainer, divider, actionsContainer] {
+            arrangedView.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+        }
+        return groupBox(content: content)
+    }
+
+    static func groupBox(content: NSView) -> NSView {
+        SettingsGroupView(content: content)
+    }
+
+    static func padded(
+        _ content: NSView,
+        vertical: CGFloat = 12,
+        horizontal: CGFloat = 14
+    ) -> NSView {
+        let container = NSView()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: container.topAnchor, constant: vertical),
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: horizontal),
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -horizontal),
+            content.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -vertical)
+        ])
+        return container
+    }
+
+    static func separator() -> NSView {
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        separator.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        return separator
+    }
+}
+
+private final class SettingsGroupView: NSView {
+    init(content: NSView) {
+        super.init(frame: .zero)
+        wantsLayer = true
+
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: topAnchor),
+            content.leadingAnchor.constraint(equalTo: leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
     }
 
-    private func configureTextView() {
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        textView.textColor = .labelColor
-        textView.backgroundColor = .textBackgroundColor
-        textView.drawsBackground = true
-        textView.textContainerInset = NSSize(width: 10, height: 10)
-        textView.frame = NSRect(x: 0, y: 0, width: 680, height: 420)
-        textView.minSize = NSSize(width: 0, height: 0)
-        textView.maxSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.containerSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        textView.textContainer?.widthTracksTextView = false
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
-    private func makeScrollView() -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = false
-        scrollView.drawsBackground = true
-        scrollView.backgroundColor = .textBackgroundColor
-        scrollView.documentView = textView
-        return scrollView
+    override var wantsUpdateLayer: Bool {
+        true
     }
 
-    private func makeMonitorSection() -> NSStackView {
-        let monitorTitle = label("Workspace Monitors")
-        monitorTitle.font = .boldSystemFont(ofSize: 13)
-        monitorSummaryLabel.lineBreakMode = .byTruncatingTail
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.borderWidth = 1
+        layer?.cornerRadius = 8
+    }
+}
 
-        workspaceMonitorRows.translatesAutoresizingMaskIntoConstraints = false
-        workspaceMonitorRows.orientation = .vertical
-        workspaceMonitorRows.alignment = .leading
-        workspaceMonitorRows.spacing = 6
+final class SettingsFilledButton: NSButton {
+    private var isPressed = false
 
-        let monitorSection = NSStackView(views: [monitorTitle, monitorSummaryLabel, workspaceMonitorRows])
-        monitorSection.translatesAutoresizingMaskIntoConstraints = false
-        monitorSection.orientation = .vertical
-        monitorSection.alignment = .leading
-        monitorSection.spacing = 8
-        return monitorSection
+    init(title: String) {
+        super.init(frame: .zero)
+        self.title = title
+        isBordered = false
+        wantsLayer = true
+        font = .systemFont(ofSize: 14, weight: .semibold)
+        contentTintColor = .labelColor
+        setButtonType(.momentaryPushIn)
     }
 
-    private func makeButtonRow() -> NSStackView {
-        let openButton = button("Open Config", action: #selector(openConfig))
-        let revealButton = button("Reveal in Finder", action: #selector(revealConfig))
-        let reloadButton = button("Reload Config", action: #selector(reloadConfig))
-        let refreshButton = button("Refresh", action: #selector(refreshButtonClicked))
-        let closeButton = button("Close", action: #selector(closeButtonClicked))
-
-        let buttons = NSStackView(views: [openButton, revealButton, reloadButton, refreshButton, closeButton])
-        buttons.translatesAutoresizingMaskIntoConstraints = false
-        buttons.orientation = .horizontal
-        buttons.alignment = .centerY
-        buttons.spacing = 8
-        return buttons
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
-    func refresh() {
-        let snapshot = settingsSnapshotProvider()
-        textView.string = renderer.render(snapshot)
-        rebuildMonitorControls(snapshot)
+    override var wantsUpdateLayer: Bool {
+        true
     }
 
-    private func button(_ title: String, action: Selector) -> NSButton {
-        let button = NSButton(title: title, target: self, action: action)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        return button
+    override func updateLayer() {
+        layer?.backgroundColor = backgroundColor.cgColor
+        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.borderWidth = 1
+        layer?.cornerRadius = 7
+        layer?.opacity = isEnabled ? 1 : 0.45
     }
 
-    private func label(_ title: String) -> NSTextField {
-        let label = NSTextField(labelWithString: title)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
+    override func mouseDown(with event: NSEvent) {
+        isPressed = true
+        updateLayer()
+        super.mouseDown(with: event)
+        isPressed = false
+        updateLayer()
     }
 
-    private func rebuildMonitorControls(_ snapshot: SettingsSnapshot) {
-        isRefreshingControls = true
-        defer { isRefreshingControls = false }
-
-        workspaceByPopupID.removeAll()
-        for view in workspaceMonitorRows.arrangedSubviews {
-            workspaceMonitorRows.removeArrangedSubview(view)
-            view.removeFromSuperview()
+    private var backgroundColor: NSColor {
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        if isDark {
+            return NSColor(white: isPressed ? 0.27 : 0.20, alpha: 1)
         }
-
-        let monitors = monitorOptions(from: snapshot)
-        monitorSummaryLabel.stringValue = monitors.map(monitorDescription).joined(separator: "   ")
-
-        for workspace in snapshot.runtimeWorkspaces {
-            let row = NSStackView()
-            row.translatesAutoresizingMaskIntoConstraints = false
-            row.orientation = .horizontal
-            row.alignment = .centerY
-            row.spacing = 8
-
-            let workspaceLabel = label(workspace)
-            workspaceLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-            workspaceLabel.widthAnchor.constraint(equalToConstant: 80).isActive = true
-
-            let popup = NSPopUpButton()
-            popup.translatesAutoresizingMaskIntoConstraints = false
-            popup.target = self
-            popup.action = #selector(workspaceMonitorChanged(_:))
-            popup.widthAnchor.constraint(equalToConstant: 260).isActive = true
-            popup.removeAllItems()
-
-            for monitor in monitors {
-                let item = NSMenuItem(title: monitorMenuTitle(monitor), action: nil, keyEquivalent: "")
-                item.representedObject = monitor.slot
-                popup.menu?.addItem(item)
-            }
-
-            let selectedSlot = snapshot.monitorSlotsByWorkspace[workspace]
-                ?? snapshot.config.workspaces.monitorSlot(for: workspace)
-            if let item = popup.itemArray.first(where: { ($0.representedObject as? MonitorSlot) == selectedSlot }) {
-                popup.select(item)
-            }
-
-            workspaceByPopupID[ObjectIdentifier(popup)] = workspace
-            row.addArrangedSubview(workspaceLabel)
-            row.addArrangedSubview(popup)
-            workspaceMonitorRows.addArrangedSubview(row)
-        }
-    }
-
-    private func monitorOptions(from snapshot: SettingsSnapshot) -> [MonitorSlotSnapshot] {
-        snapshot.monitorSlots
-    }
-
-    private func monitorDescription(_ monitor: MonitorSlotSnapshot) -> String {
-        let main = monitor.display.isMain ? " main" : ""
-        return "Monitor \(monitor.slot)\(main): usable \(format(monitor.display.visibleFrame.size))"
-    }
-
-    private func monitorMenuTitle(_ monitor: MonitorSlotSnapshot) -> String {
-        let main = monitor.display.isMain ? " main" : ""
-        return "Monitor \(monitor.slot)\(main) - usable \(format(monitor.display.visibleFrame.size))"
-    }
-
-    private func format(_ size: CGSize) -> String {
-        "\(format(size.width))x\(format(size.height))"
-    }
-
-    private func format(_ value: CGFloat) -> String {
-        String(format: "%.0f", Double(value))
-    }
-
-    @objc private func openConfig() {
-        guard let url = settingsSnapshotProvider().configURL else {
-            NSSound.beep()
-            return
-        }
-        NSWorkspace.shared.open(url)
-    }
-
-    @objc private func revealConfig() {
-        guard let url = settingsSnapshotProvider().configURL else {
-            NSSound.beep()
-            return
-        }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    @objc private func reloadConfig() {
-        reloadConfigHandler()
-        refresh()
-    }
-
-    @objc private func refreshButtonClicked() {
-        refresh()
-    }
-
-    @objc private func workspaceMonitorChanged(_ sender: NSPopUpButton) {
-        guard !isRefreshingControls,
-              let workspace = workspaceByPopupID[ObjectIdentifier(sender)],
-              let monitorSlot = sender.selectedItem?.representedObject as? MonitorSlot
-        else {
-            return
-        }
-
-        updateWorkspaceMonitorHandler(workspace, monitorSlot)
-        refresh()
-    }
-
-    @objc private func closeButtonClicked() {
-        close()
+        return NSColor(white: isPressed ? 0.78 : 0.88, alpha: 1)
     }
 }

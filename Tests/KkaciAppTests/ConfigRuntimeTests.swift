@@ -19,6 +19,9 @@ final class ConfigRuntimeTests: XCTestCase {
         }
         XCTAssertTrue(controller.appliedConfigs.isEmpty)
         XCTAssertEqual(controller.currentConfig, previousConfig)
+        guard case .invalid = runtime.status else {
+            return XCTFail("Expected invalid config status")
+        }
     }
 
     func testReloadRestoresPreviousShortcutsWhenCoreApplyFails() throws {
@@ -82,6 +85,7 @@ final class ConfigRuntimeTests: XCTestCase {
         XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+2"]])
         XCTAssertEqual(controller.appliedConfigs, [loadedConfig])
         XCTAssertEqual(controller.currentConfig, loadedConfig)
+        XCTAssertEqual(runtime.status, .valid)
     }
 
     func testReloadCanReplaceInvalidPreviouslyLoadedBindings() throws {
@@ -99,6 +103,9 @@ final class ConfigRuntimeTests: XCTestCase {
         )
 
         XCTAssertThrowsError(try runtime.installInitialShortcuts(actions: NoopShortcutActions()))
+        guard case .invalid = runtime.status else {
+            return XCTFail("Expected invalid config status")
+        }
 
         try runtime.reload(actions: NoopShortcutActions())
 
@@ -123,6 +130,23 @@ final class ConfigRuntimeTests: XCTestCase {
         XCTAssertEqual(controller.monitorUpdates.first?.workspace, "2")
         XCTAssertEqual(controller.monitorUpdates.first?.monitorSlot, 3)
         XCTAssertTrue(store.savedConfigs.isEmpty)
+    }
+
+    func testInitialLoadErrorStartsWithInvalidStatus() {
+        let runtime = ConfigRuntime(
+            configStore: ConfigStoreSpy(loadedConfig: .default),
+            configURL: nil,
+            controller: RuntimeConfigControllerSpy(currentConfig: .default),
+            keyboardShortcutManager: ShortcutInstallerSpy(),
+            keyboardBindingMapper: KeyboardBindingMapper(),
+            initialLoadError: TestError.configApply
+        )
+
+        XCTAssertNoThrow(try runtime.installInitialShortcuts(actions: NoopShortcutActions()))
+        guard case let .invalid(message) = runtime.status else {
+            return XCTFail("Expected invalid config status")
+        }
+        XCTAssertTrue(message.contains("configApply"))
     }
 
     private func makeRuntime(
