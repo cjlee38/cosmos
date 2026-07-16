@@ -181,10 +181,16 @@ private extension REPL {
         let workspace = parts[1]
         if parts.count == 3 {
             let id = try parseWindowID(parts[2])
-            try controller.assignWindow(id, to: workspace)
+            guard try controller.assignWindow(id, to: workspace) else {
+                print("workspace not found; no changes")
+                return
+            }
             print("assigned \(id) -> \(workspace)")
         } else {
-            let id = try controller.assignFocused(to: workspace)
+            guard let id = try controller.assignFocused(to: workspace) else {
+                print("workspace not found; no changes")
+                return
+            }
             print("assigned focused \(id) -> \(workspace)")
         }
     }
@@ -194,7 +200,10 @@ private extension REPL {
             print("usage: capture <workspace>")
             return
         }
-        let sync = try controller.captureVisibleWindows(into: parts[1])
+        guard let sync = try controller.captureVisibleWindows(into: parts[1]) else {
+            print("workspace not found; no changes")
+            return
+        }
         printSyncSummary(sync)
         print("captured visible windows -> \(parts[1])")
     }
@@ -204,7 +213,10 @@ private extension REPL {
             print("usage: switch <workspace>")
             return
         }
-        let sync = try controller.switchWorkspace(to: parts[1])
+        guard let sync = try controller.switchWorkspace(to: parts[1]) else {
+            print("workspace not found; no changes")
+            return
+        }
         printSyncSummary(sync)
         print("active workspace: \(parts[1])")
     }

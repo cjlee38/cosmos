@@ -60,7 +60,7 @@ final class WorkspaceActionController {
     func switchWorkspace(named workspace: String) {
         cancelSwitcher()
         perform("Switched to workspace \(workspace)") {
-            _ = try controller.switchWorkspace(to: workspace)
+            try controller.switchWorkspace(to: workspace) != nil
         }
     }
 
@@ -68,7 +68,9 @@ final class WorkspaceActionController {
         cancelSwitcher()
         do {
             let previousWorkspace = controller.focusedWindowID().flatMap(controller.membership(for:))
-            let result = try controller.moveFocusedWindow(to: workspace)
+            guard let result = try controller.moveFocusedWindow(to: workspace) else {
+                return
+            }
             if result.workspace != controller.activeWorkspace {
                 suppressNextFocusSync(result.windowID)
             }
@@ -98,10 +100,12 @@ final class WorkspaceActionController {
 
     private func perform(
         _ successMessage: String,
-        action: () throws -> Void
+        action: () throws -> Bool
     ) {
         do {
-            try action()
+            guard try action() else {
+                return
+            }
             switcherCoordinator.handleContentChanged()
             refreshSurfaces()
             log.info(successMessage)

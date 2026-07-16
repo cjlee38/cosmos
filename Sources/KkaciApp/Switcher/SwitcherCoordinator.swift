@@ -158,7 +158,7 @@ private extension SwitcherCoordinator {
 
         log.trace("commit workspace=\(name)")
         do {
-            _ = try controller.switchWorkspace(to: name)
+            guard try controller.switchWorkspace(to: name) != nil else { return }
             handleContentChanged()
             log.info("Switched to workspace \(name)")
             refreshStatus()

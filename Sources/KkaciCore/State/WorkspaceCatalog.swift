@@ -24,31 +24,9 @@ struct WorkspaceCatalog {
         workspaceOrder.contains(workspace)
     }
 
-    mutating func add(_ workspace: String, monitorSlot: MonitorSlot = 1) {
-        if !workspaceOrder.contains(workspace) {
-            workspaceOrder.append(workspace)
-            monitorSlotsByWorkspace[workspace] = max(1, monitorSlot)
-            seedActiveWorkspaces()
-        }
-    }
-
-    mutating func apply(_ workspaces: WorkspaceConfig, keeping referencedWorkspaces: Set<String>) {
-        var nextOrder = workspaces.names
-        for workspace in workspaceOrder where referencedWorkspaces.contains(workspace) {
-            if !nextOrder.contains(workspace) {
-                nextOrder.append(workspace)
-            }
-        }
-
-        let previousMonitorSlotsByWorkspace = monitorSlotsByWorkspace
-        workspaceOrder = nextOrder
-        monitorSlotsByWorkspace = nextOrder.reduce(into: [:]) { result, workspace in
-            if workspaces.names.contains(workspace) {
-                result[workspace] = workspaces.monitorSlot(for: workspace)
-            } else {
-                result[workspace] = previousMonitorSlotsByWorkspace[workspace] ?? 1
-            }
-        }
+    mutating func apply(_ workspaces: WorkspaceConfig) {
+        workspaceOrder = workspaces.names
+        monitorSlotsByWorkspace = workspaces.monitorSlotsByName
         if !workspaceOrder.contains(activeWorkspace) {
             activeWorkspace = workspaceOrder[0]
         }

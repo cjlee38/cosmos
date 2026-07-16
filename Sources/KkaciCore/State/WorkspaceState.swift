@@ -89,19 +89,22 @@ struct WorkspaceState {
         catalog.contains(workspace)
     }
 
-    mutating func addWorkspace(_ workspace: String, monitorSlot: MonitorSlot = 1) {
-        catalog.add(workspace, monitorSlot: monitorSlot)
+    func findWorkspace(_ workspace: String) -> String? {
+        let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
+        return catalog.contains(workspace) ? workspace : nil
     }
 
     mutating func applyWorkspaces(_ workspaces: WorkspaceConfig) {
-        let referencedWorkspaces = memberships.referencedWorkspaces
-            .union(activeWorkspaces)
-            .union([activeWorkspace])
-        catalog.apply(workspaces, keeping: referencedWorkspaces)
+        catalog.apply(workspaces)
+        memberships.reassignInvalidWorkspaces(
+            validWorkspaces: Set(workspaces.names),
+            to: activeWorkspace
+        )
     }
 
-    mutating func restoreWorkspaceCatalog(from snapshot: WorkspaceState) {
+    mutating func restoreWorkspaceConfiguration(from snapshot: WorkspaceState) {
         catalog = snapshot.catalog
+        memberships = snapshot.memberships
     }
 
     mutating func restoreLogicalState(from snapshot: WorkspaceState) {

@@ -73,18 +73,15 @@ public final class WorkspaceController {
             windowSystem: windowSystem,
             windowStore: windowStore,
             recordRepository: recordRepository,
-            configuration: configuration,
             restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider)
         )
         navigationCoordinator = WorkspaceNavigationCoordinator(
             windowSystem: windowSystem,
             windowStore: windowStore,
-            configuration: configuration,
             visibilityCoordinator: visibilityCoordinator
         )
         assignmentCoordinator = WindowAssignmentCoordinator(
             windowSystem: windowSystem,
-            configuration: configuration,
             visibilityCoordinator: visibilityCoordinator,
             monitorSlotResolver: monitorSlotResolver
         )
@@ -180,17 +177,28 @@ public extension WorkspaceController {
         windowStore.monitorSlots
     }
 
-    func assignFocused(to workspace: String) throws -> WindowID {
+    func assignFocused(to workspace: String) throws -> WindowID? {
+        guard let workspace = state.findWorkspace(workspace) else {
+            return nil
+        }
         _ = syncWindows()
         return try assignmentCoordinator.assignFocused(to: workspace, state: &state)
     }
 
-    func assignWindow(_ id: WindowID, to workspace: String) throws {
+    @discardableResult
+    func assignWindow(_ id: WindowID, to workspace: String) throws -> Bool {
+        guard let workspace = state.findWorkspace(workspace) else {
+            return false
+        }
         _ = syncWindows()
         try assignmentCoordinator.assignWindow(id, to: workspace, state: &state)
+        return true
     }
 
-    internal func captureVisibleWindows(into workspace: String) throws -> WorkspaceSyncSummary {
+    internal func captureVisibleWindows(into workspace: String) throws -> WorkspaceSyncSummary? {
+        guard let workspace = state.findWorkspace(workspace) else {
+            return nil
+        }
         let result = syncWindows()
         try assignmentCoordinator.captureVisibleWindows(result.windows, into: workspace, state: &state)
         return result.sync
@@ -219,7 +227,14 @@ public extension WorkspaceController {
         try hiddenWindowOperator.restoreForShutdown(state: state)
     }
 
-    func switchWorkspace(to workspace: String) throws -> WorkspaceSyncSummary {
+    func switchWorkspace(to workspace: String) throws -> WorkspaceSyncSummary? {
+        guard let workspace = state.findWorkspace(workspace) else {
+            return nil
+        }
+        return try switchExistingWorkspace(to: workspace)
+    }
+
+    private func switchExistingWorkspace(to workspace: String) throws -> WorkspaceSyncSummary {
         let sync = syncWindows().sync
         try navigationCoordinator.switchWorkspace(
             to: workspace,
@@ -231,13 +246,13 @@ public extension WorkspaceController {
 
     func switchToNextWorkspace() throws -> WorkspaceSwitchResult {
         let workspace = state.nextWorkspace(after: activeWorkspace)
-        let sync = try switchWorkspace(to: workspace)
+        let sync = try switchExistingWorkspace(to: workspace)
         return WorkspaceSwitchResult(workspace: workspace, sync: sync)
     }
 
     func switchToPreviousWorkspace() throws -> WorkspaceSwitchResult {
         let workspace = state.previousWorkspace(before: activeWorkspace)
-        let sync = try switchWorkspace(to: workspace)
+        let sync = try switchExistingWorkspace(to: workspace)
         return WorkspaceSwitchResult(workspace: workspace, sync: sync)
     }
 
@@ -259,21 +274,15 @@ public extension WorkspaceController {
         )
     }
 
-    func moveFocusedWindow(to workspace: String) throws -> WindowMoveResult {
+    func moveFocusedWindow(to workspace: String) throws -> WindowMoveResult? {
+        guard let workspace = state.findWorkspace(workspace) else {
+            return nil
+        }
         _ = syncWindows()
         return try assignmentCoordinator.moveFocusedWindow(
             to: workspace,
             frontToBackWindowIDs: windows(in: activeWorkspace).map(\.id),
             state: &state
-        )
-    }
-
-    @discardableResult
-    func createWorkspace(named workspace: String) throws -> String {
-        try configuration.ensureWorkspace(
-            workspace,
-            state: &state,
-            monitorSlot: currentMonitorSlot()
         )
     }
 
@@ -362,7 +371,7 @@ private extension WorkspaceController {
 
     private func captureInitialVisibleWindows(defaultWorkspace workspace: String) throws -> WorkspaceSyncSummary {
         let result = syncWindows()
-        try assignmentCoordinator.captureUnassignedVisibleWindowsByMonitor(
+        assignmentCoordinator.captureUnassignedVisibleWindowsByMonitor(
             result.windows,
             defaultWorkspace: workspace,
             state: &state
@@ -370,14 +379,6 @@ private extension WorkspaceController {
             monitorSlotResolver.slot(containing: frame)
         }
         return result.sync
-    }
-
-    private func currentMonitorSlot() -> MonitorSlot {
-        if let focusedWindowID = windowSystem.focusedWindowID(),
-           let frame = windowSystem.frame(for: focusedWindowID) {
-            return monitorSlotResolver.slot(containing: frame)
-        }
-        return state.monitorSlot(for: activeWorkspace)
     }
 
     private func targetFramesForConfiguredMonitors(state: WorkspaceState) -> [WindowID: WindowFrame] {

@@ -3,18 +3,15 @@ import Foundation
 final class WorkspaceNavigationCoordinator {
     private let windowSystem: any WindowSystem
     private let windowStore: WindowRuntimeStore
-    private let configuration: WorkspaceConfigurationRuntime
     private let visibilityCoordinator: WorkspaceVisibilityCoordinator
 
     init(
         windowSystem: any WindowSystem,
         windowStore: WindowRuntimeStore,
-        configuration: WorkspaceConfigurationRuntime,
         visibilityCoordinator: WorkspaceVisibilityCoordinator
     ) {
         self.windowSystem = windowSystem
         self.windowStore = windowStore
-        self.configuration = configuration
         self.visibilityCoordinator = visibilityCoordinator
     }
 
@@ -24,9 +21,6 @@ final class WorkspaceNavigationCoordinator {
         state: inout WorkspaceState
     ) throws {
         let previousState = state
-        let previousConfig = configuration.currentConfig(workspaces: state.workspaceConfig)
-        let createdWorkspace = !state.containsWorkspace(workspace.trimmingCharacters(in: .whitespacesAndNewlines))
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let previouslyActiveWorkspaces = state.activeWorkspaces
         let oldFocusedWindow = focusedWindowInActiveWorkspace(state: state)
             ?? firstWindow(in: state.activeWorkspace, from: frontToBackWindowIDs, state: state)
@@ -49,7 +43,6 @@ final class WorkspaceNavigationCoordinator {
             try rollback(
                 error,
                 previousState: previousState,
-                previousConfig: createdWorkspace ? previousConfig : nil,
                 focusedWindowID: oldFocusedWindow,
                 state: &state
             )
@@ -100,7 +93,6 @@ final class WorkspaceNavigationCoordinator {
             try rollback(
                 error,
                 previousState: previousState,
-                previousConfig: nil,
                 focusedWindowID: rollbackFocus,
                 state: &state
             )
@@ -162,18 +154,10 @@ final class WorkspaceNavigationCoordinator {
     private func rollback(
         _ applyError: Error,
         previousState: WorkspaceState,
-        previousConfig: KkaciConfig?,
         focusedWindowID: WindowID?,
         state: inout WorkspaceState
     ) throws {
         var rollbackError: Error?
-        if let previousConfig {
-            do {
-                try configuration.persist(previousConfig)
-            } catch {
-                rollbackError = error
-            }
-        }
         do {
             try visibilityCoordinator.rollback(
                 to: previousState,

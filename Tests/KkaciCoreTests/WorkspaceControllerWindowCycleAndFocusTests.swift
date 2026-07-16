@@ -259,7 +259,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.activeWorkspace, "a")
     }
 
-    func testMoveFocusedWindowToMissingWorkspaceCreatesAndPersistsIt() throws {
+    func testMoveFocusedWindowToMissingWorkspaceIsNoOp() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
@@ -272,14 +272,11 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
 
         let result = try controller.moveFocusedWindow(to: "dev")
 
-        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "dev"))
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
-        XCTAssertEqual(controller.membership(for: 100), "dev")
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
-
-        let focusCount = windowSystem.focusedIDs.count
-        _ = try controller.switchWorkspace(to: "1")
-        XCTAssertEqual(windowSystem.focusedIDs.count, focusCount)
+        XCTAssertNil(result)
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertTrue(store.savedConfigs.isEmpty)
+        XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 }
 

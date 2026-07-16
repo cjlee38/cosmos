@@ -84,27 +84,19 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertFalse(state.containsWorkspace("4"))
     }
 
-    func testWorkspaceCanBeAddedAtRuntime() {
-        var state = WorkspaceState()
-
-        state.addWorkspace("4")
-
-        XCTAssertEqual(state.workspaces, ["1", "2", "3", "4"])
-        XCTAssertTrue(state.containsWorkspace("4"))
-    }
-
-    func testApplyingWorkspacesKeepsReferencedRuntimeWorkspaces() {
+    func testApplyingWorkspacesReassignsRemovedWorkspaceWindowsToActiveWorkspace() {
         var state = WorkspaceState(workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]))
         state.assign(100, to: "scratch")
         state.activate("scratch")
 
         state.applyWorkspaces(WorkspaceConfig(names: ["1", "2", "3"]))
 
-        XCTAssertEqual(state.workspaces, ["1", "2", "3", "scratch"])
-        XCTAssertEqual(state.activeWorkspace, "scratch")
+        XCTAssertEqual(state.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(state.activeWorkspace, "1")
+        XCTAssertEqual(state.membership(for: 100), "1")
     }
 
-    func testApplyingWorkspacesKeepsActiveWorkspaceMonitorSlotsForRuntimeWorkspaces() {
+    func testApplyingWorkspacesRemovesDeletedActiveWorkspace() {
         var state = WorkspaceState(workspaces: WorkspaceConfig(
             names: ["1", "2"],
             monitorSlotsByName: ["2": 2]
@@ -112,9 +104,8 @@ final class WorkspaceStateTests: XCTestCase {
 
         state.applyWorkspaces(WorkspaceConfig(names: ["1", "3"]))
 
-        XCTAssertEqual(state.workspaces, ["1", "3", "2"])
-        XCTAssertEqual(state.monitorSlot(for: "2"), 2)
-        XCTAssertTrue(state.activeWorkspaces.contains("2"))
+        XCTAssertEqual(state.workspaces, ["1", "3"])
+        XCTAssertFalse(state.activeWorkspaces.contains("2"))
     }
 
     func testApplyingWorkspacesRemovesUnreferencedRuntimeWorkspaces() {

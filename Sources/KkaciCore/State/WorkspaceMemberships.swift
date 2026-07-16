@@ -7,10 +7,6 @@ struct WorkspaceMemberships {
         Array(workspaceByWindowID.keys)
     }
 
-    var referencedWorkspaces: Set<String> {
-        Set(workspaceByWindowID.values)
-    }
-
     func workspace(for id: WindowID) -> String? {
         workspaceByWindowID[id]
     }
@@ -27,6 +23,12 @@ struct WorkspaceMemberships {
 
     mutating func remove(_ id: WindowID) {
         workspaceByWindowID[id] = nil
+    }
+
+    mutating func reassignInvalidWorkspaces(validWorkspaces: Set<String>, to workspace: String) {
+        for (id, assignedWorkspace) in workspaceByWindowID where !validWorkspaces.contains(assignedWorkspace) {
+            workspaceByWindowID[id] = workspace
+        }
     }
 
     func windowIDs(in workspace: String) -> [WindowID] {

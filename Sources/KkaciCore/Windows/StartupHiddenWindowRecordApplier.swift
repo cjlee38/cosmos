@@ -4,20 +4,17 @@ final class StartupHiddenWindowRecordApplier {
     private let windowSystem: any WindowSystem
     private let windowStore: WindowRuntimeStore
     private let recordRepository: HiddenWindowRecordRepository
-    private let configuration: WorkspaceConfigurationRuntime
     private let restorableFrameResolver: RestorableFrameResolver
 
     init(
         windowSystem: any WindowSystem,
         windowStore: WindowRuntimeStore,
         recordRepository: HiddenWindowRecordRepository,
-        configuration: WorkspaceConfigurationRuntime,
         restorableFrameResolver: RestorableFrameResolver
     ) {
         self.windowSystem = windowSystem
         self.windowStore = windowStore
         self.recordRepository = recordRepository
-        self.configuration = configuration
         self.restorableFrameResolver = restorableFrameResolver
     }
 
@@ -43,7 +40,7 @@ final class StartupHiddenWindowRecordApplier {
                 continue
             }
 
-            let workspace = try configuration.ensureWorkspace(targetWorkspace, state: &state)
+            let workspace = state.findWorkspace(targetWorkspace) ?? state.activeWorkspace
             if action.shouldRestore {
                 try windowSystem.setFrameIfSizeChanged(
                     restorableFrameResolver.frameForRestore(record.originalFrame),

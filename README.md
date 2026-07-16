@@ -35,10 +35,10 @@ It also opens a debug status window; use `Show Debug Status` from the menu bar i
 Workspace config is stored at:
 
 ```text
-~/Library/Application Support/kkaci/config.toml
+~/.config/kkaci/config.toml
 ```
 
-If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Missing workspaces are created and persisted when used.
+If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
 
 ```toml
 [workspaces]

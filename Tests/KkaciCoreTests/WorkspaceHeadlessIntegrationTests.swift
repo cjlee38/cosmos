@@ -212,9 +212,15 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
 }
 
 final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrationTestCase {
-    func testCreatedWorkspacePersistsAndRecordReassignsToItAfterRestart() throws {
+    func testConfiguredWorkspaceRecordReassignsToItAfterRestart() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
+
+        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml"))
+        try configStore.save(KkaciConfig(
+            workspaces: WorkspaceConfig(names: ["1", "2", "3", "dev"]),
+            bindings: KkaciConfig.default.bindings
+        ))
 
         let firstSystem = FakeWindowSystem(windows: windows())
         let firstRecordStore = recordStore(in: directory)
@@ -226,7 +232,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         try firstRecordStore.flushPendingWrites()
         try firstController.restoreHiddenWindowsForShutdown()
 
-        let persistedConfig = try FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml")).load()
+        let persistedConfig = try configStore.load()
         XCTAssertEqual(persistedConfig.workspaces.names, ["1", "2", "3", "dev"])
         XCTAssertEqual(try firstRecordStore.loadRecords().map(\.workspace), ["dev"])
 

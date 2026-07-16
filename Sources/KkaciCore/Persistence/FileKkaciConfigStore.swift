@@ -3,8 +3,8 @@ import TOMLKit
 
 public final class FileKkaciConfigStore: KkaciConfigStore {
     public static let `default` = FileKkaciConfigStore(
-        url: FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        url: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config", isDirectory: true)
             .appendingPathComponent("kkaci", isDirectory: true)
             .appendingPathComponent("config.toml")
     )

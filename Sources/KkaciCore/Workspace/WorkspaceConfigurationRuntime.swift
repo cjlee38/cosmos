@@ -22,31 +22,6 @@ final class WorkspaceConfigurationRuntime {
         KkaciConfig(workspaces: workspaces, bindings: bindings)
     }
 
-    func ensureWorkspace(
-        _ workspace: String,
-        state: inout WorkspaceState,
-        monitorSlot: MonitorSlot? = nil
-    ) throws -> String {
-        let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !workspace.isEmpty else {
-            throw WorkspaceError.invalidWorkspaceName(workspace)
-        }
-
-        if state.containsWorkspace(workspace) {
-            return workspace
-        }
-
-        let monitorSlot = monitorSlot ?? state.monitorSlot(for: state.activeWorkspace)
-        let nextConfig = currentConfig(workspaces: state.workspaceConfig)
-            .addingWorkspace(named: workspace, monitorSlot: monitorSlot)
-        if isPersistenceEnabled {
-            try configStore?.save(nextConfig)
-        }
-
-        state.addWorkspace(workspace, monitorSlot: monitorSlot)
-        return workspace
-    }
-
     private func apply(
         _ config: KkaciConfig,
         enablePersistence: Bool?,
@@ -77,7 +52,7 @@ final class WorkspaceConfigurationRuntime {
             }
         } catch let applyError {
             restore(previousConfiguration)
-            state.restoreWorkspaceCatalog(from: previousState)
+            state.restoreWorkspaceConfiguration(from: previousState)
             do {
                 try applyVisibility(&state)
             } catch let rollbackError {
@@ -95,10 +70,6 @@ final class WorkspaceConfigurationRuntime {
         if isPersistenceEnabled {
             try configStore?.save(config)
         }
-    }
-
-    func persist(_ config: KkaciConfig) throws {
-        try saveIfEnabled(config)
     }
 
     private var snapshot: WorkspaceConfigurationSnapshot {

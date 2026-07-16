@@ -2,23 +2,22 @@
 import XCTest
 
 final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
-    func testInvalidAssignmentDoesNotCreateWorkspace() throws {
+    func testMissingWorkspaceAssignmentIsNoOp() throws {
         let controller = makeController(FakeWindowSystem(windows: []))
 
-        XCTAssertThrowsError(try controller.assignWindow(999, to: "scratch"))
+        let assigned = try controller.assignWindow(999, to: "scratch")
 
+        XCTAssertFalse(assigned)
         XCTAssertFalse(controller.workspaces.contains("scratch"))
     }
 
-    func testAssignmentWithoutFocusDoesNotCreateWorkspace() throws {
+    func testAssignmentWithoutFocusStillFailsForExistingWorkspace() throws {
         let controller = makeController(FakeWindowSystem(windows: []))
 
-        XCTAssertThrowsError(try controller.assignFocused(to: "scratch"))
-
-        XCTAssertFalse(controller.workspaces.contains("scratch"))
+        XCTAssertThrowsError(try controller.assignFocused(to: "1"))
     }
 
-    func testAssignmentVisibilityFailureRemovesNewWorkspaceFromRuntimeAndConfig() throws {
+    func testMissingWorkspaceAssignmentDoesNotApplyVisibilityOrSaveConfig() throws {
         let store = InMemoryWorkspaceConfigStore()
         let windowSystem = FakeWindowSystem(windows: [.window(id: 100, title: "One")])
         let controller = makeController(windowSystem, configStore: store)
@@ -27,41 +26,43 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         try controller.assignWindow(100, to: "1")
         windowSystem.frameWriteFailures.insert(100)
 
-        XCTAssertThrowsError(try controller.assignWindow(100, to: "scratch"))
+        let assigned = try controller.assignWindow(100, to: "scratch")
 
+        XCTAssertFalse(assigned)
         XCTAssertFalse(controller.workspaces.contains("scratch"))
-        XCTAssertFalse(try store.load().workspaces.names.contains("scratch"))
         XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
-    func testSwitchVisibilityFailureRemovesNewWorkspaceFromRuntimeAndConfig() throws {
+    func testMissingWorkspaceSwitchIsNoOp() throws {
         let store = InMemoryWorkspaceConfigStore()
         let windowSystem = FakeWindowSystem(windows: [.window(id: 100, title: "One")])
         let controller = makeController(windowSystem, configStore: store)
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
-        windowSystem.frameWriteFailures.insert(100)
 
-        XCTAssertThrowsError(try controller.switchWorkspace(to: "scratch"))
+        let sync = try controller.switchWorkspace(to: "scratch")
 
+        XCTAssertNil(sync)
         XCTAssertFalse(controller.workspaces.contains("scratch"))
-        XCTAssertFalse(try store.load().workspaces.names.contains("scratch"))
         XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
-    func testWorkspaceCreationSaveFailureDoesNotMutateRuntimeState() throws {
+    func testMissingWorkspaceDoesNotAttemptConfigSave() throws {
         let windowSystem = FakeWindowSystem(windows: [.window(id: 100, title: "One")])
         let store = FailingSaveWorkspaceConfigStore()
         let controller = makeController(windowSystem, configStore: store)
 
         _ = controller.discoverWindows()
 
-        XCTAssertThrowsError(try controller.assignWindow(100, to: "scratch")) { error in
-            XCTAssertEqual(error as? FailingSaveWorkspaceConfigStore.Error, .saveFailed)
-        }
+        let assigned = try controller.assignWindow(100, to: "scratch")
+
+        XCTAssertFalse(assigned)
         XCTAssertFalse(controller.workspaces.contains("scratch"))
         XCTAssertNil(controller.membership(for: 100))
+        XCTAssertTrue(store.saveAttempts.isEmpty)
     }
 
     func testConfigVisibilityFailureRestoresPreviousConfigAndVisibility() throws {
@@ -197,7 +198,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.activeWorkspace, "3")
     }
 
-    func testMissingWorkspaceIsCreatedAndPersisted() throws {
+    func testMissingWorkspaceIsNotCreatedOrPersisted() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
@@ -205,29 +206,28 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         let controller = makeController(windowSystem, configStore: store)
 
         _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "4")
+        let assigned = try controller.assignWindow(100, to: "4")
 
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "4"])
-        XCTAssertEqual(controller.currentConfig.workspaces.names, ["1", "2", "3", "4"])
-        XCTAssertEqual(controller.membership(for: 100), "4")
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "4"])
-        XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
+        XCTAssertFalse(assigned)
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
+        XCTAssertNil(controller.membership(for: 100))
+        XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
-    func testSwitchingToMissingWorkspaceCreatesIt() throws {
+    func testSwitchingToMissingWorkspaceDoesNotCreateIt() throws {
         let windowSystem = FakeWindowSystem(windows: [])
         let store = InMemoryWorkspaceConfigStore()
         let controller = makeController(windowSystem, configStore: store)
 
-        _ = try controller.switchWorkspace(to: "dev")
+        let sync = try controller.switchWorkspace(to: "dev")
 
-        XCTAssertEqual(controller.activeWorkspace, "dev")
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.bindings, KkaciConfig.default.bindings)
+        XCTAssertNil(sync)
+        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
+        XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
-    func testDisabledConfigPersistenceDoesNotSaveCreatedWorkspaces() throws {
+    func testMissingWorkspaceNoOpDoesNotDependOnPersistenceSetting() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
@@ -239,9 +239,10 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         )
 
         _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "scratch")
+        let assigned = try controller.assignWindow(100, to: "scratch")
 
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch"])
+        XCTAssertFalse(assigned)
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
@@ -256,25 +257,27 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.startupConfigLoadError as? FailingLoadWorkspaceConfigStore.Error, .loadFailed)
 
         _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "scratch")
+        let assigned = try controller.assignWindow(100, to: "scratch")
 
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch"])
+        XCTAssertFalse(assigned)
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
-    func testApplyConfigEnablesPersistenceAndKeepsReferencedRuntimeWorkspaces() throws {
+    func testApplyConfigRemovesWorkspaceAndReassignsItsWindowToActiveWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
         let store = InMemoryWorkspaceConfigStore()
-        let controller = makeController(
-            windowSystem,
-            configStore: store,
-            isConfigPersistenceEnabled: false
-        )
+        try store.save(KkaciConfig(
+            workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]),
+            bindings: KkaciConfig.default.bindings
+        ))
+        let controller = makeController(windowSystem, configStore: store)
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "scratch")
+        _ = try controller.switchWorkspace(to: "scratch")
         try controller.applyConfig(
             KkaciConfig(
                 workspaces: WorkspaceConfig(names: ["1", "2", "3"]),
@@ -282,11 +285,11 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
             ),
             enablePersistence: true
         )
-        try controller.createWorkspace(named: "dev")
 
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "scratch", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "scratch", "dev"])
-        XCTAssertEqual(store.savedConfigs.last?.bindings, [
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertEqual(controller.currentConfig.bindings, [
             HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")
         ])
     }

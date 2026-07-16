@@ -364,7 +364,7 @@ final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecord
         XCTAssertEqual(recordStore.records, [record])
     }
 
-    func testStartupRecordsCreateMissingWorkspaceBeforeAssignment() throws {
+    func testStartupRecordsRestoreMissingWorkspaceWindowIntoActiveWorkspace() throws {
         let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "dev")
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
@@ -375,9 +375,12 @@ final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecord
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
-        assertReassigned(result.reassigned, [(100, "dev")])
-        XCTAssertEqual(controller.workspaces, ["1", "2", "3", "dev"])
-        XCTAssertEqual(controller.membership(for: 100), "dev")
-        XCTAssertEqual(store.savedConfigs.last?.workspaces.names, ["1", "2", "3", "dev"])
+        XCTAssertEqual(result.restored, [100])
+        assertReassigned(result.reassigned, [(100, "1")])
+        XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertEqual(windowSystem.frames[100], record.originalFrame)
+        XCTAssertTrue(store.savedConfigs.isEmpty)
+        XCTAssertTrue(recordStore.records.isEmpty)
     }
 }

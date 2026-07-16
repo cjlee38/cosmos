@@ -3,6 +3,16 @@ import Foundation
 import XCTest
 
 final class KkaciConfigTests: XCTestCase {
+    func testDefaultConfigPathUsesDotConfigDirectory() {
+        XCTAssertEqual(
+            FileKkaciConfigStore.default.url,
+            FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".config", isDirectory: true)
+                .appendingPathComponent("kkaci", isDirectory: true)
+                .appendingPathComponent("config.toml")
+        )
+    }
+
     func testWorkspaceShortcutBindingsUseTheNonModifierKey() {
         let shortcuts = WorkspaceShortcutBindings([
             HotKeyBinding(key: "option+1", command: "workspace", workspace: "1"),

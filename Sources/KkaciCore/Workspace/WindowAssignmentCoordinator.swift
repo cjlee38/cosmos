@@ -2,18 +2,15 @@ import Foundation
 
 final class WindowAssignmentCoordinator {
     private let windowSystem: any WindowSystem
-    private let configuration: WorkspaceConfigurationRuntime
     private let visibilityCoordinator: WorkspaceVisibilityCoordinator
     private let monitorSlotResolver: MonitorSlotResolver
 
     init(
         windowSystem: any WindowSystem,
-        configuration: WorkspaceConfigurationRuntime,
         visibilityCoordinator: WorkspaceVisibilityCoordinator,
         monitorSlotResolver: MonitorSlotResolver
     ) {
         self.windowSystem = windowSystem
-        self.configuration = configuration
         self.visibilityCoordinator = visibilityCoordinator
         self.monitorSlotResolver = monitorSlotResolver
     }
@@ -34,9 +31,6 @@ final class WindowAssignmentCoordinator {
 
         let previousState = state
         let previousFocusedWindowID = windowSystem.focusedWindowID()
-        let previousConfig = configuration.currentConfig(workspaces: state.workspaceConfig)
-        let createdWorkspace = !state.containsWorkspace(workspace.trimmingCharacters(in: .whitespacesAndNewlines))
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
         state.assign(id, to: workspace)
 
@@ -50,7 +44,6 @@ final class WindowAssignmentCoordinator {
             try rollback(
                 error,
                 previousState: previousState,
-                previousConfig: createdWorkspace ? previousConfig : nil,
                 focusedWindowID: previousFocusedWindowID,
                 state: &state
             )
@@ -63,7 +56,6 @@ final class WindowAssignmentCoordinator {
         into workspace: String,
         state: inout WorkspaceState
     ) throws {
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let visibleIDs = windows
             .filter { !$0.isMinimized && !state.isHidden($0.id) }
             .map(\.id)
@@ -75,8 +67,10 @@ final class WindowAssignmentCoordinator {
         defaultWorkspace: String,
         state: inout WorkspaceState,
         monitorSlotForFrame: (WindowFrame?) -> MonitorSlot
-    ) throws {
-        _ = try configuration.ensureWorkspace(defaultWorkspace, state: &state)
+    ) {
+        guard state.findWorkspace(defaultWorkspace) != nil else {
+            return
+        }
         for window in windows where !window.isMinimized && state.membership(for: window.id) == nil {
             let workspace = state.activeWorkspace(on: monitorSlotForFrame(window.frame))
             state.capture([window.id], into: workspace)
@@ -106,9 +100,6 @@ final class WindowAssignmentCoordinator {
 
         let previousState = state
         let previousFocusedWindowID = windowSystem.focusedWindowID()
-        let previousConfig = configuration.currentConfig(workspaces: state.workspaceConfig)
-        let createdWorkspace = !state.containsWorkspace(workspace.trimmingCharacters(in: .whitespacesAndNewlines))
-        let workspace = try configuration.ensureWorkspace(workspace, state: &state)
         let destinationIsActive = state.activeWorkspaces.contains(workspace)
         let replacementFocus = workspace == currentWorkspace || destinationIsActive
             ? nil
@@ -131,7 +122,6 @@ final class WindowAssignmentCoordinator {
             try rollback(
                 error,
                 previousState: previousState,
-                previousConfig: createdWorkspace ? previousConfig : nil,
                 focusedWindowID: previousFocusedWindowID,
                 state: &state
             )
@@ -161,18 +151,10 @@ final class WindowAssignmentCoordinator {
     private func rollback(
         _ applyError: Error,
         previousState: WorkspaceState,
-        previousConfig: KkaciConfig?,
         focusedWindowID: WindowID?,
         state: inout WorkspaceState
     ) throws {
         var rollbackError: Error?
-        if let previousConfig {
-            do {
-                try configuration.persist(previousConfig)
-            } catch {
-                rollbackError = error
-            }
-        }
         do {
             try visibilityCoordinator.rollback(
                 to: previousState,
