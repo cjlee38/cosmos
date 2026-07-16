@@ -1,5 +1,10 @@
 import AppKit
 
+struct WorkspaceSwitcherInteractions {
+    let onHover: (String) -> Void
+    let onClick: (String) -> Void
+}
+
 final class WorkspaceSwitcherListView: NSView {
     private var cardViewsByName: [String: WorkspacePreviewCardView] = [:]
     private var recycledCardViews: [WorkspacePreviewCardView] = []
@@ -24,10 +29,14 @@ final class WorkspaceSwitcherListView: NSView {
         groups: [WorkspaceSwitcherGroup],
         selectedName: String,
         availableFrame: NSRect,
-        onHover: @escaping (String) -> Void,
-        onClick: @escaping (String) -> Void
+        size: CGFloat,
+        interactions: WorkspaceSwitcherInteractions
     ) {
-        let layout = WorkspaceOverviewLayout(groupCount: groups.count, availableFrame: availableFrame)
+        let layout = WorkspaceOverviewLayout(
+            groupCount: groups.count,
+            availableFrame: availableFrame,
+            size: size
+        )
         frame = NSRect(origin: .zero, size: layout.contentSize)
         recycleMissingCards(keeping: Set(groups.map(\.name)))
         ensureCapacity(groups.count)
@@ -43,8 +52,8 @@ final class WorkspaceSwitcherListView: NSView {
                 isSelected: group.name == selectedName,
                 cardSize: layout.cardSize,
                 hoverGate: hoverGate,
-                onHover: onHover,
-                onClick: onClick
+                onHover: interactions.onHover,
+                onClick: interactions.onClick
             ))
             card.frame.origin = NSPoint(
                 x: cell.midX - layout.cardSize.width / 2,
@@ -94,66 +103,6 @@ final class WorkspaceSwitcherListView: NSView {
             card.prepareForReuse()
             card.removeFromSuperview()
             recycledCardViews.append(card)
-        }
-    }
-}
-
-private struct WorkspaceOverviewLayout {
-    let contentSize: NSSize
-    let cardSize: NSSize
-    let columns: Int
-    private let rows: Int
-    private let spacing: CGFloat
-
-    init(groupCount: Int, availableFrame: NSRect) {
-        let count = max(groupCount, 1)
-        let spacing: CGFloat = 24
-        let columns = Self.columnCount(groupCount: count)
-        let rows = Int(ceil(Double(count) / Double(columns)))
-        let contentSize = NSSize(
-            width: floor(availableFrame.width * 0.90),
-            height: floor(availableFrame.height * 0.82)
-        )
-        let cellWidth = (contentSize.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
-        let cellHeight = (contentSize.height - CGFloat(rows - 1) * spacing) / CGFloat(rows)
-        let screenAspect = min(max(availableFrame.width / max(availableFrame.height, 1), 1.35), 1.9)
-        let chromeHeight: CGFloat = 82
-        let horizontalChrome: CGFloat = 24
-        let maxCanvasWidth = max(160, cellWidth - horizontalChrome)
-        let maxCanvasHeight = max(100, cellHeight - chromeHeight)
-        let canvasWidth = min(maxCanvasWidth, maxCanvasHeight * screenAspect)
-        let canvasHeight = canvasWidth / screenAspect
-
-        self.contentSize = contentSize
-        cardSize = NSSize(width: canvasWidth + horizontalChrome, height: canvasHeight + chromeHeight)
-        self.columns = columns
-        self.rows = rows
-        self.spacing = spacing
-    }
-
-    func cellFrame(row: Int, column: Int) -> NSRect {
-        let cellWidth = (contentSize.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
-        let cellHeight = (contentSize.height - CGFloat(rows - 1) * spacing) / CGFloat(rows)
-        return NSRect(
-            x: CGFloat(column) * (cellWidth + spacing),
-            y: contentSize.height - CGFloat(row + 1) * cellHeight - CGFloat(row) * spacing,
-            width: cellWidth,
-            height: cellHeight
-        )
-    }
-
-    private static func columnCount(groupCount: Int) -> Int {
-        switch groupCount {
-        case ...1:
-            1
-        case 2 ... 3:
-            groupCount
-        case 4:
-            2
-        case 5 ... 6:
-            3
-        default:
-            Int(ceil(sqrt(Double(groupCount))))
         }
     }
 }

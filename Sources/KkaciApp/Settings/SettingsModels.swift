@@ -60,3 +60,30 @@ struct GeneralSettingsSnapshot {
     let launchAtLoginStatus: LaunchAtLoginStatus
     let permissions: [SettingsPermissionStatus]
 }
+
+enum MenuBarIconStyle: String, CaseIterable {
+    case angleBrackets
+    case squareBrackets
+
+    var preview: String {
+        switch self {
+        case .angleBrackets:
+            "<*X | Y>"
+        case .squareBrackets:
+            "[*X | Y]"
+        }
+    }
+}
+
+enum SwitcherSizeRange {
+    static let window = 1.0 ... 2.5
+    static let workspace = 0.0 ... 1.0
+    static let defaultWindow = 1.75
+    static let defaultWorkspace = 0.5
+}
+
+struct AppSettingsSnapshot: Equatable {
+    let menuBarIconStyle: MenuBarIconStyle
+    let windowSwitcherSize: Double
+    let workspaceSwitcherSize: Double
+}

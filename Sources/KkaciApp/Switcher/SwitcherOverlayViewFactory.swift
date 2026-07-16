@@ -2,9 +2,14 @@ import AppKit
 import KkaciCore
 
 final class SwitcherOverlayViewFactory {
+    private let appSettingsStore: AppSettingsStore
     private let rootView = SwitcherOverlayRootView()
     private let windowListView = WindowSwitcherListView(frame: .zero)
     private let workspaceListView = WorkspaceSwitcherListView(frame: .zero)
+
+    init(appSettingsStore: AppSettingsStore) {
+        self.appSettingsStore = appSettingsStore
+    }
 
     var rootContentView: NSView {
         rootView
@@ -22,10 +27,15 @@ final class SwitcherOverlayViewFactory {
         onHover: ((WindowID) -> Void)? = nil,
         onClick: ((WindowID) -> Void)? = nil
     ) -> WindowSwitcherListView {
+        let settings = appSettingsStore.snapshot()
         windowListView.configure(
             items: items,
             selectedID: selectedID,
-            metrics: tileMetrics(count: items.count, availableFrame: availableFrame),
+            metrics: tileMetrics(
+                count: items.count,
+                availableFrame: availableFrame,
+                scale: CGFloat(settings.windowSwitcherSize)
+            ),
             onHover: onHover,
             onClick: onClick
         )
@@ -39,29 +49,100 @@ final class SwitcherOverlayViewFactory {
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) -> WorkspaceSwitcherListView {
+        let settings = appSettingsStore.snapshot()
         workspaceListView.configure(
             groups: groups,
             selectedName: selectedName,
             availableFrame: availableFrame,
-            onHover: onHover,
-            onClick: onClick
+            size: CGFloat(settings.workspaceSwitcherSize),
+            interactions: WorkspaceSwitcherInteractions(onHover: onHover, onClick: onClick)
         )
         return workspaceListView
     }
 
-    private func tileMetrics(count: Int, availableFrame: NSRect) -> WindowTileMetrics {
-        let spacing: CGFloat = 10
-        let targetWidth = targetTileWidth(count: count)
-        let minWidth: CGFloat = 104
-        let maxContentWidth = max(minWidth, availableFrame.width * 0.86)
+    private func tileMetrics(
+        count: Int,
+        availableFrame: NSRect,
+        scale: CGFloat
+    ) -> WindowTileMetrics {
+        let spacing = floor(10 * scale)
+        let targetWidth = floor(targetTileWidth(count: count) * scale)
+        let minimumWidth: CGFloat = 80
+        let maxContentWidth = max(minimumWidth, availableFrame.width * 0.86)
+        let maxContentHeight = max(100, availableFrame.height * 0.82)
         let itemCount = max(count, 1)
-        let maxColumns = max(1, Int((maxContentWidth + spacing) / (minWidth + spacing)))
-        let columns = max(1, min(itemCount, maxColumns))
-        let widthThatFits = (maxContentWidth - CGFloat(max(columns - 1, 0)) * spacing) / CGFloat(columns)
-        let tileWidth = min(targetWidth, max(minWidth, floor(widthThatFits)))
+        let minimumPreferredWidth = targetWidth * 0.9
+        let preferredMaximumColumns = max(
+            1,
+            min(
+                itemCount,
+                Int((maxContentWidth + spacing) / (minimumPreferredWidth + spacing))
+            )
+        )
+        let desiredColumns = balancedColumnCount(
+            itemCount: itemCount,
+            maximumColumns: preferredMaximumColumns
+        )
+        let maximumColumns = max(
+            desiredColumns,
+            min(
+                itemCount,
+                Int((maxContentWidth + spacing) / (minimumWidth + spacing))
+            )
+        )
+
+        var fallback = metrics(
+            itemCount: itemCount,
+            columns: desiredColumns,
+            spacing: spacing,
+            targetWidth: targetWidth,
+            maxContentWidth: maxContentWidth
+        )
+        for columns in desiredColumns ... maximumColumns {
+            let candidate = metrics(
+                itemCount: itemCount,
+                columns: columns,
+                spacing: spacing,
+                targetWidth: targetWidth,
+                maxContentWidth: maxContentWidth
+            )
+            fallback = candidate
+            if candidate.contentHeight <= maxContentHeight {
+                return candidate
+            }
+        }
+        return fallback
+    }
+
+    private func balancedColumnCount(itemCount: Int, maximumColumns: Int) -> Int {
+        let minimumColumns = max(1, Int(ceil(Double(maximumColumns) / 2)))
+        return (minimumColumns ... maximumColumns).min { lhs, rhs in
+            let lhsScore = gridScore(itemCount: itemCount, columns: lhs)
+            let rhsScore = gridScore(itemCount: itemCount, columns: rhs)
+            return lhsScore == rhsScore ? lhs > rhs : lhsScore < rhsScore
+        } ?? maximumColumns
+    }
+
+    private func gridScore(itemCount: Int, columns: Int) -> Int {
         let rows = Int(ceil(Double(itemCount) / Double(columns)))
-        let previewHeight = max(68, min(174, floor(tileWidth * 0.62)))
-        let tileHeight = previewHeight + (tileWidth < 120 ? 50 : 57)
+        let unusedCells = rows * columns - itemCount
+        return unusedCells + rows
+    }
+
+    private func metrics(
+        itemCount: Int,
+        columns: Int,
+        spacing: CGFloat,
+        targetWidth: CGFloat,
+        maxContentWidth: CGFloat
+    ) -> WindowTileMetrics {
+        let widthThatFits =
+            (maxContentWidth - CGFloat(max(columns - 1, 0)) * spacing) / CGFloat(columns)
+        let tileWidth = min(targetWidth, floor(widthThatFits))
+        let rows = Int(ceil(Double(itemCount) / Double(columns)))
+        let previewHeight = max(52, floor(tileWidth * 0.62))
+        let labelHeight: CGFloat = tileWidth < 120 ? 50 : 57
+        let tileHeight = previewHeight + labelHeight
         let contentWidth = CGFloat(columns) * tileWidth + CGFloat(max(columns - 1, 0)) * spacing
         let contentHeight = CGFloat(rows) * tileHeight + CGFloat(max(rows - 1, 0)) * spacing
 
@@ -89,6 +170,97 @@ final class SwitcherOverlayViewFactory {
         default:
             168
         }
+    }
+}
+
+struct WorkspaceOverviewLayout {
+    private struct Dimensions {
+        let widthRatio: CGFloat
+        let heightRatio: CGFloat
+        let spacing: CGFloat
+    }
+
+    let contentSize: NSSize
+    let cardSize: NSSize
+    let columns: Int
+    private let rows: Int
+    private let spacing: CGFloat
+
+    init(groupCount: Int, availableFrame: NSRect, size: CGFloat) {
+        let count = max(groupCount, 1)
+        let dimensions = Self.dimensions(for: size)
+        let spacing = dimensions.spacing
+        let columns = Self.columnCount(groupCount: count)
+        let rows = Int(ceil(Double(count) / Double(columns)))
+        let contentSize = NSSize(
+            width: floor(availableFrame.width * dimensions.widthRatio),
+            height: floor(availableFrame.height * dimensions.heightRatio)
+        )
+        let cellWidth = (contentSize.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+        let cellHeight = (contentSize.height - CGFloat(rows - 1) * spacing) / CGFloat(rows)
+        let screenAspect = min(max(availableFrame.width / max(availableFrame.height, 1), 1.35), 1.9)
+        let chromeHeight: CGFloat = 82
+        let horizontalChrome: CGFloat = 24
+        let maxCanvasWidth = max(160, cellWidth - horizontalChrome)
+        let maxCanvasHeight = max(100, cellHeight - chromeHeight)
+        let canvasWidth = min(maxCanvasWidth, maxCanvasHeight * screenAspect)
+        let canvasHeight = canvasWidth / screenAspect
+
+        self.contentSize = contentSize
+        cardSize = NSSize(
+            width: canvasWidth + horizontalChrome, height: canvasHeight + chromeHeight
+        )
+        self.columns = columns
+        self.rows = rows
+        self.spacing = spacing
+    }
+
+    func cellFrame(row: Int, column: Int) -> NSRect {
+        let cellWidth = (contentSize.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+        let cellHeight = (contentSize.height - CGFloat(rows - 1) * spacing) / CGFloat(rows)
+        return NSRect(
+            x: CGFloat(column) * (cellWidth + spacing),
+            y: contentSize.height - CGFloat(row + 1) * cellHeight - CGFloat(row) * spacing,
+            width: cellWidth,
+            height: cellHeight
+        )
+    }
+
+    private static func columnCount(groupCount: Int) -> Int {
+        switch groupCount {
+        case ...1:
+            1
+        case 2 ... 3:
+            groupCount
+        case 4:
+            2
+        case 5 ... 6:
+            3
+        default:
+            Int(ceil(sqrt(Double(groupCount))))
+        }
+    }
+
+    private static func dimensions(for size: CGFloat) -> Dimensions {
+        let small = Dimensions(widthRatio: 0.52, heightRatio: 0.48, spacing: 12)
+        let medium = Dimensions(widthRatio: 0.72, heightRatio: 0.66, spacing: 18)
+        let large = Dimensions(widthRatio: 0.965, heightRatio: 0.94, spacing: 30)
+        if size <= 0.5 {
+            return interpolate(from: small, to: medium, progress: size * 2)
+        }
+        return interpolate(from: medium, to: large, progress: (size - 0.5) * 2)
+    }
+
+    private static func interpolate(
+        from start: Dimensions,
+        to end: Dimensions,
+        progress: CGFloat
+    ) -> Dimensions {
+        Dimensions(
+            widthRatio: start.widthRatio + (end.widthRatio - start.widthRatio) * progress,
+            heightRatio: start.heightRatio + (end.heightRatio - start.heightRatio) * progress,
+            spacing: start.spacing + (end.spacing - start.spacing) * progress
+        )
     }
 }
 

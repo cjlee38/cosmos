@@ -2,7 +2,9 @@ import KkaciCore
 
 struct AppCompositionRoot {
     func build() -> AppRuntime {
-        let axClient = AXClient()
+        let axClient = AXClient(
+            includedOwnWindowIdentifiers: [SettingsWindowController.accessibilityIdentifier]
+        )
         let registry = WindowRegistry(axClient: axClient)
         let configStore = FileKkaciConfigStore.default
         let recordStore = FileHiddenWindowRecordStore.default
@@ -19,6 +21,7 @@ struct AppCompositionRoot {
             applicationIconCache: ApplicationIconCache()
         )
         let keyboardShortcutManager = KeyboardShortcutManager()
+        let appSettingsStore = AppSettingsStore()
 
         return AppRuntime(
             controller: controller,
@@ -32,6 +35,7 @@ struct AppCompositionRoot {
             ),
             permissionController: AccessibilityPermissionController(axClient: axClient),
             generalSettingsService: GeneralSettingsService(axClient: axClient),
+            appSettingsStore: appSettingsStore,
             keyboardShortcutManager: keyboardShortcutManager,
             previewService: previewService
         )

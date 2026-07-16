@@ -11,6 +11,7 @@ final class StatusMenuController: NSObject {
 
     private let controller: WorkspaceController
     private let actions: WorkspaceActionController
+    private let appSettingsStore: AppSettingsStore
     private let reloadConfigHandler: () -> Void
     private let showSettingsHandler: () -> Void
     private let statusItem: NSStatusItem
@@ -25,11 +26,13 @@ final class StatusMenuController: NSObject {
     init(
         controller: WorkspaceController,
         actions: WorkspaceActionController,
+        appSettingsStore: AppSettingsStore,
         reloadConfigHandler: @escaping () -> Void,
         showSettingsHandler: @escaping () -> Void
     ) {
         self.controller = controller
         self.actions = actions
+        self.appSettingsStore = appSettingsStore
         self.reloadConfigHandler = reloadConfigHandler
         self.showSettingsHandler = showSettingsHandler
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -52,7 +55,7 @@ final class StatusMenuController: NSObject {
         workspaceItems.removeAll()
         renderedWorkspaceEntries = workspaceMenuEntries()
 
-        statusItem.button?.title = "kkaci 1"
+        statusItem.button?.title = menuBarTitle()
         statusItem.menu = menu
 
         buildWorkspaceItems()
@@ -113,7 +116,7 @@ final class StatusMenuController: NSObject {
             buildMenu()
         }
 
-        statusItem.button?.title = "kkaci \(controller.activeWorkspace)"
+        statusItem.button?.title = menuBarTitle()
         workspaceItem.title = "Workspace: \(controller.activeWorkspace)"
         for (workspace, item) in workspaceItems {
             item.state = controller.isWorkspaceActive(workspace) ? .on : .off
@@ -134,6 +137,17 @@ final class StatusMenuController: NSObject {
         return zip(renderedWorkspaceEntries, entries).allSatisfy { current, updated in
             current.name == updated.name && current.monitorSlot == updated.monitorSlot
         }
+    }
+
+    private func menuBarTitle() -> String {
+        let workspaces = controller.activeWorkspaces.sorted {
+            controller.monitorSlot(for: $0) < controller.monitorSlot(for: $1)
+        }
+        return MenuBarTitleFormatter.title(
+            workspaces: workspaces,
+            activeWorkspace: controller.activeWorkspace,
+            style: appSettingsStore.snapshot().menuBarIconStyle
+        )
     }
 
     @objc private func switchWorkspace(_ sender: NSMenuItem) {
@@ -177,5 +191,24 @@ final class StatusMenuController: NSObject {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+}
+
+enum MenuBarTitleFormatter {
+    static func title(
+        workspaces: [String],
+        activeWorkspace: String,
+        style: MenuBarIconStyle
+    ) -> String {
+        let contents = workspaces
+            .map { $0 == activeWorkspace ? "*\($0)" : $0 }
+            .joined(separator: " | ")
+
+        switch style {
+        case .angleBrackets:
+            return "<\(contents)>"
+        case .squareBrackets:
+            return "[\(contents)]"
+        }
     }
 }

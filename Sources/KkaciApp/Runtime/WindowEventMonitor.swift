@@ -168,6 +168,10 @@ final class WindowEventMonitor {
     }
 
     private func scheduleFocusSyncIfObservable(_ app: NSRunningApplication) {
+        if app.processIdentifier == getpid(), app.activationPolicy == .regular {
+            schedule(.init(kind: .focusChanged, windowID: nil))
+            return
+        }
         if axObserverRegistry.canObserve(app) {
             schedule(.init(kind: .focusChanged, windowID: nil))
         }

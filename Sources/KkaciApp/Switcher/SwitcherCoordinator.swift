@@ -18,7 +18,7 @@ final class SwitcherCoordinator {
         previewService: SwitcherPreviewService,
         refreshStatus: @escaping () -> Void,
         overlay: (any SwitcherOverlayPresenting)? = nil,
-        makeOverlay: @escaping () -> any SwitcherOverlayPresenting = { SwitcherOverlayWindowController() }
+        makeOverlay: @escaping () -> any SwitcherOverlayPresenting
     ) {
         self.controller = controller
         self.previewService = previewService

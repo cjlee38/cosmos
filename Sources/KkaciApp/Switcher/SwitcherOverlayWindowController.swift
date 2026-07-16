@@ -45,7 +45,7 @@ protocol SwitcherOverlayPresenting: AnyObject {
 }
 
 final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlayPresenting {
-    private let viewFactory = SwitcherOverlayViewFactory()
+    private let viewFactory: SwitcherOverlayViewFactory
     private let screenLocator = SwitcherOverlayScreenLocator()
     private var windowListView: WindowSwitcherListView?
     private var workspaceListView: WorkspaceSwitcherListView?
@@ -54,7 +54,8 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
     private var onWorkspaceKey: ((String) -> Bool)?
     private let outsideClickMonitor = SwitcherOutsideClickMonitor()
 
-    init() {
+    init(appSettingsStore: AppSettingsStore) {
+        viewFactory = SwitcherOverlayViewFactory(appSettingsStore: appSettingsStore)
         let window = SwitcherOverlayPanel(
             contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
             styleMask: [.borderless, .nonactivatingPanel],

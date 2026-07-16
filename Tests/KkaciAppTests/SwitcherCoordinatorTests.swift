@@ -93,7 +93,8 @@ final class SwitcherCoordinatorTests: XCTestCase {
             controller: controller,
             previewService: previewService,
             refreshStatus: {},
-            overlay: overlay
+            overlay: overlay,
+            makeOverlay: { overlay }
         )
 
         coordinator.stepWindow(direction: .forward, wraps: true)
@@ -147,7 +148,8 @@ final class SwitcherCoordinatorTests: XCTestCase {
             controller: controller,
             previewService: makeSwitcherTestPreviewService(controller: controller),
             refreshStatus: {},
-            overlay: overlay
+            overlay: overlay,
+            makeOverlay: { overlay }
         )
     }
 }

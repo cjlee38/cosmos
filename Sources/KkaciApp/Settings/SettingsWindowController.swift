@@ -1,10 +1,17 @@
 import AppKit
 
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+    static let accessibilityIdentifier = "kkaci.settings"
+
     private let generalViewController: GeneralSettingsViewController
+    private let appearanceViewController: AppearanceSettingsViewController
+    private let visibilityChangedHandler: () -> Void
 
     init(
         generalSettingsService: GeneralSettingsService,
+        appSettingsStore: AppSettingsStore,
+        appearanceChangedHandler: @escaping () -> Void,
+        visibilityChangedHandler: @escaping () -> Void,
         configURLProvider: @escaping () -> URL?,
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
         reloadConfigHandler: @escaping () -> Void
@@ -16,12 +23,18 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             reloadConfigHandler: reloadConfigHandler
         )
         self.generalViewController = generalViewController
+        self.visibilityChangedHandler = visibilityChangedHandler
+        let appearanceViewController = AppearanceSettingsViewController(
+            store: appSettingsStore,
+            onChange: appearanceChangedHandler
+        )
+        self.appearanceViewController = appearanceViewController
 
         let sidebar = SettingsSidebarViewController()
         let content = SettingsContentViewController()
         let viewControllers: [SettingsSection: NSViewController] = [
             .general: generalViewController,
-            .appearance: Self.emptyViewController(),
+            .appearance: appearanceViewController,
             .workspaces: Self.emptyViewController()
         ]
         sidebar.onSelectionChanged = { section in
@@ -31,14 +44,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             content.show(viewController)
         }
 
-        let splitViewController = NSSplitViewController()
-        splitViewController.splitView.dividerStyle = .thin
-        let sidebarItem = NSSplitViewItem(viewController: sidebar)
-        sidebarItem.canCollapse = false
-        sidebarItem.minimumThickness = 180
-        sidebarItem.maximumThickness = 220
-        splitViewController.addSplitViewItem(sidebarItem)
-        splitViewController.addSplitViewItem(NSSplitViewItem(viewController: content))
+        let splitViewController = Self.makeSplitViewController(sidebar: sidebar, content: content)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 790, height: 560),
@@ -54,6 +60,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
         window.minSize = NSSize(width: 720, height: 520)
+        window.setAccessibilityIdentifier(Self.accessibilityIdentifier)
         window.contentViewController = splitViewController
 
         super.init(window: window)
@@ -68,25 +75,48 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
+        NSApp.setActivationPolicy(.regular)
         refresh()
         showWindow(nil)
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        visibilityChangedHandler()
     }
 
     func refresh() {
         generalViewController.refresh()
+        appearanceViewController.refresh()
     }
 
     func windowDidBecomeKey(_: Notification) {
         refresh()
     }
 
+    func windowWillClose(_: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        visibilityChangedHandler()
+    }
+
     private static func emptyViewController() -> NSViewController {
         let viewController = NSViewController()
         viewController.view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
         return viewController
+    }
+
+    private static func makeSplitViewController(
+        sidebar: NSViewController,
+        content: NSViewController
+    ) -> NSSplitViewController {
+        let splitViewController = NSSplitViewController()
+        splitViewController.splitView.dividerStyle = .thin
+        let sidebarItem = NSSplitViewItem(viewController: sidebar)
+        sidebarItem.canCollapse = false
+        sidebarItem.minimumThickness = 180
+        sidebarItem.maximumThickness = 220
+        splitViewController.addSplitViewItem(sidebarItem)
+        splitViewController.addSplitViewItem(NSSplitViewItem(viewController: content))
+        return splitViewController
     }
 }
 

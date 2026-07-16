@@ -8,6 +8,7 @@ final class AppRuntime {
     private let configRuntime: ConfigRuntime
     private let permissionController: AccessibilityPermissionController
     private let generalSettingsService: GeneralSettingsService
+    private let appSettingsStore: AppSettingsStore
     private let keyboardShortcutManager: KeyboardShortcutManager
     private let previewService: SwitcherPreviewService
     private var windowEventMonitor: WindowEventMonitor?
@@ -16,6 +17,7 @@ final class AppRuntime {
     private lazy var actionController = WorkspaceActionController(
         controller: controller,
         previewService: previewService,
+        appSettingsStore: appSettingsStore,
         refreshSurfaces: { [weak self] in
             self?.refreshSurfaces()
         },
@@ -38,6 +40,7 @@ final class AppRuntime {
     private lazy var statusMenuController = StatusMenuController(
         controller: controller,
         actions: actionController,
+        appSettingsStore: appSettingsStore,
         reloadConfigHandler: { [unowned self] in
             reloadConfig()
         },
@@ -51,6 +54,7 @@ final class AppRuntime {
         configRuntime: ConfigRuntime,
         permissionController: AccessibilityPermissionController,
         generalSettingsService: GeneralSettingsService,
+        appSettingsStore: AppSettingsStore,
         keyboardShortcutManager: KeyboardShortcutManager,
         previewService: SwitcherPreviewService
     ) {
@@ -58,6 +62,7 @@ final class AppRuntime {
         self.configRuntime = configRuntime
         self.permissionController = permissionController
         self.generalSettingsService = generalSettingsService
+        self.appSettingsStore = appSettingsStore
         self.keyboardShortcutManager = keyboardShortcutManager
         self.previewService = previewService
     }
@@ -122,6 +127,13 @@ final class AppRuntime {
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(
                 generalSettingsService: generalSettingsService,
+                appSettingsStore: appSettingsStore,
+                appearanceChangedHandler: { [unowned self] in
+                    refreshSurfaces()
+                },
+                visibilityChangedHandler: { [unowned self] in
+                    handleSettingsVisibilityChanged()
+                },
                 configURLProvider: { [unowned self] in
                     configRuntime.configURL
                 },
@@ -134,6 +146,15 @@ final class AppRuntime {
             )
         }
         settingsWindowController?.show()
+    }
+
+    private func handleSettingsVisibilityChanged() {
+        guard windowEventMonitor != nil else {
+            return
+        }
+        windowRuntimeEventHandler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        ]))
     }
 
     private func refreshSwitcherContent() {

@@ -6,6 +6,7 @@ final class WorkspaceActionController {
 
     private let controller: WorkspaceController
     private let previewService: SwitcherPreviewService
+    private let appSettingsStore: AppSettingsStore
     private let refreshSurfaces: () -> Void
     private let suppressNextFocusSync: (WindowID) -> Void
     private lazy var switcherCoordinator = SwitcherCoordinator(
@@ -13,16 +14,21 @@ final class WorkspaceActionController {
         previewService: previewService,
         refreshStatus: { [weak self] in
             self?.refreshSurfaces()
+        },
+        makeOverlay: { [appSettingsStore] in
+            SwitcherOverlayWindowController(appSettingsStore: appSettingsStore)
         }
     )
     init(
         controller: WorkspaceController,
         previewService: SwitcherPreviewService,
+        appSettingsStore: AppSettingsStore,
         refreshSurfaces: @escaping () -> Void,
         suppressNextFocusSync: @escaping (WindowID) -> Void
     ) {
         self.controller = controller
         self.previewService = previewService
+        self.appSettingsStore = appSettingsStore
         self.refreshSurfaces = refreshSurfaces
         self.suppressNextFocusSync = suppressNextFocusSync
     }

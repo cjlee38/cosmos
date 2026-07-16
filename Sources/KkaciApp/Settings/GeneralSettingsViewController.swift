@@ -192,14 +192,7 @@ private extension GeneralSettingsViewController {
     }
 
     private func makeConfigurationSection() -> NSView {
-        reloadConfigButton.image = NSImage(
-            systemSymbolName: "arrow.clockwise",
-            accessibilityDescription: "Reload"
-        )?.withSymbolConfiguration(
-            NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        )
-        reloadConfigButton.imagePosition = .imageLeading
-        reloadConfigButton.imageHugsTitle = true
+        configureReloadConfigButton()
 
         configPathLabel.isSelectable = true
         configPathLabel.textColor = .secondaryLabelColor
@@ -221,11 +214,7 @@ private extension GeneralSettingsViewController {
         fileDetails.alignment = .leading
         fileDetails.spacing = 2
 
-        configStatusIcon.translatesAutoresizingMaskIntoConstraints = false
-        configStatusIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
-        configStatusIcon.widthAnchor.constraint(equalToConstant: 18).isActive = true
-        configStatusIcon.heightAnchor.constraint(equalToConstant: 18).isActive = true
-        configStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        configureConfigStatusIcon()
 
         let status = NSStackView(views: [configStatusIcon, configStatusLabel])
         status.orientation = .horizontal
@@ -260,6 +249,25 @@ private extension GeneralSettingsViewController {
             title: "Configuration",
             content: SettingsControlFactory.actionGroup(details: details, actions: buttons)
         )
+    }
+
+    private func configureReloadConfigButton() {
+        reloadConfigButton.image = NSImage(
+            systemSymbolName: "arrow.clockwise",
+            accessibilityDescription: "Reload"
+        )?.withSymbolConfiguration(
+            NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        )
+        reloadConfigButton.imagePosition = .imageLeading
+        reloadConfigButton.imageHugsTitle = true
+    }
+
+    private func configureConfigStatusIcon() {
+        configStatusIcon.translatesAutoresizingMaskIntoConstraints = false
+        configStatusIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
+        configStatusIcon.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        configStatusIcon.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        configStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
     }
 
     private func titledSection(title: String, content: NSView) -> NSView {
