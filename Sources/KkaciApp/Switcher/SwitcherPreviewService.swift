@@ -57,18 +57,19 @@ final class SwitcherPreviewService {
         }
     }
 
-    func workspaceGroups(names: [String]) -> [WorkspaceSwitcherGroup] {
-        let liveWorkspaceNames = Set(controller.workspaces)
+    func workspaceGroups(ids: [String]) -> [WorkspaceSwitcherGroup] {
+        let liveWorkspaceIDs = Set(controller.workspaces)
         let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.bindings)
-        return names.compactMap { workspace in
-            guard liveWorkspaceNames.contains(workspace) else {
+        return ids.compactMap { workspaceID in
+            guard liveWorkspaceIDs.contains(workspaceID) else {
                 return nil
             }
             return WorkspaceSwitcherGroup(
-                name: workspace,
-                windows: controller.windows(in: workspace).map(makeItem),
-                preview: workspaceThumbnailCache.thumbnail(for: workspace),
-                shortcutKey: shortcuts.key(for: workspace)
+                id: workspaceID,
+                displayName: controller.currentConfig.workspace(for: workspaceID)?.displayName ?? workspaceID,
+                windows: controller.windows(in: workspaceID).map(makeItem),
+                preview: workspaceThumbnailCache.thumbnail(for: workspaceID),
+                shortcutKey: shortcuts.key(for: workspaceID)
             )
         }
     }
@@ -102,7 +103,7 @@ final class SwitcherPreviewService {
         let names = names.intersection(liveWorkspaceNames)
         workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceNames)
         workspaceThumbnailCache.refresh(
-            groups: workspaceGroups(names: controller.workspaces.filter(names.contains)),
+            groups: workspaceGroups(ids: controller.workspaces.filter(names.contains)),
             displayBounds: controller.monitorSlots.map(\.display.frame)
         )
     }

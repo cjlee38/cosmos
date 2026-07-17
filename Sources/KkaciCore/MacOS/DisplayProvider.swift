@@ -6,8 +6,7 @@ public struct DisplayProvider: DisplayProviding {
     public init() {}
 
     public func hidePoint(for frame: WindowFrame) -> CGPoint {
-        let assignableDisplays = displays().filter(\.isWorkspaceAssignable)
-        return hidePoint(for: frame, displays: assignableDisplays)
+        return hidePoint(for: frame, displays: displays())
             ?? bottomRight(of: CGDisplayBounds(CGMainDisplayID()))
     }
 
@@ -116,11 +115,9 @@ public struct DisplayProvider: DisplayProviding {
     }
 
     private func role(for id: DisplayID, mainDisplayID: DisplayID) -> DisplayRole? {
-        let mirrorSource = CGDisplayMirrorsDisplay(id)
-        if mirrorSource != kCGNullDirectDisplay {
-            return .mirrored(source: mirrorSource)
-        }
-        guard CGDisplayIsActive(id) != 0 else {
+        guard CGDisplayIsActive(id) != 0,
+              CGDisplayMirrorsDisplay(id) == kCGNullDirectDisplay
+        else {
             return nil
         }
         return id == mainDisplayID ? .main : .extended

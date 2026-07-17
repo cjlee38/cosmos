@@ -100,10 +100,12 @@ struct WorkspaceSettingsSnapshot: Equatable {
         return WorkspaceID.allCases.filter { !configuredIDs.contains($0) }
     }
 
-    var connectedDisplays: [WorkspaceSettingsDisplay] {
+    var workspaceDisplayOptions: [WorkspaceDisplayOption] {
         displays
-            .filter { $0.monitorSlot != nil }
-            .sorted { ($0.monitorSlot ?? 0) < ($1.monitorSlot ?? 0) }
+            .map(WorkspaceDisplayOption.init)
+            .sorted { lhs, rhs in
+                (lhs.monitorSlot ?? .max) < (rhs.monitorSlot ?? .max)
+            }
     }
 
     init(
@@ -117,6 +119,7 @@ struct WorkspaceSettingsSnapshot: Equatable {
         let workspaceItems = config.workspaces.map { workspace in
             WorkspaceSettingsItem(
                 id: workspace.id,
+                name: workspace.name,
                 monitorSlot: workspace.display,
                 switchShortcut: workspace.shortcuts.switchWorkspace,
                 moveShortcut: workspace.shortcuts.moveWindow
@@ -124,21 +127,19 @@ struct WorkspaceSettingsSnapshot: Equatable {
         }
         let idsByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
             .mapValues { $0.map(\.id) }
+        let titlesByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
+            .mapValues { $0.map(\.displayTitle) }
 
         self.displays = displays.map { display in
             let monitorSlot = slotByDisplayID[display.id]
-            let mirroredSourceMonitorSlot: MonitorSlot? = if case let .mirrored(source) = display.role {
-                slotByDisplayID[source]
-            } else {
-                nil
-            }
             return WorkspaceSettingsDisplay(
+                id: display.id,
                 name: display.name,
                 frame: display.frame,
                 role: display.role,
                 monitorSlot: monitorSlot,
-                mirroredSourceMonitorSlot: mirroredSourceMonitorSlot,
-                workspaceIDs: monitorSlot.flatMap { idsByMonitorSlot[$0] } ?? []
+                workspaceIDs: monitorSlot.flatMap { idsByMonitorSlot[$0] } ?? [],
+                workspaceTitles: monitorSlot.flatMap { titlesByMonitorSlot[$0] } ?? []
             )
         }
 
@@ -155,12 +156,42 @@ struct WorkspaceSettingsSnapshot: Equatable {
 }
 
 struct WorkspaceSettingsDisplay: Equatable {
+    let id: DisplayID
     let name: String
     let frame: CGRect
     let role: DisplayRole
     let monitorSlot: MonitorSlot?
-    let mirroredSourceMonitorSlot: MonitorSlot?
     let workspaceIDs: [WorkspaceID]
+    let workspaceTitles: [String]
+}
+
+struct WorkspaceDisplayOption: Equatable {
+    let displayID: DisplayID
+    let monitorSlot: MonitorSlot?
+    let name: String
+
+    init(displayID: DisplayID, monitorSlot: MonitorSlot?, name: String) {
+        self.displayID = displayID
+        self.monitorSlot = monitorSlot
+        self.name = name
+    }
+
+    init(display: WorkspaceSettingsDisplay) {
+        displayID = display.id
+        monitorSlot = display.monitorSlot
+        name = display.name
+    }
+
+    var isEnabled: Bool {
+        monitorSlot != nil
+    }
+
+    var title: String {
+        if let monitorSlot {
+            return "\(monitorSlot) · \(name)"
+        }
+        return name
+    }
 }
 
 struct WorkspaceNavigationShortcuts: Equatable {
@@ -170,9 +201,14 @@ struct WorkspaceNavigationShortcuts: Equatable {
 
 struct WorkspaceSettingsItem: Equatable {
     let id: WorkspaceID
+    let name: String?
     let monitorSlot: MonitorSlot
     let switchShortcut: String?
     let moveShortcut: String?
+
+    var displayTitle: String {
+        name.map { "\($0) (\(id.rawValue))" } ?? id.rawValue
+    }
 }
 
 enum ShortcutDisplayFormatter {

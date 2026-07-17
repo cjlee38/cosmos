@@ -44,7 +44,7 @@ final class SwitcherOverlayViewFactory {
 
     func makeWorkspaceList(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         availableFrame: NSRect,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
@@ -52,7 +52,7 @@ final class SwitcherOverlayViewFactory {
         let settings = appSettingsStore.snapshot()
         workspaceListView.configure(
             groups: groups,
-            selectedName: selectedName,
+            selectedID: selectedID,
             availableFrame: availableFrame,
             size: CGFloat(settings.workspaceSwitcherSize),
             interactions: WorkspaceSwitcherInteractions(onHover: onHover, onClick: onClick)

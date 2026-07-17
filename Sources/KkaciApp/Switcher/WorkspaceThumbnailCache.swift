@@ -6,7 +6,7 @@ final class WorkspaceThumbnailCache {
     private let renderQueue = DispatchQueue(label: "kkaci.workspace-thumbnails", qos: .userInitiated)
     private var thumbnails: [String: NSImage] = [:]
     private var pendingGroups: [String: WorkspaceThumbnailRenderGroup] = [:]
-    private var liveWorkspaceNames: Set<String> = []
+    private var liveWorkspaceIDs: Set<String> = []
     private var isRendering = false
     private var onThumbnailsUpdated: ((Set<String>) -> Void)?
 
@@ -19,14 +19,14 @@ final class WorkspaceThumbnailCache {
     }
 
     func removeStaleThumbnails(keeping workspaceNames: Set<String>) {
-        liveWorkspaceNames = workspaceNames
+        liveWorkspaceIDs = workspaceNames
         thumbnails = thumbnails.filter { workspaceNames.contains($0.key) }
         pendingGroups = pendingGroups.filter { workspaceNames.contains($0.key) }
     }
 
     func refresh(groups: [WorkspaceSwitcherGroup], displayBounds: [CGRect]) {
         for group in WorkspaceThumbnailRenderer.makeRenderGroups(groups, displayBounds: displayBounds) {
-            pendingGroups[group.name] = group
+            pendingGroups[group.id] = group
         }
         startPendingRender()
     }
@@ -47,7 +47,7 @@ final class WorkspaceThumbnailCache {
                 }
 
                 let images = rendered
-                    .filter { self.liveWorkspaceNames.contains($0.key) }
+                    .filter { self.liveWorkspaceIDs.contains($0.key) }
                     .mapValues { image in
                         NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
                     }
@@ -61,7 +61,7 @@ final class WorkspaceThumbnailCache {
 }
 
 private struct WorkspaceThumbnailRenderGroup {
-    let name: String
+    let id: String
     let desktopBounds: CGRect
     let windows: [WorkspaceThumbnailRenderWindow]
 }
@@ -91,7 +91,7 @@ private enum WorkspaceThumbnailRenderer {
                 )
             }
             return WorkspaceThumbnailRenderGroup(
-                name: group.name,
+                id: group.id,
                 desktopBounds: desktopBounds(windowFrames: windows.map(\.frame), displays: displayBounds),
                 windows: windows
             )
@@ -100,7 +100,7 @@ private enum WorkspaceThumbnailRenderer {
 
     static func render(_ groups: [WorkspaceThumbnailRenderGroup]) -> [String: CGImage] {
         Dictionary(uniqueKeysWithValues: groups.compactMap { group in
-            render(group).map { (group.name, $0) }
+            render(group).map { (group.id, $0) }
         })
     }
 

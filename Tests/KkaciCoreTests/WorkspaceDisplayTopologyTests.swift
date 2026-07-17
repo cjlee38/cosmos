@@ -107,34 +107,6 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.membership(for: 200), "A")
     }
 
-    func testMirroredDisplayUsesTheSameFallbackAsDisconnectedDisplay() throws {
-        let displayProvider = twoDisplayProvider()
-        let store = InMemoryWorkspaceConfigStore()
-        try store.save(configWithSecondaryWorkspace())
-        let controller = makeController(
-            FakeWindowSystem(windows: []),
-            displayProvider: displayProvider,
-            configStore: store
-        )
-
-        _ = controller.discoverWindows()
-        displayProvider.snapshots = [
-            mainDisplay(),
-            DisplaySnapshot(
-                id: 2,
-                frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
-                role: .mirrored(source: 1)
-            )
-        ]
-
-        _ = try controller.handleDisplayConfigurationChanged()
-
-        XCTAssertEqual(controller.displays.map(\.id), [1, 2])
-        XCTAssertEqual(controller.monitorSlots.map(\.display.id), [1])
-        XCTAssertEqual(controller.effectiveMonitorSlot(for: "A"), 1)
-        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "A"), 2)
-    }
-
     private func configWithSecondaryWorkspace() -> KkaciConfig {
         KkaciConfig(
             workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),

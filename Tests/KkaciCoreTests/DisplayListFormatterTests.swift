@@ -25,7 +25,12 @@ final class DisplayListFormatterTests: XCTestCase {
             )
         ]
 
-        XCTAssertEqual(DisplayListFormatter.lines(for: monitorSlots), [
+        let topology = DisplayTopologySnapshot(
+            displays: monitorSlots.map(\.display),
+            monitorSlots: monitorSlots
+        )
+
+        XCTAssertEqual(DisplayListFormatter.lines(for: topology), [
             "1 (LG ULTRAFINE)  Main",
             "2 (Built-in Retina Display)  Extended"
         ])

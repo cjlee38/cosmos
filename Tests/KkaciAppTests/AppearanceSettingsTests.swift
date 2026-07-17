@@ -61,6 +61,20 @@ final class AppearanceSettingsTests: XCTestCase {
         )
     }
 
+    func testMenuBarTitleFormatterDisplaysAliasesWithoutChangingWorkspaceIdentity() {
+        let names = ["1": "Develop", "A": "Operations"]
+
+        XCTAssertEqual(
+            MenuBarTitleFormatter.title(
+                workspaces: ["1", "A"],
+                currentWorkspace: "A",
+                style: .angleBrackets,
+                displayName: { names[$0] ?? $0 }
+            ),
+            "<Develop | •Operations>"
+        )
+    }
+
     func testSwitcherSizesIncreaseAcrossSliderRange() throws {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -166,7 +180,7 @@ final class AppearanceSettingsTests: XCTestCase {
     ) -> NSSize {
         factory.makeWorkspaceList(
             groups: [],
-            selectedName: "",
+            selectedID: "",
             availableFrame: availableFrame,
             onHover: { _ in },
             onClick: { _ in }

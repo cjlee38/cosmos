@@ -46,10 +46,11 @@ final class KkaciConfigTests: XCTestCase {
         let config = KkaciConfig(workspaces: [
             WorkspaceConfig(id: "B", display: 0),
             WorkspaceConfig(id: "1"),
+            WorkspaceConfig(id: "0"),
             WorkspaceConfig(id: "A", display: 2)
         ])
 
-        XCTAssertEqual(config.workspaceIDs, ["1", "A", "B"])
+        XCTAssertEqual(config.workspaceIDs, ["0", "1", "A", "B"])
         XCTAssertEqual(config.monitorSlot(for: "a"), 2)
         XCTAssertEqual(config.monitorSlot(for: "B"), 1)
         XCTAssertEqual(config.monitorSlot(for: "missing"), 1)
@@ -70,14 +71,10 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertEqual(removed.workspaceIDs, ["1", "3", "A"])
     }
 
-    func testWorkspaceTenUsesZeroAsItsDefaultShortcutKey() throws {
-        let config = try XCTUnwrap(KkaciConfig.default.addingWorkspace("10"))
-        let workspace = try XCTUnwrap(config.workspaces.first { $0.id == "10" })
+    func testAddingMultipleWorkspacesUsesOneCanonicalConfig() throws {
+        let config = try XCTUnwrap(KkaciConfig.default.addingWorkspaces(["B", "0", "A", "B"]))
 
-        XCTAssertEqual(workspace.shortcuts, WorkspaceShortcutConfig(
-            switchWorkspace: "option+0",
-            moveWindow: "option+shift+0"
-        ))
+        XCTAssertEqual(config.workspaceIDs, ["0", "1", "2", "3", "A", "B"])
     }
 
     func testRemovingTheLastWorkspaceIsRejected() {
@@ -110,6 +107,7 @@ final class KkaciConfigTests: XCTestCase {
                 WorkspaceConfig(id: "1"),
                 WorkspaceConfig(
                     id: "D",
+                    name: "Deploy",
                     display: 2,
                     shortcuts: WorkspaceShortcutConfig(switchWorkspace: "option+d")
                 )
@@ -145,6 +143,7 @@ final class KkaciConfigTests: XCTestCase {
               switch: option+1
               move_window: option+shift+1
           - id: d
+            name: Deploy
             display: 2
             shortcuts:
               switch: option+d
@@ -156,12 +155,13 @@ final class KkaciConfigTests: XCTestCase {
 
         XCTAssertEqual(config.workspaceIDs, ["1", "D"])
         XCTAssertEqual(config.monitorSlot(for: "D"), 2)
+        XCTAssertEqual(config.workspace(for: "D")?.name, "Deploy")
         XCTAssertEqual(config.shortcuts.workspaceSwitcher.next, "ctrl+tab")
         XCTAssertEqual(config.workspaces[1].shortcuts.moveWindow, "option+shift+d")
     }
 
     func testInvalidWorkspaceIDsAreRejected() throws {
-        for invalidID in [".", "11", "AA"] {
+        for invalidID in [".", "10", "11", "AA"] {
             let (directory, url) = temporaryConfigLocation()
             defer { try? FileManager.default.removeItem(at: directory) }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

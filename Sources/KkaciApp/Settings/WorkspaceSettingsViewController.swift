@@ -1,26 +1,29 @@
 import AppKit
 import KkaciCore
 
-final class WorkspaceSettingsViewController: NSViewController {
+final class WorkspaceSettingsViewController: NSViewController, NSTextFieldDelegate {
     private let log = Log(category: "settings")
     private let snapshotProvider: () -> WorkspaceSettingsSnapshot
-    private let updateMonitorHandler: (String, MonitorSlot) throws -> Void
-    private let addWorkspaceHandler: (WorkspaceID) throws -> Void
+    private let updateMonitorHandler: (String, DisplayID) throws -> Void
+    private let addWorkspaceHandler: ([WorkspaceID], DisplayID) throws -> Void
     private let removeWorkspaceHandler: (WorkspaceID) throws -> Void
+    private let updateNameHandler: (WorkspaceID, String?) throws -> Void
     private let displayArrangementView = WorkspaceDisplayArrangementView()
     private let displayStatusStack = NSStackView()
     private let keyboardContentStack = NSStackView()
 
     init(
         snapshotProvider: @escaping () -> WorkspaceSettingsSnapshot,
-        updateMonitorHandler: @escaping (String, MonitorSlot) throws -> Void,
-        addWorkspaceHandler: @escaping (WorkspaceID) throws -> Void,
-        removeWorkspaceHandler: @escaping (WorkspaceID) throws -> Void
+        updateMonitorHandler: @escaping (String, DisplayID) throws -> Void,
+        addWorkspaceHandler: @escaping ([WorkspaceID], DisplayID) throws -> Void,
+        removeWorkspaceHandler: @escaping (WorkspaceID) throws -> Void,
+        updateNameHandler: @escaping (WorkspaceID, String?) throws -> Void
     ) {
         self.snapshotProvider = snapshotProvider
         self.updateMonitorHandler = updateMonitorHandler
         self.addWorkspaceHandler = addWorkspaceHandler
         self.removeWorkspaceHandler = removeWorkspaceHandler
+        self.updateNameHandler = updateNameHandler
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -115,25 +118,6 @@ private extension WorkspaceSettingsViewController {
 
     private func rebuildDisplayStatus(_ snapshot: WorkspaceSettingsSnapshot) {
         removeArrangedSubviews(from: displayStatusStack)
-        let mirroredDisplays = snapshot.displays.filter {
-            if case .mirrored = $0.role {
-                return true
-            }
-            return false
-        }
-        for display in mirroredDisplays {
-            let destination = display.mirroredSourceMonitorSlot
-                .flatMap { sourceSlot in
-                    snapshot.displays.first { $0.monitorSlot == sourceSlot }?.name
-                        ?? "Monitor \(sourceSlot)"
-                }
-                ?? "another display"
-            displayStatusStack.addArrangedSubview(statusRow(
-                symbol: "rectangle.on.rectangle",
-                text: "\(display.name) mirrors \(destination)",
-                color: .secondaryLabelColor
-            ))
-        }
         for monitorSlot in snapshot.disconnectedMonitorSlots {
             let names = snapshot.workspaces
                 .filter { $0.monitorSlot == monitorSlot }
@@ -185,28 +169,37 @@ private extension WorkspaceSettingsViewController {
             headerLabel("Display"),
             headerLabel("Switch"),
             headerLabel("Move Window"),
-            addWorkspaceButton(snapshot.availableWorkspaceIDs)
+            WorkspaceSettingsControlFactory.addButton(
+                availableWorkspaceIDs: snapshot.availableWorkspaceIDs,
+                target: self,
+                action: #selector(showAddWorkspacePicker(_:))
+            )
         ]]
         rows.append(contentsOf: snapshot.workspaces.map { workspace in
             [
-                valueLabel(workspace.id.rawValue, weight: .semibold),
+                WorkspaceSettingsControlFactory.identityEditor(workspace: workspace, delegate: self),
                 monitorSelector(
                     workspace: workspace,
-                    connectedDisplays: snapshot.connectedDisplays
+                    displays: snapshot.displays
                 ),
                 shortcutBadge(workspace.switchShortcut),
                 shortcutBadge(workspace.moveShortcut),
-                removeWorkspaceButton(workspace.id, isEnabled: snapshot.workspaces.count > 1)
+                WorkspaceSettingsControlFactory.removeButton(
+                    workspaceID: workspace.id,
+                    isEnabled: snapshot.workspaces.count > 1,
+                    target: self,
+                    action: #selector(removeWorkspace(_:))
+                )
             ]
         })
 
         let grid = NSGridView(views: rows)
         grid.rowSpacing = 8
         grid.columnSpacing = 10
-        grid.column(at: 0).width = 84
-        grid.column(at: 1).width = 150
-        grid.column(at: 2).width = 104
-        grid.column(at: 3).width = 126
+        grid.column(at: 0).width = 134
+        grid.column(at: 1).width = 126
+        grid.column(at: 2).width = 94
+        grid.column(at: 3).width = 112
         grid.column(at: 4).width = 28
         for index in rows.indices {
             grid.row(at: index).yPlacement = .center
@@ -216,42 +209,16 @@ private extension WorkspaceSettingsViewController {
 
     private func monitorSelector(
         workspace: WorkspaceSettingsItem,
-        connectedDisplays: [WorkspaceSettingsDisplay]
+        displays: [WorkspaceSettingsDisplay]
     ) -> NSView {
         let selector = WorkspaceMonitorPopUpButton(
             workspaceID: workspace.id,
             currentMonitorSlot: workspace.monitorSlot,
-            connectedDisplays: connectedDisplays
+            displays: displays
         )
         selector.target = self
         selector.action = #selector(monitorSelectionChanged(_:))
         return selector
-    }
-
-    private func addWorkspaceButton(_ availableWorkspaceIDs: [WorkspaceID]) -> NSButton {
-        let button = WorkspaceAddButton(availableWorkspaceIDs: availableWorkspaceIDs)
-        button.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Add Workspace")
-        button.imagePosition = .imageOnly
-        button.bezelStyle = .accessoryBarAction
-        button.toolTip = "Add Workspace"
-        button.target = self
-        button.action = #selector(showAddWorkspaceMenu(_:))
-        button.isEnabled = !availableWorkspaceIDs.isEmpty
-        button.setAccessibilityIdentifier("kkaci.settings.workspace.add")
-        return button
-    }
-
-    private func removeWorkspaceButton(_ workspaceID: WorkspaceID, isEnabled: Bool) -> NSButton {
-        let button = WorkspaceRemoveButton(workspaceID: workspaceID)
-        button.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
-        button.imagePosition = .imageOnly
-        button.bezelStyle = .accessoryBarAction
-        button.toolTip = isEnabled ? "Delete Workspace \(workspaceID.rawValue)" : "At least one workspace is required"
-        button.target = self
-        button.action = #selector(removeWorkspace(_:))
-        button.isEnabled = isEnabled
-        button.setAccessibilityIdentifier("kkaci.settings.workspace.\(workspaceID.rawValue).remove")
-        return button
     }
 
     private func labeledShortcut(title: String, shortcut: String?) -> NSView {
@@ -334,39 +301,30 @@ private extension WorkspaceSettingsViewController {
     }
 
     @objc private func monitorSelectionChanged(_ sender: WorkspaceMonitorPopUpButton) {
-        guard let monitorSlot = sender.selectedItem?.representedObject as? MonitorSlot,
-              monitorSlot != sender.currentMonitorSlot
+        guard let displayID = sender.selectedItem?.representedObject as? DisplayID,
+              displayID != sender.currentDisplayID
         else {
             return
         }
 
         do {
-            try updateMonitorHandler(sender.workspaceID.rawValue, monitorSlot)
+            try updateMonitorHandler(sender.workspaceID.rawValue, displayID)
         } catch {
             log.error(
                 "Workspace monitor update failed workspace=\(sender.workspaceID.rawValue) "
-                    + "monitor=\(monitorSlot): \(String(describing: error))"
+                    + "display=\(displayID): \(String(describing: error))"
             )
             refresh()
         }
     }
 
-    @objc private func showAddWorkspaceMenu(_ sender: WorkspaceAddButton) {
-        let menu = WorkspaceAddMenu(
-            workspaceIDs: sender.availableWorkspaceIDs,
-            target: self,
-            action: #selector(addWorkspace(_:))
+    @objc private func showAddWorkspacePicker(_ sender: WorkspaceAddButton) {
+        let picker = WorkspaceIDPickerViewController(
+            unavailableWorkspaceIDs: Set(WorkspaceID.allCases).subtracting(sender.availableWorkspaceIDs),
+            displayOptions: snapshotProvider().workspaceDisplayOptions,
+            addHandler: addWorkspaceHandler
         )
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.maxY + 4), in: sender)
-    }
-
-    @objc private func addWorkspace(_ sender: WorkspaceIDMenuItem) {
-        do {
-            try addWorkspaceHandler(sender.workspaceID)
-        } catch {
-            log.error("Workspace add failed id=\(sender.workspaceID.rawValue): \(String(describing: error))")
-            refresh()
-        }
+        presentAsSheet(picker)
     }
 
     @objc private func removeWorkspace(_ sender: WorkspaceRemoveButton) {
@@ -387,6 +345,28 @@ private extension WorkspaceSettingsViewController {
         } catch {
             log.error("Workspace removal failed id=\(sender.workspaceID.rawValue): \(String(describing: error))")
             refresh()
+        }
+    }
+}
+
+extension WorkspaceSettingsViewController {
+    func controlTextDidEndEditing(_ notification: Notification) {
+        guard let field = notification.object as? WorkspaceNameTextField else {
+            return
+        }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedName = name.isEmpty ? nil : name
+        guard normalizedName != field.persistedName else {
+            return
+        }
+
+        do {
+            try updateNameHandler(field.workspaceID, normalizedName)
+            field.persistedName = normalizedName
+            field.stringValue = normalizedName ?? ""
+        } catch {
+            log.error("Workspace name update failed id=\(field.workspaceID.rawValue): \(String(describing: error))")
+            field.stringValue = field.persistedName ?? ""
         }
     }
 }

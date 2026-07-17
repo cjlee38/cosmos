@@ -18,30 +18,24 @@ final class WorkspaceSettingsTests: XCTestCase {
             frame: CGRect(x: 0, y: 200, width: 1200, height: 800),
             role: .extended
         )
-        let mirrored = DisplaySnapshot(
-            id: 3,
-            frame: main.frame,
-            role: .mirrored(source: 1)
-        )
         let snapshot = WorkspaceSettingsSnapshot(
             config: snapshotConfig(),
             monitorSlots: [
                 MonitorSlotSnapshot(slot: 1, display: main),
                 MonitorSlotSnapshot(slot: 2, display: extended)
             ],
-            displays: [main, extended, mirrored]
+            displays: [main, extended]
         )
 
         XCTAssertEqual(snapshot.displays[0].workspaceIDs, ["1"])
+        XCTAssertEqual(snapshot.displays[0].workspaceTitles, ["Develop (1)"])
         XCTAssertEqual(snapshot.displays[0].name, "Built-in Retina Display")
         XCTAssertEqual(snapshot.displays[1].workspaceIDs, ["A"])
-        XCTAssertEqual(snapshot.displays[2].mirroredSourceMonitorSlot, 1)
-        XCTAssertEqual(snapshot.displays[2].workspaceIDs, [])
-        XCTAssertEqual(snapshot.connectedDisplays.compactMap(\.monitorSlot), [1, 2])
         XCTAssertEqual(snapshot.disconnectedMonitorSlots, [3])
         XCTAssertEqual(snapshot.navigation.next, "ctrl+tab")
         XCTAssertEqual(snapshot.navigation.previous, "ctrl+shift+tab")
         XCTAssertEqual(snapshot.workspaces[0].switchShortcut, "option+1")
+        XCTAssertEqual(snapshot.workspaces[0].displayTitle, "Develop (1)")
         XCTAssertEqual(snapshot.workspaces[0].moveShortcut, "option+shift+1")
         XCTAssertNil(snapshot.workspaces[1].switchShortcut)
         XCTAssertFalse(snapshot.availableWorkspaceIDs.contains("1"))
@@ -57,14 +51,15 @@ final class WorkspaceSettingsTests: XCTestCase {
 
     func testMonitorSelectorSendsWorkspaceAndSelectedMonitor() throws {
         let snapshot = settingsSnapshot()
-        var update: (workspace: String, monitorSlot: MonitorSlot)?
+        var update: (workspace: String, displayID: DisplayID)?
         let viewController = WorkspaceSettingsViewController(
             snapshotProvider: { snapshot },
-            updateMonitorHandler: { workspace, monitorSlot in
-                update = (workspace, monitorSlot)
+            updateMonitorHandler: { workspace, displayID in
+                update = (workspace, displayID)
             },
-            addWorkspaceHandler: { _ in },
-            removeWorkspaceHandler: { _ in }
+            addWorkspaceHandler: { _, _ in },
+            removeWorkspaceHandler: { _ in },
+            updateNameHandler: { _, _ in }
         )
 
         _ = viewController.view
@@ -73,14 +68,15 @@ final class WorkspaceSettingsTests: XCTestCase {
                 .compactMap { $0 as? NSPopUpButton }
                 .first { $0.accessibilityIdentifier() == "kkaci.settings.workspace.1.monitor" }
         )
-        let targetItem = try XCTUnwrap(selector.itemArray.first { $0.representedObject as? Int == 2 })
-        XCTAssertEqual(targetItem.title, "Studio Display")
+        let targetItem = try XCTUnwrap(selector.itemArray.first { $0.representedObject as? DisplayID == 2 })
+        XCTAssertEqual(targetItem.title, "2 · Studio Display")
+        XCTAssertFalse(selector.menu?.autoenablesItems ?? true)
 
         selector.select(targetItem)
         selector.sendAction(selector.action, to: selector.target)
 
         XCTAssertEqual(update?.workspace, "1")
-        XCTAssertEqual(update?.monitorSlot, 2)
+        XCTAssertEqual(update?.displayID, 2)
     }
 
     func testWorkspaceControlsExposeAddAndPreventDeletingTheLastWorkspace() throws {
@@ -88,8 +84,9 @@ final class WorkspaceSettingsTests: XCTestCase {
         let viewController = WorkspaceSettingsViewController(
             snapshotProvider: { snapshot },
             updateMonitorHandler: { _, _ in },
-            addWorkspaceHandler: { _ in },
-            removeWorkspaceHandler: { _ in }
+            addWorkspaceHandler: { _, _ in },
+            removeWorkspaceHandler: { _ in },
+            updateNameHandler: { _, _ in }
         )
 
         _ = viewController.view
@@ -105,15 +102,68 @@ final class WorkspaceSettingsTests: XCTestCase {
         XCTAssertFalse(removeButton.isEnabled)
     }
 
-    func testWorkspaceAddMenuListsAllIDsAtOneLevel() {
-        let menu = WorkspaceAddMenu(
-            workspaceIDs: ["2", "10", "A"],
-            target: self,
-            action: #selector(ignoreMenuAction(_:))
-        )
+    func testWorkspaceIDPickerDimsConfiguredIDsAndSelectsAvailableIDs() throws {
+        let picker = WorkspaceIDPickerView(unavailableWorkspaceIDs: ["1", "A"])
+        let buttons = descendants(of: picker).compactMap { $0 as? WorkspaceIDKeyButton }
+        let zero = try XCTUnwrap(buttons.first { $0.workspaceID == "0" })
+        let one = try XCTUnwrap(buttons.first { $0.workspaceID == "1" })
+        let letterA = try XCTUnwrap(buttons.first { $0.workspaceID == "A" })
+        let letterB = try XCTUnwrap(buttons.first { $0.workspaceID == "B" })
 
-        XCTAssertEqual(menu.items.map(\.title), ["2", "10", "A"])
-        XCTAssertTrue(menu.items.allSatisfy { $0.submenu == nil })
+        XCTAssertTrue(zero.isEnabled)
+        XCTAssertFalse(one.isEnabled)
+        XCTAssertFalse(letterA.isEnabled)
+
+        zero.performClick(nil)
+        letterB.performClick(nil)
+
+        XCTAssertEqual(picker.selectedWorkspaceIDs, ["0", "B"])
+    }
+
+    func testWorkspaceIDPickerAddsSelectedIDsToTheChosenDisplay() throws {
+        var addition: (workspaceIDs: [WorkspaceID], displayID: DisplayID)?
+        let viewController = WorkspaceIDPickerViewController(
+            unavailableWorkspaceIDs: ["1"],
+            displayOptions: [
+                WorkspaceDisplayOption(
+                    displayID: 1,
+                    monitorSlot: 1,
+                    name: "Built-in Retina Display"
+                ),
+                WorkspaceDisplayOption(displayID: 2, monitorSlot: 2, name: "Studio Display")
+            ],
+            addHandler: { workspaceIDs, displayID in
+                addition = (workspaceIDs, displayID)
+            }
+        )
+        let parent = NSViewController()
+        let window = NSWindow(contentViewController: parent)
+        defer { window.close() }
+        parent.presentAsSheet(viewController)
+
+        _ = viewController.view
+        let views = descendants(of: viewController.view)
+        let displaySelector = try XCTUnwrap(views.compactMap { $0 as? NSPopUpButton }.first {
+            $0.accessibilityIdentifier() == "kkaci.workspace-picker.display"
+        })
+        XCTAssertEqual(
+            displaySelector.itemTitles,
+            ["1 · Built-in Retina Display", "2 · Studio Display"]
+        )
+        XCTAssertFalse(displaySelector.menu?.autoenablesItems ?? true)
+        displaySelector.selectItem(at: 1)
+
+        let workspaceB = try XCTUnwrap(views.compactMap { $0 as? WorkspaceIDKeyButton }.first {
+            $0.workspaceID == "B"
+        })
+        workspaceB.performClick(nil)
+        let addButton = try XCTUnwrap(views.compactMap { $0 as? NSButton }.first {
+            $0.title == "Add Workspaces"
+        })
+        addButton.performClick(nil)
+
+        XCTAssertEqual(addition?.workspaceIDs, ["B"])
+        XCTAssertEqual(addition?.displayID, 2)
     }
 
     private func settingsSnapshot() -> WorkspaceSettingsSnapshot {
@@ -146,6 +196,7 @@ final class WorkspaceSettingsTests: XCTestCase {
             workspaces: [
                 WorkspaceConfig(
                     id: "1",
+                    name: "Develop",
                     shortcuts: WorkspaceShortcutConfig(
                         switchWorkspace: "option+1",
                         moveWindow: "option+shift+1"
@@ -166,6 +217,4 @@ final class WorkspaceSettingsTests: XCTestCase {
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap(descendants)
     }
-
-    @objc private func ignoreMenuAction(_: NSMenuItem) {}
 }

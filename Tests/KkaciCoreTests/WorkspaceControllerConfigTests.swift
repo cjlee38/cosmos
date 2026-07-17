@@ -121,7 +121,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         try controller.assignWindow(100, to: "1")
         try controller.assignWindow(200, to: "2")
 
-        XCTAssertThrowsError(try controller.updateWorkspaceMonitor("2", monitorSlot: 1)) { error in
+        XCTAssertThrowsError(try controller.updateWorkspaceMonitor("2", displayID: 1)) { error in
             XCTAssertEqual(error as? FailingSaveWorkspaceConfigStore.Error, .saveFailed)
         }
 
@@ -133,9 +133,14 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
 
     func testFailedStartupLoadKeepsMonitorUpdatePersistenceDisabled() throws {
         let store = FailingLoadWorkspaceConfigStore()
-        let controller = makeController(FakeWindowSystem(windows: []), configStore: store)
+        let controller = makeController(
+            FakeWindowSystem(windows: []),
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+        _ = controller.discoverWindows()
 
-        try controller.updateWorkspaceMonitor("2", monitorSlot: 2)
+        try controller.updateWorkspaceMonitor("2", displayID: 2)
 
         XCTAssertEqual(controller.monitorSlot(for: "2"), 2)
         XCTAssertTrue(store.savedConfigs.isEmpty)

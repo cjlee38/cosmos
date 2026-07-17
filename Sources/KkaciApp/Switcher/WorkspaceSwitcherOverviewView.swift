@@ -6,7 +6,7 @@ struct WorkspaceSwitcherInteractions {
 }
 
 final class WorkspaceSwitcherListView: NSView {
-    private var cardViewsByName: [String: WorkspacePreviewCardView] = [:]
+    private var cardViewsByID: [String: WorkspacePreviewCardView] = [:]
     private var recycledCardViews: [WorkspacePreviewCardView] = []
 
     override init(frame frameRect: NSRect) {
@@ -19,7 +19,7 @@ final class WorkspaceSwitcherListView: NSView {
     }
 
     func ensureCapacity(_ count: Int) {
-        let missingCount = max(0, count - cardViewsByName.count - recycledCardViews.count)
+        let missingCount = max(0, count - cardViewsByID.count - recycledCardViews.count)
         for _ in 0 ..< missingCount {
             recycledCardViews.append(WorkspacePreviewCardView(frame: .zero))
         }
@@ -27,7 +27,7 @@ final class WorkspaceSwitcherListView: NSView {
 
     func configure(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         availableFrame: NSRect,
         size: CGFloat,
         interactions: WorkspaceSwitcherInteractions
@@ -38,7 +38,7 @@ final class WorkspaceSwitcherListView: NSView {
             size: size
         )
         frame = NSRect(origin: .zero, size: layout.contentSize)
-        recycleMissingCards(keeping: Set(groups.map(\.name)))
+        recycleMissingCards(keeping: Set(groups.map(\.id)))
         ensureCapacity(groups.count)
 
         let hoverGate = SwitcherHoverGate()
@@ -46,10 +46,10 @@ final class WorkspaceSwitcherListView: NSView {
             let row = index / layout.columns
             let column = index % layout.columns
             let cell = layout.cellFrame(row: row, column: column)
-            let card = cardView(for: group.name)
+            let card = cardView(for: group.id)
             card.configure(WorkspaceCardConfiguration(
                 group: group,
-                isSelected: group.name == selectedName,
+                isSelected: group.id == selectedID,
                 cardSize: layout.cardSize,
                 hoverGate: hoverGate,
                 onHover: interactions.onHover,
@@ -64,18 +64,18 @@ final class WorkspaceSwitcherListView: NSView {
 
     func updatePreviews(groups: [WorkspaceSwitcherGroup]) {
         for group in groups {
-            cardViewsByName[group.name]?.update(group: group)
+            cardViewsByID[group.id]?.update(group: group)
         }
     }
 
-    func updateSelection(selectedName: String) {
-        for (name, card) in cardViewsByName {
-            card.updateSelection(name == selectedName)
+    func updateSelection(selectedID: String) {
+        for (id, card) in cardViewsByID {
+            card.updateSelection(id == selectedID)
         }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        for card in cardViewsByName.values.reversed() {
+        for card in cardViewsByID.values.reversed() {
             let pointInCard = card.convert(point, from: self)
             if card.bounds.contains(pointInCard) {
                 return card
@@ -84,20 +84,20 @@ final class WorkspaceSwitcherListView: NSView {
         return super.hitTest(point)
     }
 
-    private func cardView(for name: String) -> WorkspacePreviewCardView {
-        if let card = cardViewsByName[name] {
+    private func cardView(for id: String) -> WorkspacePreviewCardView {
+        if let card = cardViewsByID[id] {
             return card
         }
 
         let card = recycledCardViews.removeLast()
-        cardViewsByName[name] = card
+        cardViewsByID[id] = card
         addSubview(card)
         return card
     }
 
-    private func recycleMissingCards(keeping names: Set<String>) {
-        for name in Array(cardViewsByName.keys) where !names.contains(name) {
-            guard let card = cardViewsByName.removeValue(forKey: name) else {
+    private func recycleMissingCards(keeping ids: Set<String>) {
+        for id in Array(cardViewsByID.keys) where !ids.contains(id) {
+            guard let card = cardViewsByID.removeValue(forKey: id) else {
                 continue
             }
             card.prepareForReuse()
@@ -117,7 +117,7 @@ private struct WorkspaceCardConfiguration {
 }
 
 private final class WorkspacePreviewCardView: NSView {
-    private var name: String?
+    private var workspaceID: String?
     private var hoverGate: SwitcherHoverGate?
     private var onHover: ((String) -> Void)?
     private var onClick: ((String) -> Void)?
@@ -178,12 +178,12 @@ private final class WorkspacePreviewCardView: NSView {
 
     func configure(_ configuration: WorkspaceCardConfiguration) {
         let group = configuration.group
-        name = group.name
+        workspaceID = group.id
         hoverGate = configuration.hoverGate
         onHover = configuration.onHover
         onClick = configuration.onClick
         frame.size = configuration.cardSize
-        titleLabel.stringValue = "Workspace \(group.name)"
+        titleLabel.stringValue = group.displayName
         layoutContent()
         update(group: group)
         updateSelection(configuration.isSelected)
@@ -191,7 +191,7 @@ private final class WorkspacePreviewCardView: NSView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        name = nil
+        workspaceID = nil
         hoverGate = nil
         onHover = nil
         onClick = nil
@@ -199,7 +199,7 @@ private final class WorkspacePreviewCardView: NSView {
     }
 
     func update(group: WorkspaceSwitcherGroup) {
-        guard group.name == name else {
+        guard group.id == workspaceID else {
             return
         }
 
@@ -225,17 +225,17 @@ private final class WorkspacePreviewCardView: NSView {
     }
 
     private func hover() {
-        guard let name, hoverGate?.allowHoverIfPointerMoved() == true else {
+        guard let workspaceID, hoverGate?.allowHoverIfPointerMoved() == true else {
             return
         }
-        onHover?(name)
+        onHover?(workspaceID)
     }
 
     private func commit() {
-        guard let name else {
+        guard let workspaceID else {
             return
         }
-        onClick?(name)
+        onClick?(workspaceID)
     }
 
     private func setupViews() {

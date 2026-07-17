@@ -3,7 +3,8 @@ import KkaciCore
 
 final class StatusMenuController: NSObject {
     private struct WorkspaceMenuEntry {
-        let name: String
+        let id: String
+        let title: String
         let monitorSlot: MonitorSlot
     }
 
@@ -70,7 +71,7 @@ final class StatusMenuController: NSObject {
     }
 
     private func buildWorkspaceItems() {
-        workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
+        workspaceItem.title = "Workspace: \(workspaceDisplayName(controller.currentWorkspace))"
         workspaceItem.isEnabled = false
         menu.addItem(workspaceItem)
 
@@ -84,7 +85,7 @@ final class StatusMenuController: NSObject {
 
             for workspace in workspacesByMonitor[monitorSlot, default: []] {
                 let item = NSMenuItem(
-                    title: workspace,
+                    title: workspaceMenuTitle(workspace),
                     action: #selector(switchWorkspace(_:)),
                     keyEquivalent: ""
                 )
@@ -120,7 +121,7 @@ final class StatusMenuController: NSObject {
         }
 
         statusItem.button?.title = menuBarTitle()
-        workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
+        workspaceItem.title = "Workspace: \(workspaceDisplayName(controller.currentWorkspace))"
         for (workspace, item) in workspaceItems {
             item.state = controller.isWorkspaceVisible(workspace) ? .on : .off
         }
@@ -128,7 +129,11 @@ final class StatusMenuController: NSObject {
 
     private func workspaceMenuEntries() -> [WorkspaceMenuEntry] {
         controller.workspaces.map {
-            WorkspaceMenuEntry(name: $0, monitorSlot: controller.effectiveMonitorSlot(for: $0))
+            WorkspaceMenuEntry(
+                id: $0,
+                title: workspaceMenuTitle($0),
+                monitorSlot: controller.effectiveMonitorSlot(for: $0)
+            )
         }
     }
 
@@ -143,7 +148,9 @@ final class StatusMenuController: NSObject {
         }
 
         return zip(renderedWorkspaceEntries, entries).allSatisfy { current, updated in
-            current.name == updated.name && current.monitorSlot == updated.monitorSlot
+            current.id == updated.id
+                && current.title == updated.title
+                && current.monitorSlot == updated.monitorSlot
         }
     }
 
@@ -154,8 +161,22 @@ final class StatusMenuController: NSObject {
         return MenuBarTitleFormatter.title(
             workspaces: workspaces,
             currentWorkspace: controller.currentWorkspace,
-            style: appSettingsStore.snapshot().menuBarIconStyle
+            style: appSettingsStore.snapshot().menuBarIconStyle,
+            displayName: workspaceDisplayName
         )
+    }
+
+    private func workspaceDisplayName(_ workspace: String) -> String {
+        controller.currentConfig.workspace(for: workspace)?.displayName ?? workspace
+    }
+
+    private func workspaceMenuTitle(_ workspace: String) -> String {
+        guard let configuredWorkspace = controller.currentConfig.workspace(for: workspace),
+              let name = configuredWorkspace.name
+        else {
+            return workspace
+        }
+        return "\(name) (\(workspace))"
     }
 
     @objc private func switchWorkspace(_ sender: NSMenuItem) {
@@ -206,10 +227,14 @@ enum MenuBarTitleFormatter {
     static func title(
         workspaces: [String],
         currentWorkspace: String,
-        style: MenuBarIconStyle
+        style: MenuBarIconStyle,
+        displayName: (String) -> String = { $0 }
     ) -> String {
         let contents = workspaces
-            .map { $0 == currentWorkspace ? "•\($0)" : $0 }
+            .map { workspace in
+                let title = displayName(workspace)
+                return workspace == currentWorkspace ? "•\(title)" : title
+            }
             .joined(separator: " | ")
 
         switch style {

@@ -34,10 +34,10 @@ private func runREPL() {
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 if arguments == ["displays"] {
-    let monitorSlots = MonitorSlotResolver(displayProvider: DisplayProvider()).slots()
-    let lines = DisplayListFormatter.lines(for: monitorSlots)
+    let topology = MonitorSlotResolver(displayProvider: DisplayProvider()).topology()
+    let lines = DisplayListFormatter.lines(for: topology)
     if lines.isEmpty {
-        print("No assignable displays found.")
+        print("No displays found.")
     } else {
         lines.forEach { print($0) }
     }

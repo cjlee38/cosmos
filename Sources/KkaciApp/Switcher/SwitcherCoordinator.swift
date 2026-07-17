@@ -98,7 +98,7 @@ extension SwitcherCoordinator {
             return
         }
 
-        commitWorkspace(name: selection.selectedItem)
+        commitWorkspace(id: selection.selectedItem)
     }
 }
 
@@ -153,14 +153,14 @@ private extension SwitcherCoordinator {
         overlay?.hideOverlay()
     }
 
-    private func commitWorkspace(name: String) {
+    private func commitWorkspace(id: String) {
         endSession()
 
-        log.trace("commit workspace=\(name)")
+        log.trace("commit workspace=\(id)")
         do {
-            guard try controller.switchWorkspace(to: name) != nil else { return }
+            guard try controller.switchWorkspace(to: id) != nil else { return }
             handleContentChanged()
-            log.info("Switched to workspace \(name)")
+            log.info("Switched to workspace \(id)")
             refreshStatus()
         } catch {
             log.error("Workspace switch failed: \(String(describing: error))")
@@ -179,8 +179,8 @@ private extension SwitcherCoordinator {
     }
 
     @discardableResult
-    private func selectWorkspace(name: String) -> Bool {
-        guard session?.selectWorkspace(name) == true else {
+    private func selectWorkspace(id: String) -> Bool {
+        guard session?.selectWorkspace(id) == true else {
             return false
         }
         updateVisibleSelection()
@@ -230,14 +230,14 @@ private extension SwitcherCoordinator {
             )
         case let .workspaces(selection, anchorFrame):
             overlay.showWorkspaceSwitcher(
-                groups: previewService.workspaceGroups(names: selection.items),
-                selectedName: selection.selectedItem,
+                groups: previewService.workspaceGroups(ids: selection.items),
+                selectedID: selection.selectedItem,
                 anchorFrame: anchorFrame,
-                onHover: { [weak self] name in
-                    _ = self?.selectWorkspace(name: name)
+                onHover: { [weak self] id in
+                    _ = self?.selectWorkspace(id: id)
                 },
-                onClick: { [weak self] name in
-                    self?.commitWorkspace(name: name)
+                onClick: { [weak self] id in
+                    self?.commitWorkspace(id: id)
                 }
             )
             previewService.refreshAll(
@@ -257,7 +257,7 @@ private extension SwitcherCoordinator {
         case let .windows(selection, _):
             overlay.updateWindowSelection(selectedID: selection.selectedItem)
         case let .workspaces(selection, _):
-            overlay.updateWorkspaceSelection(selectedName: selection.selectedItem)
+            overlay.updateWorkspaceSelection(selectedID: selection.selectedItem)
         case nil:
             return
         }
@@ -280,7 +280,7 @@ private extension SwitcherCoordinator {
             return false
         }
 
-        commitWorkspace(name: workspace)
+        commitWorkspace(id: workspace)
         return true
     }
 }
@@ -330,14 +330,14 @@ private extension SwitcherCoordinator {
             )
         case let .workspaces(selection, anchorFrame):
             overlay.rebindWorkspaceSwitcher(
-                groups: previewService.workspaceGroups(names: selection.items),
-                selectedName: selection.selectedItem,
+                groups: previewService.workspaceGroups(ids: selection.items),
+                selectedID: selection.selectedItem,
                 anchorFrame: anchorFrame,
-                onHover: { [weak self] name in
-                    _ = self?.selectWorkspace(name: name)
+                onHover: { [weak self] id in
+                    _ = self?.selectWorkspace(id: id)
                 },
-                onClick: { [weak self] name in
-                    self?.commitWorkspace(name: name)
+                onClick: { [weak self] id in
+                    self?.commitWorkspace(id: id)
                 }
             )
         case nil:
@@ -381,7 +381,7 @@ private extension SwitcherCoordinator {
             guard !changedNames.isEmpty else {
                 return
             }
-            overlay.updateWorkspaceSwitcher(groups: previewService.workspaceGroups(names: changedNames))
+            overlay.updateWorkspaceSwitcher(groups: previewService.workspaceGroups(ids: changedNames))
         case nil:
             return
         }

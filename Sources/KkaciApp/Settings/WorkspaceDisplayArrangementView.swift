@@ -100,8 +100,6 @@ private final class WorkspaceDisplayCardView: NSView {
             "Main"
         case .extended:
             "Extended"
-        case .mirrored:
-            "Mirrored"
         }
         let role = NSTextField(labelWithString: roleName)
         role.font = .systemFont(ofSize: 10.5, weight: .medium)
@@ -115,7 +113,7 @@ private final class WorkspaceDisplayCardView: NSView {
         heading.translatesAutoresizingMaskIntoConstraints = false
 
         workspaceFlow.translatesAutoresizingMaskIntoConstraints = false
-        workspaceFlow.apply(item.workspaceIDs)
+        workspaceFlow.apply(item.workspaceTitles)
 
         addSubview(heading)
         addSubview(workspaceFlow)
@@ -167,12 +165,12 @@ private final class WorkspacePillFlowView: NSView {
         true
     }
 
-    func apply(_ workspaceIDs: [WorkspaceID]) {
+    func apply(_ workspaceTitles: [String]) {
         for pill in pills {
             pill.removeFromSuperview()
         }
-        pills = workspaceIDs.map { id in
-            let pill = WorkspacePillView(title: id.rawValue)
+        pills = workspaceTitles.map { title in
+            let pill = WorkspacePillView(title: title)
             addSubview(pill)
             return pill
         }

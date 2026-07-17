@@ -25,14 +25,14 @@ protocol SwitcherOverlayPresenting: AnyObject {
     )
     func showWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         anchorFrame: WindowFrame?,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     )
     func rebindWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         anchorFrame: WindowFrame?,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
@@ -40,7 +40,7 @@ protocol SwitcherOverlayPresenting: AnyObject {
     func updateWindowSwitcher(items: [WindowSwitcherItem])
     func updateWindowSelection(selectedID: WindowID)
     func updateWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup])
-    func updateWorkspaceSelection(selectedName: String)
+    func updateWorkspaceSelection(selectedID: String)
     func hideOverlay()
 }
 
@@ -140,14 +140,14 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
 
     func showWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         anchorFrame: WindowFrame?,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) {
         let screenFrame = configureWorkspaceSwitcher(
             groups: groups,
-            selectedName: selectedName,
+            selectedID: selectedID,
             anchorFrame: anchorFrame,
             onHover: onHover,
             onClick: onClick
@@ -157,7 +157,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
 
     func rebindWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         anchorFrame: WindowFrame?,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
@@ -167,7 +167,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         }
         let screenFrame = configureWorkspaceSwitcher(
             groups: groups,
-            selectedName: selectedName,
+            selectedID: selectedID,
             anchorFrame: anchorFrame,
             onHover: onHover,
             onClick: onClick
@@ -187,8 +187,8 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         workspaceListView?.updatePreviews(groups: groups)
     }
 
-    func updateWorkspaceSelection(selectedName: String) {
-        workspaceListView?.updateSelection(selectedName: selectedName)
+    func updateWorkspaceSelection(selectedID: String) {
+        workspaceListView?.updateSelection(selectedID: selectedID)
     }
 
     func hideOverlay() {
@@ -230,7 +230,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
 
     private func configureWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName: String,
+        selectedID: String,
         anchorFrame: WindowFrame?,
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
@@ -238,7 +238,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
         let listView = viewFactory.makeWorkspaceList(
             groups: groups,
-            selectedName: selectedName,
+            selectedID: selectedID,
             availableFrame: screenFrame,
             onHover: onHover,
             onClick: onClick

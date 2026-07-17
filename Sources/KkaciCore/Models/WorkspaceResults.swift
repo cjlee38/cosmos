@@ -2,6 +2,7 @@ import Foundation
 
 enum WorkspaceError: Error, Equatable, CustomStringConvertible {
     case invalidWorkspaceName(String)
+    case displayNotFound(DisplayID)
     case windowNotFound(WindowID)
     case windowNotInCurrentWorkspace(WindowID, String)
     case windowNotInVisibleWorkspace(WindowID, String)
@@ -12,6 +13,8 @@ enum WorkspaceError: Error, Equatable, CustomStringConvertible {
         switch self {
         case let .invalidWorkspaceName(workspace):
             "Invalid workspace name: \(workspace)"
+        case let .displayNotFound(displayID):
+            "Display not found: \(displayID)"
         case let .windowNotFound(id):
             "Window not found: \(id)"
         case let .windowNotInCurrentWorkspace(id, workspace):

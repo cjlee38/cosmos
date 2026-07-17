@@ -11,7 +11,7 @@ protocol RuntimeConfigControlling: AnyObject {
     func updateConfig(_ config: KkaciConfig) throws -> WorkspaceSyncSummary
 
     @discardableResult
-    func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws -> WorkspaceSyncSummary
+    func updateWorkspaceMonitor(_ workspace: String, displayID: DisplayID) throws -> WorkspaceSyncSummary
 }
 
 extension WorkspaceController: RuntimeConfigControlling {}
@@ -115,8 +115,8 @@ final class ConfigRuntime {
         }
     }
 
-    func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws {
-        try controller.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+    func updateWorkspaceMonitor(_ workspace: String, displayID: DisplayID) throws {
+        try controller.updateWorkspaceMonitor(workspace, displayID: displayID)
     }
 
     private func registrations(

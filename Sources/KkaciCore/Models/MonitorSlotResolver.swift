@@ -29,6 +29,18 @@ public struct DisplayTopologySnapshot: Equatable {
     }
 }
 
+public enum WorkspaceDisplayAssignment {
+    public static func monitorSlot(
+        for displayID: DisplayID,
+        monitorSlots: [MonitorSlotSnapshot]
+    ) throws -> MonitorSlot {
+        guard let monitorSlot = monitorSlots.first(where: { $0.display.id == displayID })?.slot else {
+            throw WorkspaceError.displayNotFound(displayID)
+        }
+        return monitorSlot
+    }
+}
+
 public struct MonitorSlotResolver {
     private let displayProvider: any DisplayProviding
 
@@ -36,7 +48,7 @@ public struct MonitorSlotResolver {
         self.displayProvider = displayProvider
     }
 
-    func topology() -> DisplayTopologySnapshot {
+    public func topology() -> DisplayTopologySnapshot {
         let displays = displayProvider.displays()
         return DisplayTopologySnapshot(
             displays: displays,
@@ -133,7 +145,6 @@ public struct MonitorSlotResolver {
     }
 
     private func orderedDisplays(in displays: [DisplaySnapshot]) -> [DisplaySnapshot] {
-        let displays = displays.filter(\.isWorkspaceAssignable)
         guard let main = displays.first(where: \.isMain) ?? displays.first else {
             return []
         }

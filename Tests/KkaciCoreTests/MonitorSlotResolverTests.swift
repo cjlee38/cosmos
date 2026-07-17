@@ -3,24 +3,6 @@ import CoreGraphics
 import XCTest
 
 final class MonitorSlotResolverTests: XCTestCase {
-    func testTopologyKeepsMirroredDisplayButDoesNotAssignItAMonitorSlot() {
-        let provider = FakeDisplayProvider(snapshots: [
-            DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), role: .main),
-            DisplaySnapshot(
-                id: 2,
-                frame: CGRect(x: 1000, y: 200, width: 800, height: 600),
-                role: .mirrored(source: 1)
-            )
-        ])
-        let topology = MonitorSlotResolver(displayProvider: provider).topology()
-
-        XCTAssertEqual(topology.displays.map(\.id), [1, 2])
-        XCTAssertEqual(topology.displays[1].role, .mirrored(source: 1))
-        XCTAssertEqual(topology.displays[1].frame, CGRect(x: 1000, y: 200, width: 800, height: 600))
-        XCTAssertEqual(topology.monitorSlots.map(\.display.id), [1])
-        XCTAssertEqual(provider.displayQueryCount, 1)
-    }
-
     func testSlotsUseMainDisplayFirstThenDistanceFromMainDisplay() {
         let resolver = MonitorSlotResolver(displayProvider: FakeDisplayProvider(snapshots: [
             DisplaySnapshot(id: 10, frame: CGRect(x: 2000, y: 0, width: 1000, height: 1000), role: .extended),

@@ -1,24 +1,5 @@
 import Foundation
 
-public enum DisplayListFormatter {
-    public static func lines(for monitorSlots: [MonitorSlotSnapshot]) -> [String] {
-        monitorSlots.map { monitorSlot in
-            "\(monitorSlot.slot) (\(monitorSlot.display.name))  \(roleName(monitorSlot.display.role))"
-        }
-    }
-
-    private static func roleName(_ role: DisplayRole) -> String {
-        switch role {
-        case .main:
-            "Main"
-        case .extended:
-            "Extended"
-        case .mirrored:
-            "Mirrored"
-        }
-    }
-}
-
 public final class REPL {
     private let controller: WorkspaceController
     private let ensureAccessibilityPermission: (Bool) -> Bool
@@ -195,9 +176,12 @@ private extension REPL {
     }
 
     private func printDisplays() {
-        let lines = DisplayListFormatter.lines(for: controller.monitorSlots)
+        let lines = DisplayListFormatter.lines(for: DisplayTopologySnapshot(
+            displays: controller.displays,
+            monitorSlots: controller.monitorSlots
+        ))
         guard !lines.isEmpty else {
-            print("No assignable displays found.")
+            print("No displays found.")
             return
         }
         lines.forEach { print($0) }

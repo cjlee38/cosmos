@@ -195,23 +195,23 @@ final class SwitcherOverlaySpy: SwitcherOverlayPresenting {
 
     func showWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName _: String,
+        selectedID _: String,
         anchorFrame _: WindowFrame?,
         onHover _: @escaping (String) -> Void,
         onClick _: @escaping (String) -> Void
     ) {
-        shownWorkspaceNames.append(groups.map(\.name))
+        shownWorkspaceNames.append(groups.map(\.id))
         isOverlayVisible = true
     }
 
     func rebindWorkspaceSwitcher(
         groups: [WorkspaceSwitcherGroup],
-        selectedName _: String,
+        selectedID _: String,
         anchorFrame _: WindowFrame?,
         onHover _: @escaping (String) -> Void,
         onClick _: @escaping (String) -> Void
     ) {
-        reboundWorkspaceNames.append(groups.map(\.name))
+        reboundWorkspaceNames.append(groups.map(\.id))
     }
 
     func updateWindowSwitcher(items: [WindowSwitcherItem]) {
@@ -223,7 +223,7 @@ final class SwitcherOverlaySpy: SwitcherOverlayPresenting {
 
     func updateWorkspaceSwitcher(groups _: [WorkspaceSwitcherGroup]) {}
 
-    func updateWorkspaceSelection(selectedName _: String) {}
+    func updateWorkspaceSelection(selectedID _: String) {}
 
     func hideOverlay() {
         isOverlayVisible = false

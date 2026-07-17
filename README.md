@@ -38,7 +38,7 @@ Workspace config is stored at:
 ~/.config/kkaci/config.yaml
 ```
 
-If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Workspace IDs are limited to `1...10` and `A...Z`; letter IDs are normalized to uppercase. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
+If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Workspace IDs are limited to `0...9` and `A...Z`; letter IDs are normalized to uppercase. A workspace may have an optional display-only `name`, while commands and shortcuts continue to use its ID. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
 
 ```yaml
 version: 1
@@ -58,6 +58,7 @@ workspaces:
       switch: option+1
       move_window: option+shift+1
   - id: D
+    name: Deploy
     display: 2
     shortcuts:
       switch: option+d

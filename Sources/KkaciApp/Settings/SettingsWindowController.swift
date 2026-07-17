@@ -15,9 +15,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         appearanceChangedHandler: @escaping () -> Void,
         visibilityChangedHandler: @escaping () -> Void,
         workspaceSnapshotProvider: @escaping () -> WorkspaceSettingsSnapshot,
-        workspaceMonitorChangedHandler: @escaping (String, MonitorSlot) throws -> Void,
-        workspaceAddedHandler: @escaping (WorkspaceID) throws -> Void,
+        workspaceMonitorChangedHandler: @escaping (String, DisplayID) throws -> Void,
+        workspaceAddedHandler: @escaping ([WorkspaceID], DisplayID) throws -> Void,
         workspaceRemovedHandler: @escaping (WorkspaceID) throws -> Void,
+        workspaceNameChangedHandler: @escaping (WorkspaceID, String?) throws -> Void,
         configURLProvider: @escaping () -> URL?,
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
         reloadConfigHandler: @escaping () -> Void
@@ -36,7 +37,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         workspaceViewController = WorkspaceSettingsViewController(
             snapshotProvider: workspaceSnapshotProvider,
             updateMonitorHandler: workspaceMonitorChangedHandler,
-            addWorkspaceHandler: workspaceAddedHandler, removeWorkspaceHandler: workspaceRemovedHandler
+            addWorkspaceHandler: workspaceAddedHandler,
+            removeWorkspaceHandler: workspaceRemovedHandler,
+            updateNameHandler: workspaceNameChangedHandler
         )
 
         let sidebar = SettingsSidebarViewController()
@@ -55,22 +58,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         let splitViewController = Self.makeSplitViewController(sidebar: sidebar, content: content)
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 790, height: 560),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "kkaci Settings"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
-        window.isMovableByWindowBackground = true
-        window.isReleasedWhenClosed = false
-        window.collectionBehavior = [.moveToActiveSpace]
-        window.minSize = NSSize(width: 720, height: 520)
-        window.setAccessibilityIdentifier(Self.accessibilityIdentifier)
-        window.contentViewController = splitViewController
+        let window = Self.makeWindow(contentViewController: splitViewController)
 
         super.init(window: window)
         window.delegate = self
@@ -121,6 +109,26 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         splitViewController.addSplitViewItem(sidebarItem)
         splitViewController.addSplitViewItem(NSSplitViewItem(viewController: content))
         return splitViewController
+    }
+
+    private static func makeWindow(contentViewController: NSViewController) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 790, height: 560),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "kkaci Settings"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.moveToActiveSpace]
+        window.minSize = NSSize(width: 720, height: 520)
+        window.setAccessibilityIdentifier(accessibilityIdentifier)
+        window.contentViewController = contentViewController
+        return window
     }
 }
 

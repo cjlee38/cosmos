@@ -10,16 +10,6 @@ public protocol HidePointProviding {
 public enum DisplayRole: Equatable {
     case main
     case extended
-    case mirrored(source: DisplayID)
-
-    public var isWorkspaceAssignable: Bool {
-        switch self {
-        case .main, .extended:
-            true
-        case .mirrored:
-            false
-        }
-    }
 }
 
 public struct DisplaySnapshot: Equatable {
@@ -57,9 +47,6 @@ public struct DisplaySnapshot: Equatable {
         role == .main
     }
 
-    public var isWorkspaceAssignable: Bool {
-        role.isWorkspaceAssignable
-    }
 }
 
 public protocol DisplayProviding: HidePointProviding {

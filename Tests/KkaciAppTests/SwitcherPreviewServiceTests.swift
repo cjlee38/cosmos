@@ -30,14 +30,27 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         _ = try controller.handleWindowSetChanged()
 
         let item = try XCTUnwrap(service.windowItems(ids: [10]).first)
-        let groupItem = try XCTUnwrap(service.workspaceGroups(names: ["1"]).first?.windows.first)
+        let groupItem = try XCTUnwrap(service.workspaceGroups(ids: ["1"]).first?.windows.first)
 
         XCTAssertEqual(item.title, "Updated")
         XCTAssertEqual(item.frame, updatedFrame)
         XCTAssertTrue(item.preview === groupItem.preview)
         XCTAssertTrue(item.icon === groupItem.icon)
         XCTAssertTrue(service.windowItems(ids: [999]).isEmpty)
-        XCTAssertEqual(service.workspaceGroups(names: ["missing"]).count, 0)
+        XCTAssertEqual(service.workspaceGroups(ids: ["missing"]).count, 0)
+    }
+
+    func testWorkspaceGroupUsesAliasForDisplayAndIDForIdentity() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        try controller.applyConfig(KkaciConfig(workspaces: [
+            WorkspaceConfig(id: "1", name: "Develop")
+        ]))
+        let service = makeSwitcherTestPreviewService(controller: controller)
+
+        let group = try XCTUnwrap(service.workspaceGroups(ids: ["1"]).first)
+
+        XCTAssertEqual(group.id, "1")
+        XCTAssertEqual(group.displayName, "Develop")
     }
 
     func testThumbnailCompletionReportsOnlyTheAffectedWindow() throws {

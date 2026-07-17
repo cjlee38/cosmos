@@ -121,3 +121,14 @@ final class WorkspaceDisplayCoordinator {
         state.hiddenFrame(for: id) ?? windowStore.snapshot(for: id)?.frame
     }
 }
+
+public extension WorkspaceController {
+    @discardableResult
+    func updateWorkspaceMonitor(_ workspace: String, displayID: DisplayID) throws -> WorkspaceSyncSummary {
+        let monitorSlot = try WorkspaceDisplayAssignment.monitorSlot(
+            for: displayID,
+            monitorSlots: monitorSlots
+        )
+        return try updateConfig(currentConfig.assigningWorkspace(workspace, toMonitorSlot: monitorSlot))
+    }
+}

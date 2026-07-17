@@ -16,7 +16,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
 
-        try controller.updateWorkspaceMonitor("1", monitorSlot: 2)
+        try controller.updateWorkspaceMonitor("1", displayID: 2)
 
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1100, y: 100, width: 300, height: 200))
         XCTAssertEqual(controller.workspaceFrame(for: 100), windowSystem.frames[100])
@@ -76,7 +76,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
 
-        try controller.updateWorkspaceMonitor("1", monitorSlot: 2)
+        try controller.updateWorkspaceMonitor("1", displayID: 2)
 
         XCTAssertEqual(
             windowSystem.frames[100],
@@ -124,5 +124,19 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.workspaceFrame(for: 100), originalFrame)
         XCTAssertEqual(recordStore.records.first?.workspace, "2")
         XCTAssertEqual(recordStore.records.first?.originalFrame, originalFrame)
+    }
+
+    func testMonitorUpdateRejectsUnknownDisplay() {
+        let controller = makeController(
+            FakeWindowSystem(windows: []),
+            displayProvider: FakeDisplayProvider(snapshots: [
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), role: .main)
+            ])
+        )
+        _ = controller.discoverWindows()
+
+        XCTAssertThrowsError(try controller.updateWorkspaceMonitor("1", displayID: 2)) { error in
+            XCTAssertEqual(error as? WorkspaceError, .displayNotFound(2))
+        }
     }
 }

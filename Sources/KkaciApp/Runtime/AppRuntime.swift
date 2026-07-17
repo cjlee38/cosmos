@@ -141,14 +141,17 @@ final class AppRuntime {
                         displays: controller.displays
                     )
                 },
-                workspaceMonitorChangedHandler: { [unowned self] workspace, monitorSlot in
-                    try updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+                workspaceMonitorChangedHandler: { [unowned self] workspace, displayID in
+                    try updateWorkspaceMonitor(workspace, displayID: displayID)
                 },
-                workspaceAddedHandler: { [unowned self] workspaceID in
-                    try addWorkspace(workspaceID)
+                workspaceAddedHandler: { [unowned self] workspaceIDs, displayID in
+                    try addWorkspaces(workspaceIDs, displayID: displayID)
                 },
                 workspaceRemovedHandler: { [unowned self] workspaceID in
                     try removeWorkspace(workspaceID)
+                },
+                workspaceNameChangedHandler: { [unowned self] workspaceID, name in
+                    try updateWorkspaceName(workspaceID, name: name)
                 },
                 configURLProvider: { [unowned self] in
                     configRuntime.configURL
@@ -164,18 +167,25 @@ final class AppRuntime {
         settingsWindowController?.show()
     }
 
-    private func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws {
-        try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+    private func updateWorkspaceMonitor(_ workspace: String, displayID: DisplayID) throws {
+        try configRuntime.updateWorkspaceMonitor(workspace, displayID: displayID)
         refreshAfterWorkspaceConfigChange()
-        log.info("Assigned workspace \(workspace) to monitor \(monitorSlot)")
+        log.info("Assigned workspace \(workspace) to display \(displayID)")
     }
 
-    private func addWorkspace(_ workspaceID: WorkspaceID) throws {
-        guard let config = controller.currentConfig.addingWorkspace(workspaceID) else {
+    private func addWorkspaces(_ workspaceIDs: [WorkspaceID], displayID: DisplayID) throws {
+        let monitorSlot = try WorkspaceDisplayAssignment.monitorSlot(
+            for: displayID,
+            monitorSlots: controller.monitorSlots
+        )
+        guard let config = controller.currentConfig.addingWorkspaces(workspaceIDs, display: monitorSlot) else {
             return
         }
         try updateWorkspaceConfig(config)
-        log.info("Added workspace \(workspaceID.rawValue)")
+        log.info(
+            "Added workspaces \(workspaceIDs.map(\.rawValue).joined(separator: ",")) "
+                + "to display \(displayID)"
+        )
     }
 
     private func removeWorkspace(_ workspaceID: WorkspaceID) throws {
@@ -184,6 +194,14 @@ final class AppRuntime {
         }
         try updateWorkspaceConfig(config)
         log.info("Removed workspace \(workspaceID.rawValue)")
+    }
+
+    private func updateWorkspaceName(_ workspaceID: WorkspaceID, name: String?) throws {
+        guard let config = controller.currentConfig.namingWorkspace(workspaceID, name: name) else {
+            return
+        }
+        try updateWorkspaceConfig(config)
+        log.info("Updated workspace name id=\(workspaceID.rawValue)")
     }
 
     private func updateWorkspaceConfig(_ config: KkaciConfig) throws {

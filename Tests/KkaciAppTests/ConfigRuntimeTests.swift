@@ -140,11 +140,11 @@ final class ConfigRuntimeTests: XCTestCase {
             keyboardBindingMapper: KeyboardBindingMapper()
         )
 
-        try runtime.updateWorkspaceMonitor("2", monitorSlot: 3)
+        try runtime.updateWorkspaceMonitor("2", displayID: 3)
 
         XCTAssertEqual(controller.monitorUpdates.count, 1)
         XCTAssertEqual(controller.monitorUpdates.first?.workspace, "2")
-        XCTAssertEqual(controller.monitorUpdates.first?.monitorSlot, 3)
+        XCTAssertEqual(controller.monitorUpdates.first?.displayID, 3)
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
@@ -204,7 +204,7 @@ private final class RuntimeConfigControllerSpy: RuntimeConfigControlling {
     var currentConfig: KkaciConfig
     private let applyError: Error?
     private(set) var appliedConfigs: [KkaciConfig] = []
-    private(set) var monitorUpdates: [(workspace: String, monitorSlot: MonitorSlot)] = []
+    private(set) var monitorUpdates: [(workspace: String, displayID: DisplayID)] = []
 
     init(currentConfig: KkaciConfig, applyError: Error? = nil) {
         self.currentConfig = currentConfig
@@ -226,9 +226,9 @@ private final class RuntimeConfigControllerSpy: RuntimeConfigControlling {
 
     func updateWorkspaceMonitor(
         _ workspace: String,
-        monitorSlot: MonitorSlot
+        displayID: DisplayID
     ) throws -> WorkspaceSyncSummary {
-        monitorUpdates.append((workspace, monitorSlot))
+        monitorUpdates.append((workspace, displayID))
         return WorkspaceSyncSummary(autoAssigned: [], removed: [])
     }
 }

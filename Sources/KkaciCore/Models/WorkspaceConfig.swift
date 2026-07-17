@@ -1,75 +1,5 @@
 import Foundation
 
-public struct WorkspaceID: RawRepresentable, Hashable, Comparable, Codable, CaseIterable, ExpressibleByStringLiteral {
-    public static let allCases: [WorkspaceID] = {
-        let numbers = (1 ... 10).map { WorkspaceID(unchecked: String($0)) }
-        let letters = (UnicodeScalar("A").value ... UnicodeScalar("Z").value).compactMap {
-            UnicodeScalar($0).map { WorkspaceID(unchecked: String(Character($0))) }
-        }
-        return numbers + letters
-    }()
-
-    public let rawValue: String
-
-    public init?(rawValue: String) {
-        let normalized = rawValue.uppercased()
-        guard Self.allRawValues.contains(normalized) else {
-            return nil
-        }
-        self.init(unchecked: normalized)
-    }
-
-    public init(stringLiteral value: String) {
-        guard let id = WorkspaceID(rawValue: value) else {
-            preconditionFailure("Invalid workspace ID: \(value)")
-        }
-        self = id
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let value = if let number = try? container.decode(Int.self) {
-            String(number)
-        } else {
-            try container.decode(String.self)
-        }
-
-        guard let id = WorkspaceID(rawValue: value) else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Invalid workspace ID: \(value). Expected 1...10 or A...Z"
-            )
-        }
-        self = id
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        if let number = Int(rawValue) {
-            try container.encode(number)
-        } else {
-            try container.encode(rawValue)
-        }
-    }
-
-    public static func < (lhs: WorkspaceID, rhs: WorkspaceID) -> Bool {
-        orderByRawValue[lhs.rawValue, default: 0] < orderByRawValue[rhs.rawValue, default: 0]
-    }
-
-    public var defaultShortcutKey: String {
-        rawValue == "10" ? "0" : rawValue.lowercased()
-    }
-
-    private init(unchecked rawValue: String) {
-        self.rawValue = rawValue
-    }
-
-    private static let allRawValues = Set(allCases.map(\.rawValue))
-    private static let orderByRawValue = Dictionary(
-        uniqueKeysWithValues: allCases.enumerated().map { ($0.element.rawValue, $0.offset) }
-    )
-}
-
 public struct SwitcherShortcutConfig: Codable, Equatable {
     public static let empty = SwitcherShortcutConfig()
 
@@ -133,17 +63,24 @@ public struct WorkspaceShortcutConfig: Codable, Equatable {
 
 public struct WorkspaceConfig: Codable, Equatable {
     public let id: WorkspaceID
+    public let name: String?
     public let display: MonitorSlot
     public let shortcuts: WorkspaceShortcutConfig
 
     public init(
         id: WorkspaceID,
+        name: String? = nil,
         display: MonitorSlot = 1,
         shortcuts: WorkspaceShortcutConfig = .empty
     ) {
         self.id = id
+        self.name = Self.normalizedName(name)
         self.display = max(display, 1)
         self.shortcuts = shortcuts
+    }
+
+    public var displayName: String {
+        name ?? id.rawValue
     }
 
     public static func defaultShortcuts(for id: WorkspaceID) -> WorkspaceShortcutConfig {
@@ -152,60 +89,37 @@ public struct WorkspaceConfig: Codable, Equatable {
             moveWindow: "option+shift+\(id.defaultShortcutKey)"
         )
     }
-}
 
-public struct HotKeyBinding: Equatable {
-    public let key: String
-    public let command: String
-    public let workspace: String?
-
-    public init(key: String, command: String, workspace: String? = nil) {
-        self.key = key
-        self.command = command
-        self.workspace = workspace
-    }
-}
-
-public struct WorkspaceShortcutBindings {
-    private struct Entry {
-        let workspace: String
-        let key: String
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case display
+        case shortcuts
     }
 
-    private static let modifierNames: Set<String> = [
-        "ctrl", "control", "option", "alt", "shift", "cmd", "command"
-    ]
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(WorkspaceID.self, forKey: .id),
+            name: container.decodeIfPresent(String.self, forKey: .name),
+            display: container.decode(MonitorSlot.self, forKey: .display),
+            shortcuts: container.decode(WorkspaceShortcutConfig.self, forKey: .shortcuts)
+        )
+    }
 
-    private let entries: [Entry]
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encode(display, forKey: .display)
+        try container.encode(shortcuts, forKey: .shortcuts)
+    }
 
-    public init(_ bindings: [HotKeyBinding]) {
-        entries = bindings.compactMap { binding in
-            guard binding.command.lowercased() == "workspace",
-                  let workspace = binding.workspace?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !workspace.isEmpty,
-                  let key = Self.keyName(from: binding.key)
-            else {
-                return nil
-            }
-            return Entry(workspace: workspace, key: key)
+    private static func normalizedName(_ name: String?) -> String? {
+        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else {
+            return nil
         }
-    }
-
-    public func key(for workspace: String) -> String? {
-        entries.first { $0.workspace == workspace }?.key
-    }
-
-    public func workspace(for key: String) -> String? {
-        let key = key.lowercased()
-        return entries.first { $0.key == key }?.workspace
-    }
-
-    private static func keyName(from shortcut: String) -> String? {
-        let keys = shortcut
-            .split(separator: "+")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty && !modifierNames.contains($0) }
-        return keys.count == 1 ? keys[0] : nil
+        return name
     }
 }
 
@@ -286,6 +200,13 @@ public struct KkaciConfig: Codable, Equatable {
         workspaces.map(\.id)
     }
 
+    public func workspace(for id: String) -> WorkspaceConfig? {
+        guard let workspaceID = WorkspaceID(rawValue: id) else {
+            return nil
+        }
+        return workspaces.first { $0.id == workspaceID }
+    }
+
     public func monitorSlot(for workspace: String) -> MonitorSlot {
         workspaces.first { $0.id.rawValue == workspace.uppercased() }?.display ?? 1
     }
@@ -306,6 +227,7 @@ public struct KkaciConfig: Codable, Equatable {
                 }
                 return WorkspaceConfig(
                     id: configuredWorkspace.id,
+                    name: configuredWorkspace.name,
                     display: monitorSlot,
                     shortcuts: configuredWorkspace.shortcuts
                 )
@@ -314,17 +236,46 @@ public struct KkaciConfig: Codable, Equatable {
         )
     }
 
-    public func addingWorkspace(_ id: WorkspaceID, display: MonitorSlot = 1) -> KkaciConfig? {
-        guard !workspaces.contains(where: { $0.id == id }) else {
+    public func namingWorkspace(_ id: WorkspaceID, name: String?) -> KkaciConfig? {
+        guard workspaces.contains(where: { $0.id == id }) else {
             return nil
         }
         return KkaciConfig(
             version: version,
-            workspaces: workspaces + [WorkspaceConfig(
-                id: id,
-                display: display,
-                shortcuts: WorkspaceConfig.defaultShortcuts(for: id)
-            )],
+            workspaces: workspaces.map { workspace in
+                guard workspace.id == id else {
+                    return workspace
+                }
+                return WorkspaceConfig(
+                    id: workspace.id,
+                    name: name,
+                    display: workspace.display,
+                    shortcuts: workspace.shortcuts
+                )
+            },
+            shortcuts: shortcuts
+        )
+    }
+
+    public func addingWorkspace(_ id: WorkspaceID, display: MonitorSlot = 1) -> KkaciConfig? {
+        addingWorkspaces([id], display: display)
+    }
+
+    public func addingWorkspaces(_ ids: [WorkspaceID], display: MonitorSlot = 1) -> KkaciConfig? {
+        let configuredIDs = Set(workspaces.map(\.id))
+        let newIDs = Set(ids).subtracting(configuredIDs).sorted()
+        guard !newIDs.isEmpty else {
+            return nil
+        }
+        return KkaciConfig(
+            version: version,
+            workspaces: workspaces + newIDs.map { id in
+                WorkspaceConfig(
+                    id: id,
+                    display: display,
+                    shortcuts: WorkspaceConfig.defaultShortcuts(for: id)
+                )
+            },
             shortcuts: shortcuts
         )
     }

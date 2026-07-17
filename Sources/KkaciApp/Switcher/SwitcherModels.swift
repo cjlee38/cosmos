@@ -15,18 +15,21 @@ struct WindowSwitcherItem {
 }
 
 struct WorkspaceSwitcherGroup {
-    let name: String
+    let id: String
+    let displayName: String
     let windows: [WindowSwitcherItem]
     let preview: NSImage?
     let shortcutKey: String?
 
     init(
-        name: String,
+        id: String,
+        displayName: String,
         windows: [WindowSwitcherItem],
         preview: NSImage?,
         shortcutKey: String? = nil
     ) {
-        self.name = name
+        self.id = id
+        self.displayName = displayName
         self.windows = windows
         self.preview = preview
         self.shortcutKey = shortcutKey

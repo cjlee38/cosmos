@@ -303,11 +303,6 @@ public extension WorkspaceController {
         try applyConfigTransaction(config, enablePersistence: nil, saveConfig: true)
     }
 
-    @discardableResult
-    func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws -> WorkspaceSyncSummary {
-        try updateConfig(currentConfig.assigningWorkspace(workspace, toMonitorSlot: monitorSlot))
-    }
-
     func hideWindow(_ id: WindowID) throws {
         _ = syncWindows()
         try hiddenWindowOperator.hide(id, state: &state, currentWorkspace: currentWorkspace)
