@@ -21,19 +21,19 @@ final class WorkspaceNavigationCoordinator {
         state: inout WorkspaceState
     ) throws {
         let previousState = state
-        let previouslyActiveWorkspaces = state.activeWorkspaces
-        let oldFocusedWindow = focusedWindowInActiveWorkspace(state: state)
-            ?? firstWindow(in: state.activeWorkspace, from: frontToBackWindowIDs, state: state)
+        let previouslyVisibleWorkspaces = visibleWorkspaces(in: state)
+        let oldFocusedWindow = focusedWindowInCurrentWorkspace(state: state)
+            ?? firstWindow(in: state.currentWorkspace, from: frontToBackWindowIDs, state: state)
         let preferredFocus = firstWindow(in: workspace, from: frontToBackWindowIDs, state: state)
 
         state.activate(workspace)
         do {
             let requiredWindowIDs = requiredVisibilityWindowIDs(
                 destination: workspace,
-                previouslyActiveWorkspaces: previouslyActiveWorkspaces,
+                previouslyVisibleWorkspaces: previouslyVisibleWorkspaces,
                 state: state
             )
-            try visibilityCoordinator.applyActiveWorkspaces(
+            try visibilityCoordinator.applyVisibleWorkspaces(
                 state: &state,
                 focusWindowID: preferredFocus,
                 hideLastWindowID: oldFocusedWindow,
@@ -64,16 +64,23 @@ final class WorkspaceNavigationCoordinator {
             return .unmanagedWindow(id)
         }
 
-        let monitorSlot = state.monitorSlot(for: workspace)
-        guard workspace != state.activeWorkspace(on: monitorSlot) else {
+        let availableMonitorSlots = windowStore.displayTopology.availableMonitorSlots
+        let monitorSlot = state.monitorSlot(
+            for: workspace,
+            availableMonitorSlots: availableMonitorSlots
+        )
+        guard workspace != state.visibleWorkspace(
+            on: monitorSlot,
+            availableMonitorSlots: availableMonitorSlots
+        ) else {
             state.activate(workspace)
             return .alreadyActive(windowID: id, workspace: workspace)
         }
 
         let previousState = state
-        let previouslyActiveWorkspaces = state.activeWorkspaces
+        let previouslyVisibleWorkspaces = visibleWorkspaces(in: state)
         let rollbackFocus = firstWindow(
-            in: previousState.activeWorkspace,
+            in: previousState.currentWorkspace,
             from: frontToBackWindowIDs,
             state: previousState
         )
@@ -81,10 +88,10 @@ final class WorkspaceNavigationCoordinator {
         do {
             let requiredWindowIDs = requiredVisibilityWindowIDs(
                 destination: workspace,
-                previouslyActiveWorkspaces: previouslyActiveWorkspaces,
+                previouslyVisibleWorkspaces: previouslyVisibleWorkspaces,
                 state: state
             )
-            try visibilityCoordinator.applyActiveWorkspaces(
+            try visibilityCoordinator.applyVisibleWorkspaces(
                 state: &state,
                 focusWindowID: id,
                 requiredWindowIDs: requiredWindowIDs
@@ -107,8 +114,8 @@ final class WorkspaceNavigationCoordinator {
         frontToBackWindowIDs: [WindowID],
         state: WorkspaceState
     ) -> WindowFocusResult {
-        let workspace = state.activeWorkspace
-        let currentFocused = focusedWindowInActiveWorkspace(state: state)
+        let workspace = state.currentWorkspace
+        let currentFocused = focusedWindowInCurrentWorkspace(state: state)
         let direction: CycleDirection = next ? .forward : .backward
         let target = currentFocused.map { current in
             cycledValue(in: frontToBackWindowIDs, after: current, direction: direction)
@@ -131,9 +138,9 @@ final class WorkspaceNavigationCoordinator {
         frontToBackWindowIDs.first { state.membership(for: $0) == workspace }
     }
 
-    private func focusedWindowInActiveWorkspace(state: WorkspaceState) -> WindowID? {
+    private func focusedWindowInCurrentWorkspace(state: WorkspaceState) -> WindowID? {
         guard let id = windowSystem.focusedWindowID(),
-              state.membership(for: id) == state.activeWorkspace
+              state.membership(for: id) == state.currentWorkspace
         else {
             return nil
         }
@@ -142,12 +149,18 @@ final class WorkspaceNavigationCoordinator {
 
     private func requiredVisibilityWindowIDs(
         destination: String,
-        previouslyActiveWorkspaces: Set<String>,
+        previouslyVisibleWorkspaces: Set<String>,
         state: WorkspaceState
     ) -> Set<WindowID> {
-        let deactivatedWorkspaces = previouslyActiveWorkspaces.subtracting(state.activeWorkspaces)
+        let newlyHiddenWorkspaces = previouslyVisibleWorkspaces.subtracting(visibleWorkspaces(in: state))
         return Set(state.windowIDs(in: destination)).union(
-            deactivatedWorkspaces.flatMap(state.windowIDs(in:))
+            newlyHiddenWorkspaces.flatMap(state.windowIDs(in:))
+        )
+    }
+
+    private func visibleWorkspaces(in state: WorkspaceState) -> Set<String> {
+        state.visibleWorkspaces(
+            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
         )
     }
 

@@ -72,7 +72,7 @@ final class SwitcherCoordinatorTests: XCTestCase {
         coordinator.commitWorkspaceSelection()
 
         XCTAssertEqual(controller.workspaces, ["1", "3"])
-        XCTAssertEqual(controller.activeWorkspace, "3")
+        XCTAssertEqual(controller.currentWorkspace, "3")
     }
 
     func testPreviewCompletionUpdatesOnlyTheAffectedTileAndPreservesSelection() throws {

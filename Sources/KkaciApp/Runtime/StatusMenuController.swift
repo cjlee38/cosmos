@@ -22,6 +22,7 @@ final class StatusMenuController: NSObject {
     )
     private var workspaceItems: [String: NSMenuItem] = [:]
     private var renderedWorkspaceEntries: [WorkspaceMenuEntry] = []
+    private var renderedMonitorSlots: [MonitorSlot] = []
 
     init(
         controller: WorkspaceController,
@@ -54,6 +55,7 @@ final class StatusMenuController: NSObject {
         menu.removeAllItems()
         workspaceItems.removeAll()
         renderedWorkspaceEntries = workspaceMenuEntries()
+        renderedMonitorSlots = displayedMonitorSlots()
 
         statusItem.button?.title = menuBarTitle()
         statusItem.menu = menu
@@ -68,13 +70,13 @@ final class StatusMenuController: NSObject {
     }
 
     private func buildWorkspaceItems() {
-        workspaceItem.title = "Workspace: \(controller.activeWorkspace)"
+        workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
         workspaceItem.isEnabled = false
         menu.addItem(workspaceItem)
 
-        let workspacesByMonitor = Dictionary(grouping: controller.workspaces, by: controller.monitorSlot)
+        let workspacesByMonitor = Dictionary(grouping: controller.workspaces, by: controller.effectiveMonitorSlot)
 
-        for monitorSlot in workspacesByMonitor.keys.sorted() {
+        for monitorSlot in displayedMonitorSlots() {
             let monitorItem = NSMenuItem(title: "Monitor \(monitorSlot)", action: nil, keyEquivalent: "")
             monitorItem.isEnabled = false
             monitorItem.indentationLevel = 1
@@ -112,21 +114,27 @@ final class StatusMenuController: NSObject {
     }
 
     private func refreshMenu() {
-        if !hasSameWorkspaceMenuEntries(as: workspaceMenuEntries()) {
+        if renderedMonitorSlots != displayedMonitorSlots()
+            || !hasSameWorkspaceMenuEntries(as: workspaceMenuEntries()) {
             buildMenu()
         }
 
         statusItem.button?.title = menuBarTitle()
-        workspaceItem.title = "Workspace: \(controller.activeWorkspace)"
+        workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
         for (workspace, item) in workspaceItems {
-            item.state = controller.isWorkspaceActive(workspace) ? .on : .off
+            item.state = controller.isWorkspaceVisible(workspace) ? .on : .off
         }
     }
 
     private func workspaceMenuEntries() -> [WorkspaceMenuEntry] {
         controller.workspaces.map {
-            WorkspaceMenuEntry(name: $0, monitorSlot: controller.monitorSlot(for: $0))
+            WorkspaceMenuEntry(name: $0, monitorSlot: controller.effectiveMonitorSlot(for: $0))
         }
+    }
+
+    private func displayedMonitorSlots() -> [MonitorSlot] {
+        let monitorSlots = controller.monitorSlots.map(\.slot)
+        return monitorSlots.isEmpty ? [1] : monitorSlots
     }
 
     private func hasSameWorkspaceMenuEntries(as entries: [WorkspaceMenuEntry]) -> Bool {
@@ -140,12 +148,12 @@ final class StatusMenuController: NSObject {
     }
 
     private func menuBarTitle() -> String {
-        let workspaces = controller.activeWorkspaces.sorted {
-            controller.monitorSlot(for: $0) < controller.monitorSlot(for: $1)
+        let workspaces = controller.visibleWorkspaces.sorted {
+            controller.effectiveMonitorSlot(for: $0) < controller.effectiveMonitorSlot(for: $1)
         }
         return MenuBarTitleFormatter.title(
             workspaces: workspaces,
-            activeWorkspace: controller.activeWorkspace,
+            currentWorkspace: controller.currentWorkspace,
             style: appSettingsStore.snapshot().menuBarIconStyle
         )
     }
@@ -197,11 +205,11 @@ final class StatusMenuController: NSObject {
 enum MenuBarTitleFormatter {
     static func title(
         workspaces: [String],
-        activeWorkspace: String,
+        currentWorkspace: String,
         style: MenuBarIconStyle
     ) -> String {
         let contents = workspaces
-            .map { $0 == activeWorkspace ? "*\($0)" : $0 }
+            .map { $0 == currentWorkspace ? "•\($0)" : $0 }
             .joined(separator: " | ")
 
         switch style {

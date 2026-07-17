@@ -87,7 +87,7 @@ struct SwitcherTestDisplayProvider: DisplayProviding {
         [DisplaySnapshot(
             id: 1,
             frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
-            isMain: true
+            role: .main
         )]
     }
 }

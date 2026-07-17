@@ -364,7 +364,7 @@ final class WorkspaceStartupHiddenWindowRecordTests: WorkspaceHiddenWindowRecord
         XCTAssertEqual(recordStore.records, [record])
     }
 
-    func testStartupRecordsRestoreMissingWorkspaceWindowIntoActiveWorkspace() throws {
+    func testStartupRecordsRestoreMissingWorkspaceWindowIntoCurrentWorkspace() throws {
         let record = hiddenRecord(originalFrame: .frame(x: 120, y: 140), workspace: "dev")
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))

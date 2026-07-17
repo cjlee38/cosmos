@@ -3,7 +3,8 @@ import Foundation
 enum WorkspaceError: Error, Equatable, CustomStringConvertible {
     case invalidWorkspaceName(String)
     case windowNotFound(WindowID)
-    case windowNotInActiveWorkspace(WindowID, String)
+    case windowNotInCurrentWorkspace(WindowID, String)
+    case windowNotInVisibleWorkspace(WindowID, String)
     case noFocusedWindow
     case frameUnavailable(WindowID)
 
@@ -13,8 +14,10 @@ enum WorkspaceError: Error, Equatable, CustomStringConvertible {
             "Invalid workspace name: \(workspace)"
         case let .windowNotFound(id):
             "Window not found: \(id)"
-        case let .windowNotInActiveWorkspace(id, workspace):
-            "Window \(id) belongs to inactive workspace \(workspace)."
+        case let .windowNotInCurrentWorkspace(id, workspace):
+            "Window \(id) belongs to workspace \(workspace), which is not current."
+        case let .windowNotInVisibleWorkspace(id, workspace):
+            "Window \(id) belongs to workspace \(workspace), which is not visible."
         case .noFocusedWindow:
             "No focused window."
         case let .frameUnavailable(id):

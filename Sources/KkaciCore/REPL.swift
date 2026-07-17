@@ -1,5 +1,24 @@
 import Foundation
 
+public enum DisplayListFormatter {
+    public static func lines(for monitorSlots: [MonitorSlotSnapshot]) -> [String] {
+        monitorSlots.map { monitorSlot in
+            "\(monitorSlot.slot) (\(monitorSlot.display.name))  \(roleName(monitorSlot.display.role))"
+        }
+    }
+
+    private static func roleName(_ role: DisplayRole) -> String {
+        switch role {
+        case .main:
+            "Main"
+        case .extended:
+            "Extended"
+        case .mirrored:
+            "Mirrored"
+        }
+    }
+}
+
 public final class REPL {
     private let controller: WorkspaceController
     private let ensureAccessibilityPermission: (Bool) -> Bool
@@ -20,7 +39,7 @@ public final class REPL {
         printHelp()
 
         while true {
-            print("\nkkaci:\(controller.activeWorkspace)> ", terminator: "")
+            print("\nkkaci:\(controller.currentWorkspace)> ", terminator: "")
             guard let line = readLine() else {
                 print("")
                 return
@@ -50,7 +69,7 @@ private extension REPL {
             return false
         case let .unknown(raw):
             print("Unknown command: \(raw)")
-        case .help, .permission, .list, .focused, .workspaces:
+        case .help, .permission, .list, .displays, .focused, .workspaces:
             handleReadCommand(command)
         case .assign, .capture, .switchWorkspace, .nextWorkspace, .previousWorkspace:
             try handleWorkspaceCommand(command, parts: parts)
@@ -70,6 +89,8 @@ private extension REPL {
             print(ensureAccessibilityPermission(true) ? "granted" : "missing")
         case .list:
             printWindows()
+        case .displays:
+            printDisplays()
         case .focused:
             printFocusedWindow()
         case .workspaces:
@@ -124,14 +145,15 @@ private extension REPL {
         commands:
           permission                 check/prompt Accessibility permission
           list | ls                  list AX windows
+          displays                   show display slot mappings
           focused                    print focused window id
           assign <workspace> [id]    assign focused window or id to workspace
           capture <workspace>        assign all visible windows to workspace
           switch | ws <workspace>    switch workspace
           next-workspace | next-ws    switch to the next configured workspace
           prev-workspace | prev-ws    switch to the previous configured workspace
-          next-window | next-win      focus the next window in the active workspace
-          prev-window | prev-win      focus the previous window in the active workspace
+          next-window | next-win      focus the next window in the current workspace
+          prev-window | prev-win      focus the previous window in the current workspace
           hide <id>                  move one window to the hide corner
           restore <id> [id...]       restore and focus workspace-hidden windows
           workspaces                 show current in-memory memberships
@@ -170,6 +192,15 @@ private extension REPL {
         } else {
             print("No focused window.")
         }
+    }
+
+    private func printDisplays() {
+        let lines = DisplayListFormatter.lines(for: controller.monitorSlots)
+        guard !lines.isEmpty else {
+            print("No assignable displays found.")
+            return
+        }
+        lines.forEach { print($0) }
     }
 
     private func assign(_ parts: [String]) throws {
@@ -218,7 +249,7 @@ private extension REPL {
             return
         }
         printSyncSummary(sync)
-        print("active workspace: \(parts[1])")
+        print("current workspace: \(parts[1])")
     }
 
     private func switchToNextWorkspace(_ parts: [String]) throws {
@@ -228,7 +259,7 @@ private extension REPL {
         }
         let result = try controller.switchToNextWorkspace()
         printSyncSummary(result.sync)
-        print("active workspace: \(result.workspace)")
+        print("current workspace: \(result.workspace)")
     }
 
     private func switchToPreviousWorkspace(_ parts: [String]) throws {
@@ -238,7 +269,7 @@ private extension REPL {
         }
         let result = try controller.switchToPreviousWorkspace()
         printSyncSummary(result.sync)
-        print("active workspace: \(result.workspace)")
+        print("current workspace: \(result.workspace)")
     }
 
     private func focusNextWindow(_ parts: [String]) {

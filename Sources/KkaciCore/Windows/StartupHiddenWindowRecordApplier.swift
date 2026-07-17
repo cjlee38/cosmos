@@ -40,9 +40,9 @@ final class StartupHiddenWindowRecordApplier {
                 continue
             }
 
-            let workspace = state.findWorkspace(targetWorkspace) ?? state.activeWorkspace
+            let workspace = state.findWorkspace(targetWorkspace) ?? state.currentWorkspace
             if action.shouldRestore {
-                try windowSystem.setFrameIfSizeChanged(
+                try windowSystem.setFrameOrMove(
                     restorableFrameResolver.frameForRestore(record.originalFrame),
                     for: record.windowID
                 )

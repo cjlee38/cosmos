@@ -71,7 +71,7 @@ final class WorkspaceActionController {
             guard let result = try controller.moveFocusedWindow(to: workspace) else {
                 return
             }
-            if result.workspace != controller.activeWorkspace {
+            if result.workspace != controller.currentWorkspace {
                 suppressNextFocusSync(result.windowID)
             }
             previewService.refresh(

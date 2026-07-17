@@ -18,16 +18,24 @@ final class WindowSetSynchronizer {
         self.monitorSlotResolver = monitorSlotResolver
     }
 
-    func refresh(state: inout WorkspaceState) -> WindowDiscoveryResult {
+    func refresh(
+        state: inout WorkspaceState,
+        reconcileVisibleWindowMonitorMembership: Bool = true
+    ) -> WindowDiscoveryResult {
         let windows = windowSystem.refresh()
+        let displayTopology = monitorSlotResolver.topology()
         windowStore.replace(
             windows: windows,
             focusedWindowID: windowSystem.focusedWindowID(),
-            monitorSlots: monitorSlotResolver.slots()
+            displayTopology: displayTopology
         )
 
-        let sync = state.sync(windows: windows) { frame in
-            monitorSlotResolver.slot(containing: frame)
+        let sync = state.sync(
+            windows: windows,
+            availableMonitorSlots: displayTopology.availableMonitorSlots,
+            reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership
+        ) { frame in
+            monitorSlotResolver.slot(containing: frame, among: displayTopology.monitorSlots)
         }
         for id in sync.removed {
             recordRepository.removeAllRecords(for: id)

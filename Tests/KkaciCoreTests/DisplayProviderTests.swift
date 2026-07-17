@@ -51,7 +51,7 @@ final class DisplayProviderTests: XCTestCase {
                     id: 1,
                     frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
                     visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 900),
-                    isMain: true
+                    role: .main
                 )
             ]
         ))
@@ -63,7 +63,7 @@ final class DisplayProviderTests: XCTestCase {
         DisplaySnapshot(
             id: id,
             frame: CGRect(x: x, y: y, width: 1000, height: 1000),
-            isMain: id == 1
+            role: id == 1 ? .main : .extended
         )
     }
 }

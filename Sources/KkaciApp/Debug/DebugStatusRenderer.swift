@@ -15,8 +15,8 @@ final class DebugStatusRenderer {
 
         var lines: [String] = [
             "kkaci debug status",
-            "active workspace: \(controller.activeWorkspace)",
-            "active workspaces: \(controller.activeWorkspaces.joined(separator: ", "))",
+            "current workspace: \(controller.currentWorkspace)",
+            "visible workspaces: \(controller.visibleWorkspaces.joined(separator: ", "))",
             "workspaces: \(controller.workspaces.joined(separator: ", "))",
             ""
         ]
@@ -25,8 +25,11 @@ final class DebugStatusRenderer {
         for monitor in controller.monitorSlots {
             let frame = format(monitor.display.frame)
             let main = monitor.display.isMain ? " main" : ""
-            let active = controller.activeWorkspace(on: monitor.slot)
-            lines.append("  slot=\(monitor.slot)\(main) display=\(monitor.display.id) active=\(active) \(frame)")
+            let visible = controller.visibleWorkspace(on: monitor.slot)
+            lines.append(
+                "  slot=\(monitor.slot)\(main) display=\(monitor.display.id) "
+                    + "name=\(monitor.display.name) visible=\(visible) \(frame)"
+            )
         }
         lines.append("")
 
@@ -38,7 +41,7 @@ final class DebugStatusRenderer {
                 let marker = window.id == focused ? "*" : " "
                 let workspace = controller.membership(for: window.id) ?? "-"
                 let monitor = controller.membership(for: window.id)
-                    .map { String(controller.monitorSlot(for: $0)) } ?? "-"
+                    .map { String(controller.effectiveMonitorSlot(for: $0)) } ?? "-"
                 let hidden = controller.isHiddenByWorkspace(window.id) ? "hidden" : "visible"
                 let minimized = window.isMinimized ? "minimized" : "normal"
                 let title = window.title.isEmpty ? "(untitled)" : window.title

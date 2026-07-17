@@ -24,7 +24,7 @@ final class HiddenWindowOperator {
     func hide(
         _ id: WindowID,
         state: inout WorkspaceState,
-        activeWorkspace: String,
+        currentWorkspace: String,
         preferredFrame: WindowFrame? = nil
     ) throws {
         guard windowSystem.contains(id) else {
@@ -46,7 +46,7 @@ final class HiddenWindowOperator {
         recordRepository.upsertRecord(
             HiddenWindowRecordPolicy.makeRecord(
                 window: window,
-                workspace: state.membership(for: id) ?? activeWorkspace,
+                workspace: state.membership(for: id) ?? currentWorkspace,
                 originalFrame: frame,
                 hiddenPosition: point
             )
@@ -84,15 +84,15 @@ final class HiddenWindowOperator {
         guard let frame = state.hiddenFrame(for: id) else {
             if let preferredFrame {
                 let targetFrame = restorableFrameResolver.frameForRestore(preferredFrame)
-                try windowSystem.setFrameIfSizeChanged(targetFrame, for: id)
-                windowStore.updateFrame(targetFrame, for: id)
+                let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
+                windowStore.updateFrame(appliedFrame, for: id)
             }
             return .alreadyVisible
         }
 
         let targetFrame = restorableFrameResolver.frameForRestore(preferredFrame ?? frame)
-        try windowSystem.setFrameIfSizeChanged(targetFrame, for: id)
-        windowStore.updateFrame(targetFrame, for: id)
+        let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
+        windowStore.updateFrame(appliedFrame, for: id)
         state.clearHiddenFrame(for: id)
         recordRepository.removeRecord(
             windowID: id,
@@ -109,8 +109,8 @@ final class HiddenWindowOperator {
             }
             let targetFrame = restorableFrameResolver.frameForRestore(frame)
             do {
-                try windowSystem.setFrameIfSizeChanged(targetFrame, for: id)
-                windowStore.updateFrame(targetFrame, for: id)
+                let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
+                windowStore.updateFrame(appliedFrame, for: id)
             } catch {
                 failedWindowIDs.append(id)
             }

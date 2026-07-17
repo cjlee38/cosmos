@@ -1,19 +1,19 @@
 import Foundation
 
 struct WorkspaceCatalog {
-    private(set) var activeWorkspace: String
+    private(set) var currentWorkspace: String
     private var workspaceOrder: [String]
     private var monitorSlotsByWorkspace: [String: MonitorSlot]
-    private var activeWorkspaceByMonitorSlot: [MonitorSlot: String]
+    private var visibleWorkspaceByMonitorSlot: [MonitorSlot: String]
 
     init(workspaces: WorkspaceConfig) {
         workspaceOrder = workspaces.names
-        activeWorkspace = workspaces.names[0]
+        currentWorkspace = workspaces.names[0]
         monitorSlotsByWorkspace = workspaces.monitorSlotsByName
-        activeWorkspaceByMonitorSlot = [
+        visibleWorkspaceByMonitorSlot = [
             workspaces.monitorSlot(for: workspaces.names[0]): workspaces.names[0]
         ]
-        seedActiveWorkspaces()
+        seedVisibleWorkspaces()
     }
 
     var workspaces: [String] {
@@ -27,17 +27,17 @@ struct WorkspaceCatalog {
     mutating func apply(_ workspaces: WorkspaceConfig) {
         workspaceOrder = workspaces.names
         monitorSlotsByWorkspace = workspaces.monitorSlotsByName
-        if !workspaceOrder.contains(activeWorkspace) {
-            activeWorkspace = workspaceOrder[0]
+        if !workspaceOrder.contains(currentWorkspace) {
+            currentWorkspace = workspaceOrder[0]
         }
-        pruneActiveWorkspaces()
-        activeWorkspaceByMonitorSlot[monitorSlot(for: activeWorkspace)] = activeWorkspace
-        seedActiveWorkspaces()
+        pruneVisibleWorkspaces()
+        visibleWorkspaceByMonitorSlot[monitorSlot(for: currentWorkspace)] = currentWorkspace
+        seedVisibleWorkspaces()
     }
 
     mutating func activate(_ workspace: String) {
-        activeWorkspace = workspace
-        activeWorkspaceByMonitorSlot[monitorSlot(for: workspace)] = workspace
+        currentWorkspace = workspace
+        visibleWorkspaceByMonitorSlot[monitorSlot(for: workspace)] = workspace
     }
 
     var workspaceConfig: WorkspaceConfig {
@@ -48,37 +48,83 @@ struct WorkspaceCatalog {
         monitorSlotsByWorkspace[workspace] ?? 1
     }
 
-    func activeWorkspace(on monitorSlot: MonitorSlot) -> String {
-        activeWorkspaceByMonitorSlot[monitorSlot]
-            ?? workspaceOrder.first { self.monitorSlot(for: $0) == monitorSlot }
-            ?? activeWorkspace
+    func effectiveMonitorSlot(
+        for workspace: String,
+        availableMonitorSlots: Set<MonitorSlot>
+    ) -> MonitorSlot {
+        let homeSlot = monitorSlot(for: workspace)
+        return availableMonitorSlots.contains(homeSlot) ? homeSlot : 1
     }
 
-    var activeWorkspaces: Set<String> {
-        Set(activeWorkspaceByMonitorSlot.values).intersection(workspaceOrder)
+    func visibleWorkspace(
+        on monitorSlot: MonitorSlot,
+        availableMonitorSlots: Set<MonitorSlot>
+    ) -> String {
+        if effectiveMonitorSlot(
+            for: currentWorkspace,
+            availableMonitorSlots: availableMonitorSlots
+        ) == monitorSlot {
+            return currentWorkspace
+        }
+
+        return visibleWorkspaceByMonitorSlot[monitorSlot]
+            ?? workspaceOrder.first {
+                effectiveMonitorSlot(for: $0, availableMonitorSlots: availableMonitorSlots) == monitorSlot
+            }
+            ?? currentWorkspace
     }
 
-    func nextWorkspace(after workspace: String, on monitorSlot: MonitorSlot) -> String {
-        let order = workspaceOrder.filter { self.monitorSlot(for: $0) == monitorSlot }
-        return cycledValue(in: order, after: workspace, direction: .forward) ?? activeWorkspace(on: monitorSlot)
+    func visibleWorkspaces(availableMonitorSlots: Set<MonitorSlot>) -> Set<String> {
+        guard !availableMonitorSlots.isEmpty else {
+            return [currentWorkspace]
+        }
+
+        let currentSlot = effectiveMonitorSlot(
+            for: currentWorkspace,
+            availableMonitorSlots: availableMonitorSlots
+        )
+        var result: Set<String> = [currentWorkspace]
+        for slot in availableMonitorSlots where slot != currentSlot {
+            result.insert(visibleWorkspace(on: slot, availableMonitorSlots: availableMonitorSlots))
+        }
+        return result.intersection(workspaceOrder)
     }
 
-    func previousWorkspace(before workspace: String, on monitorSlot: MonitorSlot) -> String {
-        let order = workspaceOrder.filter { self.monitorSlot(for: $0) == monitorSlot }
-        return cycledValue(in: order, after: workspace, direction: .backward) ?? activeWorkspace(on: monitorSlot)
+    func nextWorkspace(
+        after workspace: String,
+        on monitorSlot: MonitorSlot,
+        availableMonitorSlots: Set<MonitorSlot>
+    ) -> String {
+        let order = workspaceOrder.filter {
+            effectiveMonitorSlot(for: $0, availableMonitorSlots: availableMonitorSlots) == monitorSlot
+        }
+        return cycledValue(in: order, after: workspace, direction: .forward)
+            ?? visibleWorkspace(on: monitorSlot, availableMonitorSlots: availableMonitorSlots)
     }
 
-    private mutating func seedActiveWorkspaces() {
+    func previousWorkspace(
+        before workspace: String,
+        on monitorSlot: MonitorSlot,
+        availableMonitorSlots: Set<MonitorSlot>
+    ) -> String {
+        let order = workspaceOrder.filter {
+            effectiveMonitorSlot(for: $0, availableMonitorSlots: availableMonitorSlots) == monitorSlot
+        }
+        return cycledValue(in: order, after: workspace, direction: .backward)
+            ?? visibleWorkspace(on: monitorSlot, availableMonitorSlots: availableMonitorSlots)
+    }
+
+    private mutating func seedVisibleWorkspaces() {
         for workspace in workspaceOrder {
             let slot = monitorSlot(for: workspace)
-            if activeWorkspaceByMonitorSlot[slot] == nil {
-                activeWorkspaceByMonitorSlot[slot] = workspace
+            if visibleWorkspaceByMonitorSlot[slot] == nil {
+                visibleWorkspaceByMonitorSlot[slot] = workspace
             }
         }
     }
 
-    private mutating func pruneActiveWorkspaces() {
-        activeWorkspaceByMonitorSlot = activeWorkspaceByMonitorSlot.reduce(into: [:]) { result, entry in
+    private mutating func pruneVisibleWorkspaces() {
+        visibleWorkspaceByMonitorSlot = visibleWorkspaceByMonitorSlot.reduce(into: [:]) { result, entry in
             if workspaceOrder.contains(entry.value), monitorSlot(for: entry.value) == entry.key {
                 result[entry.key] = entry.value
             }

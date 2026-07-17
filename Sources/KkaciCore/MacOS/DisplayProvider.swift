@@ -6,18 +6,26 @@ public struct DisplayProvider: DisplayProviding {
     public init() {}
 
     public func hidePoint(for frame: WindowFrame) -> CGPoint {
-        hidePoint(for: frame, displays: displays()) ?? bottomRight(of: CGDisplayBounds(CGMainDisplayID()))
+        let assignableDisplays = displays().filter(\.isWorkspaceAssignable)
+        return hidePoint(for: frame, displays: assignableDisplays)
+            ?? bottomRight(of: CGDisplayBounds(CGMainDisplayID()))
     }
 
     public func displays() -> [DisplaySnapshot] {
         let screensByDisplayID = screensByDisplayID()
-        return activeDisplayIDs().map { id in
+        let mainDisplayID = CGMainDisplayID()
+        return onlineDisplayIDs().compactMap { id in
+            guard let role = role(for: id, mainDisplayID: mainDisplayID) else {
+                return nil
+            }
             let frame = CGDisplayBounds(id)
+            let screen = screensByDisplayID[id]
             return DisplaySnapshot(
                 id: id,
+                name: screen?.localizedName ?? "Display \(id)",
                 frame: frame,
-                visibleFrame: screensByDisplayID[id].map { visibleFrame(for: $0, displayFrame: frame) },
-                isMain: id == CGMainDisplayID()
+                visibleFrame: screen.map { visibleFrame(for: $0, displayFrame: frame) },
+                role: role
             )
         }
     }
@@ -107,14 +115,25 @@ public struct DisplayProvider: DisplayProviding {
         )
     }
 
-    private func activeDisplayIDs() -> [CGDirectDisplayID] {
+    private func role(for id: DisplayID, mainDisplayID: DisplayID) -> DisplayRole? {
+        let mirrorSource = CGDisplayMirrorsDisplay(id)
+        if mirrorSource != kCGNullDirectDisplay {
+            return .mirrored(source: mirrorSource)
+        }
+        guard CGDisplayIsActive(id) != 0 else {
+            return nil
+        }
+        return id == mainDisplayID ? .main : .extended
+    }
+
+    private func onlineDisplayIDs() -> [CGDirectDisplayID] {
         var count: UInt32 = 0
-        guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else {
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else {
             return [CGMainDisplayID()]
         }
 
         var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetActiveDisplayList(count, &displays, &count) == .success else {
+        guard CGGetOnlineDisplayList(count, &displays, &count) == .success else {
             return [CGMainDisplayID()]
         }
 

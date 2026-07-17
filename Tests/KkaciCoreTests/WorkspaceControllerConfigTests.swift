@@ -46,7 +46,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
 
         XCTAssertNil(sync)
         XCTAssertFalse(controller.workspaces.contains("scratch"))
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
@@ -145,7 +145,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
             .window(id: 200, title: "First"),
             .window(id: 201, title: "Second")
         ])
-        let controller = makeController(windowSystem)
+        let controller = makeController(windowSystem, displayProvider: twoDisplayProvider())
 
         _ = controller.discoverWindows()
         try controller.assignWindow(200, to: "2")
@@ -195,7 +195,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         let result = try controller.switchToPreviousWorkspace()
 
         XCTAssertEqual(result.workspace, "3")
-        XCTAssertEqual(controller.activeWorkspace, "3")
+        XCTAssertEqual(controller.currentWorkspace, "3")
     }
 
     func testMissingWorkspaceIsNotCreatedOrPersisted() throws {
@@ -222,7 +222,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         let sync = try controller.switchWorkspace(to: "dev")
 
         XCTAssertNil(sync)
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
@@ -264,7 +264,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         XCTAssertTrue(store.savedConfigs.isEmpty)
     }
 
-    func testApplyConfigRemovesWorkspaceAndReassignsItsWindowToActiveWorkspace() throws {
+    func testApplyConfigRemovesWorkspaceAndReassignsItsWindowToCurrentWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
@@ -287,7 +287,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         )
 
         XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertEqual(controller.currentConfig.bindings, [
             HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")

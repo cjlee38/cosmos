@@ -13,36 +13,87 @@ public struct MonitorSlotSnapshot: Equatable {
     }
 }
 
-struct MonitorSlotResolver {
+public struct DisplayTopologySnapshot: Equatable {
+    public let displays: [DisplaySnapshot]
+    public let monitorSlots: [MonitorSlotSnapshot]
+
+    public init(displays: [DisplaySnapshot], monitorSlots: [MonitorSlotSnapshot]) {
+        self.displays = displays
+        self.monitorSlots = monitorSlots
+    }
+
+    public static let empty = DisplayTopologySnapshot(displays: [], monitorSlots: [])
+
+    public var availableMonitorSlots: Set<MonitorSlot> {
+        Set(monitorSlots.map(\.slot))
+    }
+}
+
+public struct MonitorSlotResolver {
     private let displayProvider: any DisplayProviding
 
-    init(displayProvider: any DisplayProviding) {
+    public init(displayProvider: any DisplayProviding) {
         self.displayProvider = displayProvider
     }
 
-    func slots() -> [MonitorSlotSnapshot] {
-        orderedDisplays().enumerated().map { index, display in
+    func topology() -> DisplayTopologySnapshot {
+        let displays = displayProvider.displays()
+        return DisplayTopologySnapshot(
+            displays: displays,
+            monitorSlots: slots(for: displays)
+        )
+    }
+
+    public func slots() -> [MonitorSlotSnapshot] {
+        topology().monitorSlots
+    }
+
+    func slots(for displays: [DisplaySnapshot]) -> [MonitorSlotSnapshot] {
+        orderedDisplays(in: displays).enumerated().map { index, display in
             MonitorSlotSnapshot(slot: index + 1, display: display)
         }
     }
 
     func slot(containing frame: WindowFrame?) -> MonitorSlot {
+        slot(containing: frame, among: slots())
+    }
+
+    func slot(containing frame: WindowFrame?, among slots: [MonitorSlotSnapshot]) -> MonitorSlot {
         guard let frame else {
             return 1
         }
 
-        return slot(containing: frame.center)
+        return slot(containing: frame.center, among: slots)
     }
 
-    func display(for slot: MonitorSlot) -> DisplaySnapshot? {
-        slots().first { $0.slot == slot }?.display
+    func display(for slot: MonitorSlot, among slots: [MonitorSlotSnapshot]) -> DisplaySnapshot? {
+        slots.first { $0.slot == slot }?.display
     }
 
     func translatedFrame(_ frame: WindowFrame, to slot: MonitorSlot) -> WindowFrame? {
-        guard let source = display(for: self.slot(containing: frame)),
-              let target = display(for: slot),
-              source.id != target.id
+        translatedFrame(frame, to: slot, among: slots())
+    }
+
+    func translatedFrame(
+        _ frame: WindowFrame,
+        to slot: MonitorSlot,
+        among slots: [MonitorSlotSnapshot]
+    ) -> WindowFrame? {
+        guard let source = display(for: self.slot(containing: frame, among: slots), among: slots),
+              let target = display(for: slot, among: slots)
         else {
+            return nil
+        }
+
+        return translatedFrame(frame, from: source, to: target)
+    }
+
+    func translatedFrame(
+        _ frame: WindowFrame,
+        from source: DisplaySnapshot,
+        to target: DisplaySnapshot
+    ) -> WindowFrame? {
+        if source.id == target.id, source.visibleFrame == target.visibleFrame {
             return nil
         }
 
@@ -71,8 +122,7 @@ struct MonitorSlotResolver {
         )
     }
 
-    private func slot(containing point: CGPoint) -> MonitorSlot {
-        let slots = slots()
+    private func slot(containing point: CGPoint, among slots: [MonitorSlotSnapshot]) -> MonitorSlot {
         guard let display = DisplayGeometry.display(
             containingOrNearest: point,
             among: slots.map(\.display)
@@ -82,8 +132,8 @@ struct MonitorSlotResolver {
         return slots.first(where: { $0.display.id == display.id })?.slot ?? 1
     }
 
-    private func orderedDisplays() -> [DisplaySnapshot] {
-        let displays = displayProvider.displays()
+    private func orderedDisplays(in displays: [DisplaySnapshot]) -> [DisplaySnapshot] {
+        let displays = displays.filter(\.isWorkspaceAssignable)
         guard let main = displays.first(where: \.isMain) ?? displays.first else {
             return []
         }

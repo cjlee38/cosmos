@@ -1,0 +1,171 @@
+import CoreGraphics
+@testable import KkaciCore
+import XCTest
+
+final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
+    func testDisconnectedWorkspaceFallsBackToMainAndReturnsHomeWhenDisplayReconnects() throws {
+        let displayProvider = twoDisplayProvider()
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(configWithSecondaryWorkspace())
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100, width: 300, height: 200))
+        ])
+        let controller = makeController(
+            windowSystem,
+            displayProvider: displayProvider,
+            configStore: store
+        )
+
+        _ = controller.discoverWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "a")
+
+        displayProvider.snapshots = [mainDisplay()]
+        _ = try controller.handleDisplayConfigurationChanged()
+
+        XCTAssertEqual(controller.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 1)
+        XCTAssertEqual(controller.visibleWorkspaces, ["1"])
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertTrue(controller.isHiddenByWorkspace(200))
+        XCTAssertEqual(controller.workspaceFrame(for: 200), .frame(x: 100, y: 100, width: 300, height: 200))
+        XCTAssertEqual(controller.currentConfig.workspaces.monitorSlot(for: "a"), 2)
+
+        displayProvider.snapshots = [mainDisplay(), secondaryDisplay()]
+        _ = try controller.handleDisplayConfigurationChanged()
+
+        XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 2)
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "a"])
+        XCTAssertFalse(controller.isHiddenByWorkspace(100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertEqual(windowSystem.frames[200], .frame(x: 1100, y: 100, width: 300, height: 200))
+    }
+
+    func testCurrentSecondaryWorkspaceStaysVisibleOnMainWhileItsDisplayIsDisconnected() throws {
+        let displayProvider = twoDisplayProvider()
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(configWithSecondaryWorkspace())
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100))
+        ])
+        let controller = makeController(
+            windowSystem,
+            displayProvider: displayProvider,
+            configStore: store
+        )
+
+        _ = controller.discoverWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "a")
+        _ = try controller.switchWorkspace(to: "a")
+        displayProvider.snapshots = [mainDisplay()]
+
+        _ = try controller.handleDisplayConfigurationChanged()
+
+        XCTAssertEqual(controller.currentWorkspace, "a")
+        XCTAssertEqual(controller.visibleWorkspaces, ["a"])
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+        XCTAssertEqual(windowSystem.frames[200], .frame(x: 100, y: 100))
+    }
+
+    func testMainDisplaySwapMovesWorkspaceGroupsWithTheirConfiguredRoles() throws {
+        let displayProvider = FakeDisplayProvider(
+            point: hidePoint,
+            snapshots: [mainDisplay(), smallSecondaryDisplay()]
+        )
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(configWithSecondaryWorkspace())
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1050, y: 50, width: 150, height: 100))
+        ])
+        let controller = makeController(
+            windowSystem,
+            displayProvider: displayProvider,
+            configStore: store
+        )
+
+        _ = controller.discoverWindows()
+        try controller.assignWindow(100, to: "1")
+        try controller.assignWindow(200, to: "a")
+        displayProvider.snapshots = [
+            DisplaySnapshot(id: 2, frame: CGRect(x: 0, y: 0, width: 500, height: 500), role: .main),
+            DisplaySnapshot(id: 1, frame: CGRect(x: 500, y: 0, width: 1000, height: 1000), role: .extended)
+        ]
+
+        _ = try controller.handleDisplayConfigurationChanged()
+
+        XCTAssertEqual(controller.monitorSlots.map(\.display.id), [2, 1])
+        XCTAssertEqual(controller.monitorSlot(for: "1"), 1)
+        XCTAssertEqual(controller.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: 50, y: 50, width: 150, height: 100))
+        XCTAssertEqual(windowSystem.frames[200], .frame(x: 600, y: 100, width: 300, height: 200))
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertEqual(controller.membership(for: 200), "a")
+    }
+
+    func testMirroredDisplayUsesTheSameFallbackAsDisconnectedDisplay() throws {
+        let displayProvider = twoDisplayProvider()
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(configWithSecondaryWorkspace())
+        let controller = makeController(
+            FakeWindowSystem(windows: []),
+            displayProvider: displayProvider,
+            configStore: store
+        )
+
+        _ = controller.discoverWindows()
+        displayProvider.snapshots = [
+            mainDisplay(),
+            DisplaySnapshot(
+                id: 2,
+                frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+                role: .mirrored(source: 1)
+            )
+        ]
+
+        _ = try controller.handleDisplayConfigurationChanged()
+
+        XCTAssertEqual(controller.displays.map(\.id), [1, 2])
+        XCTAssertEqual(controller.monitorSlots.map(\.display.id), [1])
+        XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 1)
+        XCTAssertEqual(controller.currentConfig.workspaces.monitorSlot(for: "a"), 2)
+    }
+
+    private func configWithSecondaryWorkspace() -> KkaciConfig {
+        KkaciConfig(
+            workspaces: WorkspaceConfig(
+                names: ["1", "a"],
+                monitorSlotsByName: ["a": 2]
+            ),
+            bindings: KkaciConfig.default.bindings
+        )
+    }
+
+    private func mainDisplay() -> DisplaySnapshot {
+        DisplaySnapshot(
+            id: 1,
+            frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+            role: .main
+        )
+    }
+
+    private func secondaryDisplay() -> DisplaySnapshot {
+        DisplaySnapshot(
+            id: 2,
+            frame: CGRect(x: 1000, y: 0, width: 1000, height: 1000),
+            role: .extended
+        )
+    }
+
+    private func smallSecondaryDisplay() -> DisplaySnapshot {
+        DisplaySnapshot(
+            id: 2,
+            frame: CGRect(x: 1000, y: 0, width: 500, height: 500),
+            role: .extended
+        )
+    }
+}

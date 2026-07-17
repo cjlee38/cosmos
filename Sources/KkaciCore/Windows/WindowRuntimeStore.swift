@@ -3,16 +3,20 @@ import Foundation
 final class WindowRuntimeStore {
     private(set) var windows: [WindowSnapshot] = []
     private(set) var focusedWindowID: WindowID?
-    private(set) var monitorSlots: [MonitorSlotSnapshot] = []
+    private(set) var displayTopology = DisplayTopologySnapshot.empty
+
+    var monitorSlots: [MonitorSlotSnapshot] {
+        displayTopology.monitorSlots
+    }
 
     func replace(
         windows: [WindowSnapshot],
         focusedWindowID: WindowID?,
-        monitorSlots: [MonitorSlotSnapshot]
+        displayTopology: DisplayTopologySnapshot
     ) {
         self.windows = windows
         self.focusedWindowID = focusedWindowID
-        self.monitorSlots = monitorSlots
+        self.displayTopology = displayTopology
     }
 
     func snapshot(for id: WindowID) -> WindowSnapshot? {

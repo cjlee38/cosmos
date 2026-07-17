@@ -58,7 +58,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1100, y: 100, width: 300, height: 200))
     }
 
-    func testPartialCrossMonitorFrameFailureRestoresTheOriginalFrame() throws {
+    func testResizeFailureMovesCurrentWorkspaceWindowWithItsOriginalSize() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Window", frame: .frame(x: 100, y: 100, width: 300, height: 200))
         ])
@@ -69,26 +69,26 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
             configStore: store
         )
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
-        var failedTargetWrite = false
-        windowSystem.operationFailureAfterMutation = { operation in
-            guard case let .setFrame(id, frame) = operation,
-                  id == 100,
-                  frame != originalFrame,
-                  !failedTargetWrite
-            else {
+        windowSystem.operationFailure = { operation in
+            guard case .setFrame(100, _) = operation else {
                 return nil
             }
-            failedTargetWrite = true
-            return FakeWindowSystemError.frameWrite(id)
+            return FakeWindowSystemError.frameWrite(100)
         }
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
 
-        XCTAssertThrowsError(try controller.updateWorkspaceMonitor("1", monitorSlot: 2))
-        XCTAssertEqual(windowSystem.frames[100], originalFrame)
-        XCTAssertEqual(controller.workspaceFrame(for: 100), originalFrame)
-        XCTAssertEqual(controller.monitorSlot(for: "1"), 1)
+        try controller.updateWorkspaceMonitor("1", monitorSlot: 2)
+
+        XCTAssertEqual(
+            windowSystem.frames[100],
+            .frame(x: 1050, y: 50, width: originalFrame.size.width, height: originalFrame.size.height)
+        )
+        XCTAssertEqual(controller.workspaceFrame(for: 100), windowSystem.frames[100])
+        XCTAssertEqual(controller.monitorSlot(for: "1"), 2)
+        XCTAssertEqual(controller.currentWorkspace, "1")
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "2"])
     }
 
     func testFailedHiddenWindowReassignmentRestoresThePreviousDurableFrame() throws {

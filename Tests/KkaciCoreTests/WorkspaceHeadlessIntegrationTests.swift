@@ -168,14 +168,14 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         try recordStore.flushPendingWrites()
 
         XCTAssertEqual(result, .switched(windowID: 200, workspace: "2"))
-        XCTAssertEqual(controller.activeWorkspace, "2")
+        XCTAssertEqual(controller.currentWorkspace, "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(windowSystem.focusedIDs.last, 200)
         XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [100])
     }
 
-    func testNewWindowDiscoveredOnActiveWorkspaceThenHiddenWhenSwitchingAway() throws {
+    func testNewWindowDiscoveredOnCurrentWorkspaceThenHiddenWhenSwitchingAway() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 

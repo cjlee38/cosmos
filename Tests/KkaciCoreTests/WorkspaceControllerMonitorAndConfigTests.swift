@@ -30,8 +30,8 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
 
         _ = try controller.switchWorkspace(to: "2")
 
-        XCTAssertEqual(controller.activeWorkspace, "2")
-        XCTAssertEqual(Set(controller.activeWorkspaces), ["2", "a"])
+        XCTAssertEqual(controller.currentWorkspace, "2")
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["2", "a"])
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 
@@ -63,8 +63,8 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
 
         XCTAssertEqual(result, .alreadyActive(windowID: 100, workspace: "1"))
-        XCTAssertEqual(controller.activeWorkspace, "1")
-        XCTAssertEqual(Set(controller.activeWorkspaces), ["1", "a"])
+        XCTAssertEqual(controller.currentWorkspace, "1")
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "a"])
     }
 }
 
@@ -112,7 +112,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         try controller.assignWindow(200, to: "2")
 
         XCTAssertThrowsError(try controller.focusWindow(200)) { error in
-            XCTAssertEqual(error as? WorkspaceError, .windowNotInActiveWorkspace(200, "2"))
+            XCTAssertEqual(error as? WorkspaceError, .windowNotInVisibleWorkspace(200, "2"))
         }
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
@@ -175,7 +175,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         let result = try controller.switchToNextWorkspace()
 
         XCTAssertEqual(result.workspace, "2")
-        XCTAssertEqual(controller.activeWorkspace, "2")
+        XCTAssertEqual(controller.currentWorkspace, "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
     }
@@ -207,7 +207,7 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
 
         _ = try controller.switchWorkspace(to: "3")
 
-        XCTAssertEqual(controller.activeWorkspace, "3")
+        XCTAssertEqual(controller.currentWorkspace, "3")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertFalse(controller.isHiddenByWorkspace(300))
@@ -242,11 +242,11 @@ final class WorkspaceControllerMonitorTests: WorkspaceControllerTestCase {
         windowSystem.frameWriteFailures.insert(300)
 
         XCTAssertThrowsError(try controller.switchWorkspace(to: "3"))
-        XCTAssertEqual(controller.activeWorkspace, "1")
-        XCTAssertEqual(controller.activeWorkspaces, ["1", "2"])
+        XCTAssertEqual(controller.currentWorkspace, "1")
+        XCTAssertEqual(controller.visibleWorkspaces, ["1", "2"])
     }
 
-    func testBootstrapAssignsVisibleWindowsToTheActiveWorkspaceOnTheirMonitorSlot() throws {
+    func testBootstrapAssignsVisibleWindowsToTheVisibleWorkspaceOnTheirMonitorSlot() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100)),
             .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100))

@@ -46,18 +46,18 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertEqual(
             MenuBarTitleFormatter.title(
                 workspaces: ["1", "a"],
-                activeWorkspace: "1",
+                currentWorkspace: "1",
                 style: .angleBrackets
             ),
-            "<*1 | a>"
+            "<•1 | a>"
         )
         XCTAssertEqual(
             MenuBarTitleFormatter.title(
                 workspaces: ["1", "a"],
-                activeWorkspace: "a",
+                currentWorkspace: "a",
                 style: .squareBrackets
             ),
-            "[1 | *a]"
+            "[1 | •a]"
         )
     }
 

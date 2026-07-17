@@ -27,7 +27,7 @@ final class RestorableFrameResolverTests: XCTestCase {
                     id: 1,
                     frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
                     visibleFrame: CGRect(x: 0, y: 40, width: 1000, height: 900),
-                    isMain: true
+                    role: .main
                 )
             ]
         ))

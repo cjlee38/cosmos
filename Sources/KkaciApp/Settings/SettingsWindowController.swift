@@ -1,10 +1,12 @@
 import AppKit
+import KkaciCore
 
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let accessibilityIdentifier = "kkaci.settings"
 
     private let generalViewController: GeneralSettingsViewController
     private let appearanceViewController: AppearanceSettingsViewController
+    private let workspaceViewController: WorkspaceSettingsViewController
     private let visibilityChangedHandler: () -> Void
 
     init(
@@ -12,30 +14,34 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         appSettingsStore: AppSettingsStore,
         appearanceChangedHandler: @escaping () -> Void,
         visibilityChangedHandler: @escaping () -> Void,
+        workspaceSnapshotProvider: @escaping () -> WorkspaceSettingsSnapshot,
+        workspaceMonitorChangedHandler: @escaping (String, MonitorSlot) throws -> Void,
         configURLProvider: @escaping () -> URL?,
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
         reloadConfigHandler: @escaping () -> Void
     ) {
-        let generalViewController = GeneralSettingsViewController(
+        generalViewController = GeneralSettingsViewController(
             service: generalSettingsService,
             configURLProvider: configURLProvider,
             configStatusProvider: configStatusProvider,
             reloadConfigHandler: reloadConfigHandler
         )
-        self.generalViewController = generalViewController
         self.visibilityChangedHandler = visibilityChangedHandler
-        let appearanceViewController = AppearanceSettingsViewController(
+        appearanceViewController = AppearanceSettingsViewController(
             store: appSettingsStore,
             onChange: appearanceChangedHandler
         )
-        self.appearanceViewController = appearanceViewController
+        workspaceViewController = WorkspaceSettingsViewController(
+            snapshotProvider: workspaceSnapshotProvider,
+            updateMonitorHandler: workspaceMonitorChangedHandler
+        )
 
         let sidebar = SettingsSidebarViewController()
         let content = SettingsContentViewController()
         let viewControllers: [SettingsSection: NSViewController] = [
             .general: generalViewController,
             .appearance: appearanceViewController,
-            .workspaces: Self.emptyViewController()
+            .workspaces: workspaceViewController
         ]
         sidebar.onSelectionChanged = { section in
             guard let viewController = viewControllers[section] else {
@@ -87,6 +93,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     func refresh() {
         generalViewController.refresh()
         appearanceViewController.refresh()
+        workspaceViewController.refresh()
     }
 
     func windowDidBecomeKey(_: Notification) {
@@ -96,12 +103,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     func windowWillClose(_: Notification) {
         NSApp.setActivationPolicy(.accessory)
         visibilityChangedHandler()
-    }
-
-    private static func emptyViewController() -> NSViewController {
-        let viewController = NSViewController()
-        viewController.view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
-        return viewController
     }
 
     private static func makeSplitViewController(

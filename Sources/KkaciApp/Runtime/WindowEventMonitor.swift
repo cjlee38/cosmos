@@ -61,8 +61,12 @@ struct WindowRuntimeEventBatch {
         events.contains { $0.kind == .layoutChanged }
     }
 
-    var needsFullThumbnailRefresh: Bool {
+    var containsDisplayChange: Bool {
         events.contains { $0.kind == .displayChanged }
+    }
+
+    var needsFullThumbnailRefresh: Bool {
+        containsDisplayChange
     }
 }
 

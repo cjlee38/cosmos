@@ -25,8 +25,8 @@ class WorkspaceControllerTestCase: XCTestCase {
         FakeDisplayProvider(
             point: hidePoint,
             snapshots: [
-                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), isMain: true),
-                DisplaySnapshot(id: 2, frame: CGRect(x: 1000, y: 0, width: 1000, height: 1000), isMain: false)
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), role: .main),
+                DisplaySnapshot(id: 2, frame: CGRect(x: 1000, y: 0, width: 1000, height: 1000), role: .extended)
             ]
         )
     }
@@ -35,8 +35,8 @@ class WorkspaceControllerTestCase: XCTestCase {
         FakeDisplayProvider(
             point: hidePoint,
             snapshots: [
-                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), isMain: true),
-                DisplaySnapshot(id: 2, frame: CGRect(x: 1000, y: 0, width: 500, height: 500), isMain: false)
+                DisplaySnapshot(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 1000), role: .main),
+                DisplaySnapshot(id: 2, frame: CGRect(x: 1000, y: 0, width: 500, height: 500), role: .extended)
             ]
         )
     }
@@ -110,7 +110,7 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
 
         _ = try controller.switchWorkspace(to: "2")
 
-        XCTAssertEqual(controller.activeWorkspace, "2")
+        XCTAssertEqual(controller.currentWorkspace, "2")
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertTrue(controller.isHiddenByWorkspace(300))
     }
@@ -128,7 +128,7 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
         windowSystem.frameWriteFailures.insert(100)
 
         XCTAssertThrowsError(try controller.switchWorkspace(to: "2"))
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
     }
@@ -151,7 +151,7 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
 
         XCTAssertThrowsError(try controller.switchWorkspace(to: "2"))
 
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(101))
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
@@ -323,7 +323,7 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.workspaceFrame(for: 100), windowSystem.frames[100])
     }
 
-    func testFocusWindowFocusesActiveWorkspaceWindow() throws {
+    func testFocusWindowFocusesVisibleWorkspaceWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two")

@@ -17,6 +17,15 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(batch.windowIDsNeedingCapture, [100])
     }
 
+    func testDisplayChangeIsRecognizedAsTopologyAndFullThumbnailChange() {
+        let batch = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .displayChanged, windowID: nil)
+        ])
+
+        XCTAssertTrue(batch.containsDisplayChange)
+        XCTAssertTrue(batch.needsFullThumbnailRefresh)
+    }
+
     func testEventKindsPreserveDistinctFocusLayoutAndThumbnailSemantics() {
         XCTAssertEqual(
             WindowRuntimeEventKind.kinds(forAXNotification: kAXFocusedWindowChangedNotification as String),
@@ -87,7 +96,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
         ]))
 
-        XCTAssertEqual(controller.activeWorkspace, "2")
+        XCTAssertEqual(controller.currentWorkspace, "2")
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
     }
 
@@ -104,7 +113,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             WindowRuntimeEvent(kind: .layoutChanged, windowID: 200)
         ]))
 
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
     }
 
@@ -155,7 +164,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
         ]))
 
-        XCTAssertEqual(controller.activeWorkspace, "1")
+        XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertEqual(switcherRefreshCount, 0)
         XCTAssertEqual(surfaceRefreshCount, 0)
     }

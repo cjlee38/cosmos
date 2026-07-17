@@ -105,14 +105,14 @@ extension SwitcherCoordinator {
 private extension SwitcherCoordinator {
     private func startWindowSession(direction: SwitcherDirection) {
         let windows = controller.currentWindows()
-        let windowIDs = controller.windows(in: controller.activeWorkspace).map(\.id)
+        let windowIDs = controller.windows(in: controller.currentWorkspace).map(\.id)
 
         guard let selection = SwitcherSession(
             items: windowIDs,
             currentItem: windowIDs.first,
             direction: direction
         ) else {
-            log.info("No windows in workspace \(controller.activeWorkspace)")
+            log.info("No windows in workspace \(controller.currentWorkspace)")
             return
         }
 
@@ -123,12 +123,12 @@ private extension SwitcherCoordinator {
 
     private func startWorkspaceSession(direction: SwitcherDirection) {
         let windows = controller.currentWindows()
-        let activeWindowID = controller.windows(in: controller.activeWorkspace).first?.id
+        let activeWindowID = controller.windows(in: controller.currentWorkspace).first?.id
         let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: activeWindowID)
 
         guard let selection = SwitcherSession(
             items: controller.workspaces,
-            currentItem: controller.activeWorkspace,
+            currentItem: controller.currentWorkspace,
             direction: direction
         ) else {
             log.info("No workspaces")
@@ -225,7 +225,7 @@ private extension SwitcherCoordinator {
             )
             previewService.refresh(
                 windowIDs: Set(selection.items),
-                workspaceNames: [controller.activeWorkspace],
+                workspaceNames: [controller.currentWorkspace],
                 priorityIDs: [selection.selectedItem]
             )
         case let .workspaces(selection, anchorFrame):
@@ -241,7 +241,7 @@ private extension SwitcherCoordinator {
                 }
             )
             previewService.refreshAll(
-                priorityIDs: controller.windows(in: controller.activeWorkspace).first.map { [$0.id] } ?? []
+                priorityIDs: controller.windows(in: controller.currentWorkspace).first.map { [$0.id] } ?? []
             )
         case nil:
             return
@@ -290,14 +290,14 @@ private extension SwitcherCoordinator {
         let windows = controller.currentWindows()
         switch session {
         case .windows:
-            let windowIDs = controller.windows(in: controller.activeWorkspace).map(\.id)
+            let windowIDs = controller.windows(in: controller.currentWorkspace).map(\.id)
             let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: windowIDs.first)
             guard session?.reconcileWindows(windowIDs, anchorFrame: anchorFrame) == true else {
                 endSession()
                 return
             }
         case .workspaces:
-            let activeWindowID = controller.windows(in: controller.activeWorkspace).first?.id
+            let activeWindowID = controller.windows(in: controller.currentWorkspace).first?.id
             let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: activeWindowID)
             guard session?.reconcileWorkspaces(controller.workspaces, anchorFrame: anchorFrame) == true else {
                 endSession()
@@ -355,7 +355,7 @@ private extension SwitcherCoordinator {
         }
 
         return windows.first {
-            controller.membership(for: $0.id) == controller.activeWorkspace
+            controller.membership(for: $0.id) == controller.currentWorkspace
                 && !controller.isHiddenByWorkspace($0.id)
                 && !$0.isMinimized
                 && $0.frame != nil

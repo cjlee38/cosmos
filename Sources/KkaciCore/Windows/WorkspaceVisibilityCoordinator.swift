@@ -15,17 +15,17 @@ final class WorkspaceVisibilityCoordinator {
         self.windowStore = windowStore
     }
 
-    func applyActiveWorkspaces(
+    func applyVisibleWorkspaces(
         state: inout WorkspaceState,
         focusWindowID: WindowID? = nil,
         hideLastWindowID: WindowID? = nil,
         requiredWindowIDs: Set<WindowID> = [],
         targetFrames: [WindowID: WindowFrame] = [:]
     ) throws {
-        let activeWorkspace = state.activeWorkspace
-        let visibleWorkspaces = state.activeWorkspaces.isEmpty
-            ? Set([activeWorkspace])
-            : state.activeWorkspaces
+        let currentWorkspace = state.currentWorkspace
+        let visibleWorkspaces = state.visibleWorkspaces(
+            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+        )
 
         for workspace in visibleWorkspaces.sorted() {
             for id in state.windowIDs(in: workspace) {
@@ -57,7 +57,7 @@ final class WorkspaceVisibilityCoordinator {
                 try hiddenWindowOperator.hide(
                     id,
                     state: &state,
-                    activeWorkspace: activeWorkspace,
+                    currentWorkspace: currentWorkspace,
                     preferredFrame: targetFrames[id]
                 )
             } catch {
@@ -80,7 +80,7 @@ final class WorkspaceVisibilityCoordinator {
         state: inout WorkspaceState
     ) throws {
         state.restoreLogicalState(from: previousState)
-        try applyActiveWorkspaces(
+        try applyVisibleWorkspaces(
             state: &state,
             focusWindowID: focusedWindowID,
             requiredWindowIDs: Set(previousState.assignedWindowIDs)

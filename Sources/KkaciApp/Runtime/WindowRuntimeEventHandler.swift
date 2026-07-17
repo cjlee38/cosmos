@@ -29,15 +29,21 @@ final class WindowRuntimeEventHandler {
     func handle(_ events: WindowRuntimeEventBatch) {
         let previousMemberships = currentMemberships()
         let focusedWindowID = controller.focusedWindowID()
-        let shouldFollowFocusedWindow = focusSyncSuppression.shouldFollow(
+        let isFocusSyncAllowed = focusSyncSuppression.shouldFollow(
             requested: shouldFollowFocusedWindow(for: events, focusedWindowID: focusedWindowID),
             focusedWindowID: focusedWindowID
         )
+        let shouldFollowFocusedWindow = !events.containsDisplayChange && isFocusSyncAllowed
 
         do {
-            let result = try shouldFollowFocusedWindow
-                ? controller.handleFocusedWindowChanged()
-                : controller.handleWindowSetChanged()
+            let result: ExternalWindowEventResult
+            if events.containsDisplayChange {
+                result = try controller.handleDisplayConfigurationChanged()
+            } else if shouldFollowFocusedWindow {
+                result = try controller.handleFocusedWindowChanged()
+            } else {
+                result = try controller.handleWindowSetChanged()
+            }
             refreshPreviews(
                 for: events,
                 result: result,

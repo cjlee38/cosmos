@@ -2,15 +2,18 @@ import Foundation
 
 final class WindowAssignmentCoordinator {
     private let windowSystem: any WindowSystem
+    private let windowStore: WindowRuntimeStore
     private let visibilityCoordinator: WorkspaceVisibilityCoordinator
     private let monitorSlotResolver: MonitorSlotResolver
 
     init(
         windowSystem: any WindowSystem,
+        windowStore: WindowRuntimeStore,
         visibilityCoordinator: WorkspaceVisibilityCoordinator,
         monitorSlotResolver: MonitorSlotResolver
     ) {
         self.windowSystem = windowSystem
+        self.windowStore = windowStore
         self.visibilityCoordinator = visibilityCoordinator
         self.monitorSlotResolver = monitorSlotResolver
     }
@@ -35,7 +38,7 @@ final class WindowAssignmentCoordinator {
         state.assign(id, to: workspace)
 
         do {
-            try visibilityCoordinator.applyActiveWorkspaces(
+            try visibilityCoordinator.applyVisibleWorkspaces(
                 state: &state,
                 requiredWindowIDs: [id],
                 targetFrames: dictionary(for: id, frame: preferredFrame)
@@ -72,7 +75,10 @@ final class WindowAssignmentCoordinator {
             return
         }
         for window in windows where !window.isMinimized && state.membership(for: window.id) == nil {
-            let workspace = state.activeWorkspace(on: monitorSlotForFrame(window.frame))
+            let workspace = state.visibleWorkspace(
+                on: monitorSlotForFrame(window.frame),
+                availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+            )
             state.capture([window.id], into: workspace)
         }
     }
@@ -89,29 +95,31 @@ final class WindowAssignmentCoordinator {
             throw WorkspaceError.windowNotFound(id)
         }
         guard let currentWorkspace = state.membership(for: id),
-              currentWorkspace == state.activeWorkspace,
+              currentWorkspace == state.currentWorkspace,
               !state.isHidden(id)
         else {
-            throw WorkspaceError.windowNotInActiveWorkspace(
+            throw WorkspaceError.windowNotInCurrentWorkspace(
                 id,
-                state.membership(for: id) ?? state.activeWorkspace
+                state.membership(for: id) ?? state.currentWorkspace
             )
         }
 
         let previousState = state
         let previousFocusedWindowID = windowSystem.focusedWindowID()
-        let destinationIsActive = state.activeWorkspaces.contains(workspace)
-        let replacementFocus = workspace == currentWorkspace || destinationIsActive
+        let destinationIsVisible = state.visibleWorkspaces(
+            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+        ).contains(workspace)
+        let replacementFocus = workspace == currentWorkspace || destinationIsVisible
             ? nil
             : frontToBackWindowIDs.first { $0 != id }
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
         state.assign(id, to: workspace)
-        if destinationIsActive {
+        if destinationIsVisible {
             state.activate(workspace)
         }
 
         do {
-            try visibilityCoordinator.applyActiveWorkspaces(
+            try visibilityCoordinator.applyVisibleWorkspaces(
                 state: &state,
                 focusWindowID: replacementFocus,
                 requiredWindowIDs: [id],
@@ -134,11 +142,15 @@ final class WindowAssignmentCoordinator {
         to workspace: String,
         state: WorkspaceState
     ) -> WindowFrame? {
-        let targetSlot = state.monitorSlot(for: workspace)
+        let monitorSlots = windowStore.monitorSlots
+        let targetSlot = state.monitorSlot(
+            for: workspace,
+            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+        )
         guard let frame = state.hiddenFrame(for: id) ?? windowSystem.frame(for: id) else {
             return nil
         }
-        return monitorSlotResolver.translatedFrame(frame, to: targetSlot)
+        return monitorSlotResolver.translatedFrame(frame, to: targetSlot, among: monitorSlots)
     }
 
     private func dictionary(for id: WindowID, frame: WindowFrame?) -> [WindowID: WindowFrame] {

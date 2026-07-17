@@ -70,6 +70,6 @@ final class DisplayGeometryTests: XCTestCase {
 
     private func display(id: CGDirectDisplayID, x: CGFloat, width: CGFloat) -> DisplaySnapshot {
         let frame = CGRect(x: x, y: 0, width: width, height: 1000)
-        return DisplaySnapshot(id: id, frame: frame, visibleFrame: frame, isMain: id == 1)
+        return DisplaySnapshot(id: id, frame: frame, visibleFrame: frame, role: id == 1 ? .main : .extended)
     }
 }

@@ -2,6 +2,7 @@ enum REPLCommand {
     case help
     case permission
     case list
+    case displays
     case focused
     case assign
     case capture
@@ -22,6 +23,7 @@ enum REPLCommand {
         "permission": .permission,
         "list": .list,
         "ls": .list,
+        "displays": .displays,
         "focused": .focused,
         "assign": .assign,
         "capture": .capture,

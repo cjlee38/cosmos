@@ -3,10 +3,16 @@ import Foundation
 final class EmergencyHiddenWindowRestorer {
     private let recordRepository: HiddenWindowRecordRepository
     private let hiddenWindowOperator: HiddenWindowOperator
+    private let windowStore: WindowRuntimeStore
 
-    init(recordRepository: HiddenWindowRecordRepository, hiddenWindowOperator: HiddenWindowOperator) {
+    init(
+        recordRepository: HiddenWindowRecordRepository,
+        hiddenWindowOperator: HiddenWindowOperator,
+        windowStore: WindowRuntimeStore
+    ) {
         self.recordRepository = recordRepository
         self.hiddenWindowOperator = hiddenWindowOperator
+        self.windowStore = windowStore
     }
 
     func restoreAll(
@@ -25,8 +31,18 @@ final class EmergencyHiddenWindowRestorer {
             do {
                 if try hiddenWindowOperator.restore(id, state: &state) == .restored {
                     if let previousWorkspace = state.membership(for: id) {
-                        let monitorSlot = state.monitorSlot(for: previousWorkspace)
-                        state.assign(id, to: state.activeWorkspace(on: monitorSlot))
+                        let availableMonitorSlots = windowStore.displayTopology.availableMonitorSlots
+                        let monitorSlot = state.monitorSlot(
+                            for: previousWorkspace,
+                            availableMonitorSlots: availableMonitorSlots
+                        )
+                        state.assign(
+                            id,
+                            to: state.visibleWorkspace(
+                                on: monitorSlot,
+                                availableMonitorSlots: availableMonitorSlots
+                            )
+                        )
                     }
                     restored.append(id)
                 }

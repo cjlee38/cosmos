@@ -134,6 +134,16 @@ final class AppRuntime {
                 visibilityChangedHandler: { [unowned self] in
                     handleSettingsVisibilityChanged()
                 },
+                workspaceSnapshotProvider: { [unowned self] in
+                    WorkspaceSettingsSnapshot(
+                        config: controller.currentConfig,
+                        monitorSlots: controller.monitorSlots,
+                        displays: controller.displays
+                    )
+                },
+                workspaceMonitorChangedHandler: { [unowned self] workspace, monitorSlot in
+                    try updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+                },
                 configURLProvider: { [unowned self] in
                     configRuntime.configURL
                 },
@@ -146,6 +156,14 @@ final class AppRuntime {
             )
         }
         settingsWindowController?.show()
+    }
+
+    private func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws {
+        try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+        previewService.refreshAll()
+        actionController.refreshSwitcherContent()
+        refreshSurfaces()
+        log.info("Assigned workspace \(workspace) to monitor \(monitorSlot)")
     }
 
     private func handleSettingsVisibilityChanged() {
@@ -196,7 +214,7 @@ final class AppRuntime {
 
     private func bootstrapMessage(for recordResult: HiddenWindowRecordStartupApplyResult) -> String {
         guard !recordResult.reassigned.isEmpty || !recordResult.restored.isEmpty else {
-            return "Captured visible windows to active workspaces"
+            return "Captured visible windows to visible workspaces"
         }
 
         return "Applied \(recordResult.reassigned.count) records, restored \(recordResult.restored.count)"
