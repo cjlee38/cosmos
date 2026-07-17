@@ -16,6 +16,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         visibilityChangedHandler: @escaping () -> Void,
         workspaceSnapshotProvider: @escaping () -> WorkspaceSettingsSnapshot,
         workspaceMonitorChangedHandler: @escaping (String, MonitorSlot) throws -> Void,
+        workspaceAddedHandler: @escaping (WorkspaceID) throws -> Void,
+        workspaceRemovedHandler: @escaping (WorkspaceID) throws -> Void,
         configURLProvider: @escaping () -> URL?,
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
         reloadConfigHandler: @escaping () -> Void
@@ -33,7 +35,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         )
         workspaceViewController = WorkspaceSettingsViewController(
             snapshotProvider: workspaceSnapshotProvider,
-            updateMonitorHandler: workspaceMonitorChangedHandler
+            updateMonitorHandler: workspaceMonitorChangedHandler,
+            addWorkspaceHandler: workspaceAddedHandler, removeWorkspaceHandler: workspaceRemovedHandler
         )
 
         let sidebar = SettingsSidebarViewController()

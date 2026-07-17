@@ -88,6 +88,47 @@ final class ConfigRuntimeTests: XCTestCase {
         XCTAssertEqual(runtime.status, .valid)
     }
 
+    func testSettingsConfigUpdateInstallsShortcutsAndUpdatesCoreConfig() throws {
+        let previousConfig = config(key: "option+1", workspace: "1")
+        let updatedConfig = try XCTUnwrap(previousConfig.addingWorkspace("A"))
+        let controller = RuntimeConfigControllerSpy(currentConfig: previousConfig)
+        let shortcutInstaller = ShortcutInstallerSpy()
+        let runtime = makeRuntime(
+            loadedConfig: previousConfig,
+            controller: controller,
+            shortcutInstaller: shortcutInstaller
+        )
+        try runtime.installInitialShortcuts(actions: NoopShortcutActions())
+
+        try runtime.updateConfig(updatedConfig, actions: NoopShortcutActions())
+
+        XCTAssertEqual(controller.currentConfig, updatedConfig)
+        XCTAssertEqual(shortcutInstaller.replacedKeys.last, updatedConfig.bindings.map(\.key))
+    }
+
+    func testSettingsConfigUpdateRestoresPreviousShortcutsWhenCoreUpdateFails() throws {
+        let previousConfig = config(key: "option+1", workspace: "1")
+        let updatedConfig = try XCTUnwrap(previousConfig.addingWorkspace("A"))
+        let controller = RuntimeConfigControllerSpy(
+            currentConfig: previousConfig,
+            applyError: TestError.configApply
+        )
+        let shortcutInstaller = ShortcutInstallerSpy()
+        let runtime = makeRuntime(
+            loadedConfig: previousConfig,
+            controller: controller,
+            shortcutInstaller: shortcutInstaller
+        )
+
+        XCTAssertThrowsError(
+            try runtime.updateConfig(updatedConfig, actions: NoopShortcutActions())
+        ) { error in
+            XCTAssertEqual(error as? TestError, .configApply)
+        }
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [updatedConfig.bindings.map(\.key), []])
+        XCTAssertEqual(controller.currentConfig, previousConfig)
+    }
+
     func testMonitorUpdateDelegatesToCoreWithoutSavingInConfigRuntime() throws {
         let store = ConfigStoreSpy(loadedConfig: .default)
         let controller = RuntimeConfigControllerSpy(currentConfig: .default)
@@ -141,8 +182,9 @@ final class ConfigRuntimeTests: XCTestCase {
     private func config(key: String, workspace: String) -> KkaciConfig {
         KkaciConfig(
             workspaces: ["1", "2"].map { name in
-                WorkspaceConfig(
-                    name: name,
+                let id = WorkspaceID(rawValue: name)!
+                return WorkspaceConfig(
+                    id: id,
                     shortcuts: WorkspaceShortcutConfig(
                         switchWorkspace: name == workspace ? key : nil
                     )
@@ -176,6 +218,10 @@ private final class RuntimeConfigControllerSpy: RuntimeConfigControlling {
         }
         currentConfig = config
         return WorkspaceSyncSummary(autoAssigned: [], removed: [])
+    }
+
+    func updateConfig(_ config: KkaciConfig) throws -> WorkspaceSyncSummary {
+        try applyConfig(config, enablePersistence: true)
     }
 
     func updateWorkspaceMonitor(

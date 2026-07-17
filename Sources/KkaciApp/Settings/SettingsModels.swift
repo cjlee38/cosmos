@@ -95,6 +95,11 @@ struct WorkspaceSettingsSnapshot: Equatable {
     let navigation: WorkspaceNavigationShortcuts
     let workspaces: [WorkspaceSettingsItem]
 
+    var availableWorkspaceIDs: [WorkspaceID] {
+        let configuredIDs = Set(workspaces.map(\.id))
+        return WorkspaceID.allCases.filter { !configuredIDs.contains($0) }
+    }
+
     var connectedDisplays: [WorkspaceSettingsDisplay] {
         displays
             .filter { $0.monitorSlot != nil }
@@ -111,14 +116,14 @@ struct WorkspaceSettingsSnapshot: Equatable {
         })
         let workspaceItems = config.workspaces.map { workspace in
             WorkspaceSettingsItem(
-                name: workspace.name,
+                id: workspace.id,
                 monitorSlot: workspace.display,
                 switchShortcut: workspace.shortcuts.switchWorkspace,
                 moveShortcut: workspace.shortcuts.moveWindow
             )
         }
-        let namesByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
-            .mapValues { $0.map(\.name) }
+        let idsByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
+            .mapValues { $0.map(\.id) }
 
         self.displays = displays.map { display in
             let monitorSlot = slotByDisplayID[display.id]
@@ -133,7 +138,7 @@ struct WorkspaceSettingsSnapshot: Equatable {
                 role: display.role,
                 monitorSlot: monitorSlot,
                 mirroredSourceMonitorSlot: mirroredSourceMonitorSlot,
-                workspaceNames: monitorSlot.flatMap { namesByMonitorSlot[$0] } ?? []
+                workspaceIDs: monitorSlot.flatMap { idsByMonitorSlot[$0] } ?? []
             )
         }
 
@@ -155,7 +160,7 @@ struct WorkspaceSettingsDisplay: Equatable {
     let role: DisplayRole
     let monitorSlot: MonitorSlot?
     let mirroredSourceMonitorSlot: MonitorSlot?
-    let workspaceNames: [String]
+    let workspaceIDs: [WorkspaceID]
 }
 
 struct WorkspaceNavigationShortcuts: Equatable {
@@ -164,7 +169,7 @@ struct WorkspaceNavigationShortcuts: Equatable {
 }
 
 struct WorkspaceSettingsItem: Equatable {
-    let name: String
+    let id: WorkspaceID
     let monitorSlot: MonitorSlot
     let switchShortcut: String?
     let moveShortcut: String?

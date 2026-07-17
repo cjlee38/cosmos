@@ -90,7 +90,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         XCTAssertThrowsError(try controller.applyConfig(configWithSwitchShortcut(
             "option+x",
             workspace: "1",
-            workspaceNames: ["1", "2"]
+            workspaceIDs: ["1", "2"]
         )))
 
         XCTAssertEqual(controller.currentConfig, initialConfig)
@@ -271,19 +271,19 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "2", "scratch"]),
+            workspaces: workspaceConfigs(["1", "2", "A"]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(windowSystem, configStore: store)
 
         _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "scratch")
-        _ = try controller.switchWorkspace(to: "scratch")
+        try controller.assignWindow(100, to: "A")
+        _ = try controller.switchWorkspace(to: "A")
         try controller.applyConfig(
             configWithSwitchShortcut(
                 "option+d",
                 workspace: "3",
-                workspaceNames: ["1", "2", "3"]
+                workspaceIDs: ["1", "2", "3"]
             ),
             enablePersistence: true
         )
@@ -300,14 +300,15 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
 private func configWithSwitchShortcut(
     _ shortcut: String,
     workspace: String,
-    workspaceNames: [String]
+    workspaceIDs: [String]
 ) -> KkaciConfig {
     KkaciConfig(
-        workspaces: workspaceNames.map { name in
-            WorkspaceConfig(
-                name: name,
+        workspaces: workspaceIDs.map { workspaceID in
+            let id = WorkspaceID(rawValue: workspaceID)!
+            return WorkspaceConfig(
+                id: id,
                 shortcuts: WorkspaceShortcutConfig(
-                    switchWorkspace: name == workspace ? shortcut : nil
+                    switchWorkspace: id.rawValue == workspace ? shortcut : nil
                 )
             )
         }

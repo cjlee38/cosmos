@@ -168,7 +168,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
@@ -182,13 +182,13 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         try controller.assignWindow(101, to: "1")
         windowSystem.focusedWindow = 100
 
-        let result = try controller.moveFocusedWindow(to: "a")
+        let result = try controller.moveFocusedWindow(to: "A")
 
-        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "a"))
-        XCTAssertEqual(controller.membership(for: 100), "a")
+        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "A"))
+        XCTAssertEqual(controller.membership(for: 100), "A")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1050, y: 50, width: 150, height: 100))
-        XCTAssertEqual(controller.currentWorkspace, "a")
+        XCTAssertEqual(controller.currentWorkspace, "A")
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 
@@ -198,7 +198,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "a", "b"], displays: ["a": 2, "b": 2]),
+            workspaces: workspaceConfigs(["1", "A", "B"], displays: ["A": 2, "B": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
@@ -211,13 +211,13 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         try controller.assignWindow(100, to: "1")
         windowSystem.focusedWindow = 100
 
-        _ = try controller.moveFocusedWindow(to: "b")
+        _ = try controller.moveFocusedWindow(to: "B")
 
-        XCTAssertEqual(controller.membership(for: 100), "b")
+        XCTAssertEqual(controller.membership(for: 100), "B")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(windowSystem.positions[100], hidePoint)
 
-        _ = try controller.switchWorkspace(to: "b")
+        _ = try controller.switchWorkspace(to: "B")
 
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1050, y: 50, width: 150, height: 100))
@@ -229,7 +229,7 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
@@ -245,9 +245,9 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
 
         _ = try controller.handleFocusedWindowChanged()
 
-        XCTAssertEqual(controller.membership(for: 100), "a")
+        XCTAssertEqual(controller.membership(for: 100), "A")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
-        XCTAssertEqual(controller.currentWorkspace, "a")
+        XCTAssertEqual(controller.currentWorkspace, "A")
     }
 
     func testMoveFocusedWindowToMissingWorkspaceIsNoOp() throws {

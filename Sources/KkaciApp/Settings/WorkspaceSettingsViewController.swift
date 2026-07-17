@@ -5,16 +5,22 @@ final class WorkspaceSettingsViewController: NSViewController {
     private let log = Log(category: "settings")
     private let snapshotProvider: () -> WorkspaceSettingsSnapshot
     private let updateMonitorHandler: (String, MonitorSlot) throws -> Void
+    private let addWorkspaceHandler: (WorkspaceID) throws -> Void
+    private let removeWorkspaceHandler: (WorkspaceID) throws -> Void
     private let displayArrangementView = WorkspaceDisplayArrangementView()
     private let displayStatusStack = NSStackView()
     private let keyboardContentStack = NSStackView()
 
     init(
         snapshotProvider: @escaping () -> WorkspaceSettingsSnapshot,
-        updateMonitorHandler: @escaping (String, MonitorSlot) throws -> Void
+        updateMonitorHandler: @escaping (String, MonitorSlot) throws -> Void,
+        addWorkspaceHandler: @escaping (WorkspaceID) throws -> Void,
+        removeWorkspaceHandler: @escaping (WorkspaceID) throws -> Void
     ) {
         self.snapshotProvider = snapshotProvider
         self.updateMonitorHandler = updateMonitorHandler
+        self.addWorkspaceHandler = addWorkspaceHandler
+        self.removeWorkspaceHandler = removeWorkspaceHandler
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -131,7 +137,7 @@ private extension WorkspaceSettingsViewController {
         for monitorSlot in snapshot.disconnectedMonitorSlots {
             let names = snapshot.workspaces
                 .filter { $0.monitorSlot == monitorSlot }
-                .map(\.name)
+                .map(\.id.rawValue)
                 .joined(separator: ", ")
             displayStatusStack.addArrangedSubview(statusRow(
                 symbol: "rectangle.slash",
@@ -178,17 +184,19 @@ private extension WorkspaceSettingsViewController {
             headerLabel("Workspace"),
             headerLabel("Display"),
             headerLabel("Switch"),
-            headerLabel("Move Window")
+            headerLabel("Move Window"),
+            addWorkspaceButton(snapshot.availableWorkspaceIDs)
         ]]
         rows.append(contentsOf: snapshot.workspaces.map { workspace in
             [
-                valueLabel(workspace.name, weight: .semibold),
+                valueLabel(workspace.id.rawValue, weight: .semibold),
                 monitorSelector(
                     workspace: workspace,
                     connectedDisplays: snapshot.connectedDisplays
                 ),
                 shortcutBadge(workspace.switchShortcut),
-                shortcutBadge(workspace.moveShortcut)
+                shortcutBadge(workspace.moveShortcut),
+                removeWorkspaceButton(workspace.id, isEnabled: snapshot.workspaces.count > 1)
             ]
         })
 
@@ -199,6 +207,7 @@ private extension WorkspaceSettingsViewController {
         grid.column(at: 1).width = 150
         grid.column(at: 2).width = 104
         grid.column(at: 3).width = 126
+        grid.column(at: 4).width = 28
         for index in rows.indices {
             grid.row(at: index).yPlacement = .center
         }
@@ -210,13 +219,39 @@ private extension WorkspaceSettingsViewController {
         connectedDisplays: [WorkspaceSettingsDisplay]
     ) -> NSView {
         let selector = WorkspaceMonitorPopUpButton(
-            workspace: workspace.name,
+            workspaceID: workspace.id,
             currentMonitorSlot: workspace.monitorSlot,
             connectedDisplays: connectedDisplays
         )
         selector.target = self
         selector.action = #selector(monitorSelectionChanged(_:))
         return selector
+    }
+
+    private func addWorkspaceButton(_ availableWorkspaceIDs: [WorkspaceID]) -> NSButton {
+        let button = WorkspaceAddButton(availableWorkspaceIDs: availableWorkspaceIDs)
+        button.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Add Workspace")
+        button.imagePosition = .imageOnly
+        button.bezelStyle = .accessoryBarAction
+        button.toolTip = "Add Workspace"
+        button.target = self
+        button.action = #selector(showAddWorkspaceMenu(_:))
+        button.isEnabled = !availableWorkspaceIDs.isEmpty
+        button.setAccessibilityIdentifier("kkaci.settings.workspace.add")
+        return button
+    }
+
+    private func removeWorkspaceButton(_ workspaceID: WorkspaceID, isEnabled: Bool) -> NSButton {
+        let button = WorkspaceRemoveButton(workspaceID: workspaceID)
+        button.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
+        button.imagePosition = .imageOnly
+        button.bezelStyle = .accessoryBarAction
+        button.toolTip = isEnabled ? "Delete Workspace \(workspaceID.rawValue)" : "At least one workspace is required"
+        button.target = self
+        button.action = #selector(removeWorkspace(_:))
+        button.isEnabled = isEnabled
+        button.setAccessibilityIdentifier("kkaci.settings.workspace.\(workspaceID.rawValue).remove")
+        return button
     }
 
     private func labeledShortcut(title: String, shortcut: String?) -> NSView {
@@ -306,95 +341,52 @@ private extension WorkspaceSettingsViewController {
         }
 
         do {
-            try updateMonitorHandler(sender.workspace, monitorSlot)
+            try updateMonitorHandler(sender.workspaceID.rawValue, monitorSlot)
         } catch {
             log.error(
-                "Workspace monitor update failed workspace=\(sender.workspace) "
+                "Workspace monitor update failed workspace=\(sender.workspaceID.rawValue) "
                     + "monitor=\(monitorSlot): \(String(describing: error))"
             )
             refresh()
         }
     }
-}
 
-private final class WorkspaceMonitorPopUpButton: NSPopUpButton {
-    let workspace: String
-    let currentMonitorSlot: MonitorSlot
+    @objc private func showAddWorkspaceMenu(_ sender: WorkspaceAddButton) {
+        let menu = WorkspaceAddMenu(
+            workspaceIDs: sender.availableWorkspaceIDs,
+            target: self,
+            action: #selector(addWorkspace(_:))
+        )
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.maxY + 4), in: sender)
+    }
 
-    init(
-        workspace: String,
-        currentMonitorSlot: MonitorSlot,
-        connectedDisplays: [WorkspaceSettingsDisplay]
-    ) {
-        self.workspace = workspace
-        self.currentMonitorSlot = currentMonitorSlot
-        super.init(frame: .zero, pullsDown: false)
-
-        setAccessibilityIdentifier("kkaci.settings.workspace.\(workspace).monitor")
-        controlSize = .small
-        font = .systemFont(ofSize: 12, weight: .medium)
-        let labelsByMonitorSlot = Dictionary(uniqueKeysWithValues: connectedDisplays.compactMap { display in
-            display.monitorSlot.map { monitorSlot in
-                (monitorSlot, display.name)
-            }
-        })
-        let availableSlots = Set(labelsByMonitorSlot.keys)
-        let options = availableSlots.union([currentMonitorSlot]).sorted()
-        for monitorSlot in options {
-            let isConnected = availableSlots.contains(monitorSlot)
-            let title = labelsByMonitorSlot[monitorSlot] ?? "Monitor \(monitorSlot)"
-            addItem(withTitle: title)
-            let item = itemArray[itemArray.count - 1]
-            item.representedObject = monitorSlot
-            item.isEnabled = isConnected
-            if !isConnected {
-                item.title += " · Disconnected"
-            }
-            if monitorSlot == currentMonitorSlot {
-                select(item)
-            }
+    @objc private func addWorkspace(_ sender: WorkspaceIDMenuItem) {
+        do {
+            try addWorkspaceHandler(sender.workspaceID)
+        } catch {
+            log.error("Workspace add failed id=\(sender.workspaceID.rawValue): \(String(describing: error))")
+            refresh()
         }
     }
 
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-}
+    @objc private func removeWorkspace(_ sender: WorkspaceRemoveButton) {
+        let alert = NSAlert()
+        alert.messageText = "Delete Workspace \(sender.workspaceID.rawValue)?"
+        alert.informativeText = "Its windows will move to the current workspace."
+        alert.alertStyle = .warning
+        alert.icon = NSImage(systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
+        alert.addButton(withTitle: "Delete")
+        alert.buttons[0].hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return
+        }
 
-private final class ShortcutBadgeView: NSView {
-    init(title: String, isConfigured: Bool) {
-        super.init(frame: .zero)
-        wantsLayer = true
-
-        let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = isConfigured ? .labelColor : .tertiaryLabelColor
-        label.alignment = .center
-        label.lineBreakMode = .byTruncatingTail
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-        NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 28),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override var wantsUpdateLayer: Bool {
-        true
-    }
-
-    override func updateLayer() {
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        layer?.borderColor = NSColor.separatorColor.cgColor
-        layer?.borderWidth = 1
-        layer?.cornerRadius = 6
+        do {
+            try removeWorkspaceHandler(sender.workspaceID)
+        } catch {
+            log.error("Workspace removal failed id=\(sender.workspaceID.rawValue): \(String(describing: error))")
+            refresh()
+        }
     }
 }

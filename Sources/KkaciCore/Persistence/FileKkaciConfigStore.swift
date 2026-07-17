@@ -17,6 +17,11 @@ public final class FileKkaciConfigStore: KkaciConfigStore {
     #   - Command: 'command'
     #   - Combine modifiers and a key with '+'. Example: 'option+shift+1'
     #
+    # - Workspace IDs
+    #   - Valid IDs are the numbers 1 through 10 and the letters A through Z.
+    #   - Letter IDs are case-insensitive and are saved as uppercase.
+    #   - Workspace IDs must be unique.
+    #
     # - Display slots
     #   - A display slot is an integer assigned to each display by Kkaci.
     #   - Check assigned slots in Settings > Workspaces or run 'kkaci displays'.

@@ -25,7 +25,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
 
     func testReassigningHiddenWindowToAnotherMonitorReplacesItsRestoreFrame() throws {
         let initialConfig = KkaciConfig(
-            workspaces: workspaceConfigs(["1", "2", "a", "b"], displays: ["a": 2, "b": 2]),
+            workspaces: workspaceConfigs(["1", "2", "A", "B"], displays: ["A": 2, "B": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         )
         let store = InMemoryWorkspaceConfigStore()
@@ -43,14 +43,14 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "2")
-        try controller.assignWindow(100, to: "b")
+        try controller.assignWindow(100, to: "B")
 
         XCTAssertEqual(
             recordStore.records.first?.originalFrame,
             .frame(x: 1100, y: 100, width: 300, height: 200)
         )
 
-        _ = try controller.switchWorkspace(to: "b")
+        _ = try controller.switchWorkspace(to: "B")
 
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1100, y: 100, width: 300, height: 200))
     }
@@ -90,7 +90,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
 
     func testFailedHiddenWindowReassignmentRestoresThePreviousDurableFrame() throws {
         let initialConfig = KkaciConfig(
-            workspaces: workspaceConfigs(["1", "2", "b"], displays: ["b": 2]),
+            workspaces: workspaceConfigs(["1", "2", "B"], displays: ["B": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         )
         let store = InMemoryWorkspaceConfigStore()
@@ -118,7 +118,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
             return FakeWindowSystemError.frameWrite(100)
         }
 
-        XCTAssertThrowsError(try controller.assignWindow(100, to: "b"))
+        XCTAssertThrowsError(try controller.assignWindow(100, to: "B"))
 
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertEqual(controller.workspaceFrame(for: 100), originalFrame)

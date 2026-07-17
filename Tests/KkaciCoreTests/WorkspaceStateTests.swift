@@ -82,9 +82,9 @@ final class WorkspaceStateTests: XCTestCase {
     }
 
     func testApplyingWorkspacesReassignsRemovedWorkspaceWindowsToCurrentWorkspace() {
-        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2", "scratch"]))
-        state.assign(100, to: "scratch")
-        state.activate("scratch")
+        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2", "A"]))
+        state.assign(100, to: "A")
+        state.activate("A")
 
         state.applyWorkspaces(workspaceConfigs(["1", "2", "3"]))
 
@@ -103,7 +103,7 @@ final class WorkspaceStateTests: XCTestCase {
     }
 
     func testApplyingWorkspacesRemovesUnreferencedRuntimeWorkspaces() {
-        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2", "scratch"]))
+        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2", "A"]))
 
         state.applyWorkspaces(workspaceConfigs(["1", "2", "3"]))
 

@@ -10,7 +10,7 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "2", "a"], displays: ["a": 2]),
+            workspaces: workspaceConfigs(["1", "2", "A"], displays: ["A": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
@@ -21,14 +21,14 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "a")
+        try controller.assignWindow(200, to: "A")
         windowSystem.focusedWindow = 100
         windowSystem.focusedIDs.removeAll()
 
         _ = try controller.switchWorkspace(to: "2")
 
         XCTAssertEqual(controller.currentWorkspace, "2")
-        XCTAssertEqual(Set(controller.visibleWorkspaces), ["2", "a"])
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["2", "A"])
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 
@@ -39,7 +39,7 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
@@ -50,15 +50,15 @@ final class WorkspaceMultiMonitorFocusTests: WorkspaceControllerTestCase {
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "a")
-        _ = try controller.switchWorkspace(to: "a")
+        try controller.assignWindow(200, to: "A")
+        _ = try controller.switchWorkspace(to: "A")
         windowSystem.focusedWindow = 100
 
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
 
         XCTAssertEqual(result, .alreadyActive(windowID: 100, workspace: "1"))
         XCTAssertEqual(controller.currentWorkspace, "1")
-        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "a"])
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "A"])
     }
 }
 

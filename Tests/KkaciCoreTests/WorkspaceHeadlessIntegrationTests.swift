@@ -218,7 +218,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
 
         let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.yaml"))
         try configStore.save(KkaciConfig(
-            workspaces: workspaceConfigs(["1", "2", "3", "dev"]),
+            workspaces: workspaceConfigs(["1", "2", "3", "D"]),
             shortcuts: KkaciConfig.default.shortcuts
         ))
 
@@ -228,13 +228,13 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.bootstrapWindowState(defaultWorkspace: "1")
-        try firstController.assignWindow(200, to: "dev")
+        try firstController.assignWindow(200, to: "D")
         try firstRecordStore.flushPendingWrites()
         try firstController.restoreHiddenWindowsForShutdown()
 
         let persistedConfig = try configStore.load()
-        XCTAssertEqual(persistedConfig.workspaceNames, ["1", "2", "3", "dev"])
-        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.workspace), ["dev"])
+        XCTAssertEqual(persistedConfig.workspaceIDs, ["1", "2", "3", "D"])
+        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.workspace), ["D"])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
         let secondRecordStore = recordStore(in: directory)
@@ -243,11 +243,11 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let startup = try secondController.bootstrapWindowState(defaultWorkspace: "1")
         try secondRecordStore.flushPendingWrites()
 
-        XCTAssertEqual(secondController.workspaces, ["1", "2", "3", "dev"])
-        assertReassigned(startup.reassigned, [(200, "dev")])
-        XCTAssertEqual(secondController.membership(for: 200), "dev")
+        XCTAssertEqual(secondController.workspaces, ["1", "2", "3", "D"])
+        assertReassigned(startup.reassigned, [(200, "D")])
+        XCTAssertEqual(secondController.membership(for: 200), "D")
         XCTAssertTrue(secondController.isHiddenByWorkspace(200))
-        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.workspace), ["dev"])
+        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.workspace), ["D"])
     }
 
     func testClosedHiddenWindowPrunesRecordBeforeRestart() throws {

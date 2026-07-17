@@ -144,6 +144,12 @@ final class AppRuntime {
                 workspaceMonitorChangedHandler: { [unowned self] workspace, monitorSlot in
                     try updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
                 },
+                workspaceAddedHandler: { [unowned self] workspaceID in
+                    try addWorkspace(workspaceID)
+                },
+                workspaceRemovedHandler: { [unowned self] workspaceID in
+                    try removeWorkspace(workspaceID)
+                },
                 configURLProvider: { [unowned self] in
                     configRuntime.configURL
                 },
@@ -160,10 +166,35 @@ final class AppRuntime {
 
     private func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws {
         try configRuntime.updateWorkspaceMonitor(workspace, monitorSlot: monitorSlot)
+        refreshAfterWorkspaceConfigChange()
+        log.info("Assigned workspace \(workspace) to monitor \(monitorSlot)")
+    }
+
+    private func addWorkspace(_ workspaceID: WorkspaceID) throws {
+        guard let config = controller.currentConfig.addingWorkspace(workspaceID) else {
+            return
+        }
+        try updateWorkspaceConfig(config)
+        log.info("Added workspace \(workspaceID.rawValue)")
+    }
+
+    private func removeWorkspace(_ workspaceID: WorkspaceID) throws {
+        guard let config = controller.currentConfig.removingWorkspace(workspaceID) else {
+            return
+        }
+        try updateWorkspaceConfig(config)
+        log.info("Removed workspace \(workspaceID.rawValue)")
+    }
+
+    private func updateWorkspaceConfig(_ config: KkaciConfig) throws {
+        try configRuntime.updateConfig(config, actions: actionController)
+        refreshAfterWorkspaceConfigChange()
+    }
+
+    private func refreshAfterWorkspaceConfigChange() {
         previewService.refreshAll()
         actionController.refreshSwitcherContent()
         refreshSurfaces()
-        log.info("Assigned workspace \(workspace) to monitor \(monitorSlot)")
     }
 
     private func handleSettingsVisibilityChanged() {

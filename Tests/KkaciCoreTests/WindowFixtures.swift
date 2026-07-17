@@ -33,7 +33,10 @@ func workspaceConfigs(
     displays: [String: MonitorSlot] = [:]
 ) -> [WorkspaceConfig] {
     names.map { name in
-        WorkspaceConfig(name: name, display: displays[name] ?? 1)
+        guard let id = WorkspaceID(rawValue: name) else {
+            preconditionFailure("Invalid workspace ID in test: \(name)")
+        }
+        return WorkspaceConfig(id: id, display: displays[name] ?? 1)
     }
 }
 

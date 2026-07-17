@@ -107,14 +107,16 @@ struct WorkspaceState {
     }
 
     func findWorkspace(_ workspace: String) -> String? {
-        let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
-        return catalog.contains(workspace) ? workspace : nil
+        guard let workspaceID = WorkspaceID(rawValue: workspace) else {
+            return nil
+        }
+        return catalog.contains(workspaceID.rawValue) ? workspaceID.rawValue : nil
     }
 
     mutating func applyWorkspaces(_ workspaces: [WorkspaceConfig]) {
         catalog.apply(workspaces)
         memberships.reassignInvalidWorkspaces(
-            validWorkspaces: Set(workspaces.map(\.name)),
+            validWorkspaces: Set(workspaces.map(\.id.rawValue)),
             to: currentWorkspace
         )
     }

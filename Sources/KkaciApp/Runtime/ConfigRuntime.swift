@@ -8,6 +8,9 @@ protocol RuntimeConfigControlling: AnyObject {
     func applyConfig(_ config: KkaciConfig, enablePersistence: Bool) throws -> WorkspaceSyncSummary
 
     @discardableResult
+    func updateConfig(_ config: KkaciConfig) throws -> WorkspaceSyncSummary
+
+    @discardableResult
     func updateWorkspaceMonitor(_ workspace: String, monitorSlot: MonitorSlot) throws -> WorkspaceSyncSummary
 }
 
@@ -72,13 +75,32 @@ final class ConfigRuntime {
 
     private func performReload(actions: any KeyboardShortcutActionHandling) throws {
         let loadedConfig = try configStore.load()
-        let previousRegistrations = installedRegistrations
-        let loadedRegistrations = try registrations(for: loadedConfig.bindings, actions: actions)
+        try applyConfigWithShortcuts(loadedConfig, actions: actions) { config in
+            try controller.applyConfig(config, enablePersistence: true)
+        }
+    }
 
-        try shortcutInstaller.replaceShortcuts(loadedRegistrations)
-        installedRegistrations = loadedRegistrations
+    func updateConfig(
+        _ config: KkaciConfig,
+        actions: any KeyboardShortcutActionHandling
+    ) throws {
+        try applyConfigWithShortcuts(config, actions: actions) { config in
+            try controller.updateConfig(config)
+        }
+    }
+
+    private func applyConfigWithShortcuts(
+        _ config: KkaciConfig,
+        actions: any KeyboardShortcutActionHandling,
+        apply: (KkaciConfig) throws -> Void
+    ) throws {
+        let previousRegistrations = installedRegistrations
+        let updatedRegistrations = try registrations(for: config.bindings, actions: actions)
+
+        try shortcutInstaller.replaceShortcuts(updatedRegistrations)
+        installedRegistrations = updatedRegistrations
         do {
-            try controller.applyConfig(loadedConfig, enablePersistence: true)
+            try apply(config)
         } catch let applyError {
             do {
                 try shortcutInstaller.replaceShortcuts(previousRegistrations)

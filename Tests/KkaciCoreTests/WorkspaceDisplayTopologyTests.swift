@@ -19,24 +19,24 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "a")
+        try controller.assignWindow(200, to: "A")
 
         displayProvider.snapshots = [mainDisplay()]
         _ = try controller.handleDisplayConfigurationChanged()
 
-        XCTAssertEqual(controller.monitorSlot(for: "a"), 2)
-        XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 1)
+        XCTAssertEqual(controller.monitorSlot(for: "A"), 2)
+        XCTAssertEqual(controller.effectiveMonitorSlot(for: "A"), 1)
         XCTAssertEqual(controller.visibleWorkspaces, ["1"])
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(controller.workspaceFrame(for: 200), .frame(x: 100, y: 100, width: 300, height: 200))
-        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "A"), 2)
 
         displayProvider.snapshots = [mainDisplay(), secondaryDisplay()]
         _ = try controller.handleDisplayConfigurationChanged()
 
-        XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 2)
-        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "a"])
+        XCTAssertEqual(controller.effectiveMonitorSlot(for: "A"), 2)
+        XCTAssertEqual(Set(controller.visibleWorkspaces), ["1", "A"])
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(windowSystem.frames[200], .frame(x: 1100, y: 100, width: 300, height: 200))
@@ -58,14 +58,14 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "a")
-        _ = try controller.switchWorkspace(to: "a")
+        try controller.assignWindow(200, to: "A")
+        _ = try controller.switchWorkspace(to: "A")
         displayProvider.snapshots = [mainDisplay()]
 
         _ = try controller.handleDisplayConfigurationChanged()
 
-        XCTAssertEqual(controller.currentWorkspace, "a")
-        XCTAssertEqual(controller.visibleWorkspaces, ["a"])
+        XCTAssertEqual(controller.currentWorkspace, "A")
+        XCTAssertEqual(controller.visibleWorkspaces, ["A"])
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(windowSystem.frames[200], .frame(x: 100, y: 100))
@@ -90,7 +90,7 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
 
         _ = controller.discoverWindows()
         try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "a")
+        try controller.assignWindow(200, to: "A")
         displayProvider.snapshots = [
             DisplaySnapshot(id: 2, frame: CGRect(x: 0, y: 0, width: 500, height: 500), role: .main),
             DisplaySnapshot(id: 1, frame: CGRect(x: 500, y: 0, width: 1000, height: 1000), role: .extended)
@@ -100,11 +100,11 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
 
         XCTAssertEqual(controller.monitorSlots.map(\.display.id), [2, 1])
         XCTAssertEqual(controller.monitorSlot(for: "1"), 1)
-        XCTAssertEqual(controller.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(controller.monitorSlot(for: "A"), 2)
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 50, y: 50, width: 150, height: 100))
         XCTAssertEqual(windowSystem.frames[200], .frame(x: 600, y: 100, width: 300, height: 200))
         XCTAssertEqual(controller.membership(for: 100), "1")
-        XCTAssertEqual(controller.membership(for: 200), "a")
+        XCTAssertEqual(controller.membership(for: 200), "A")
     }
 
     func testMirroredDisplayUsesTheSameFallbackAsDisconnectedDisplay() throws {
@@ -131,13 +131,13 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
 
         XCTAssertEqual(controller.displays.map(\.id), [1, 2])
         XCTAssertEqual(controller.monitorSlots.map(\.display.id), [1])
-        XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 1)
-        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(controller.effectiveMonitorSlot(for: "A"), 1)
+        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "A"), 2)
     }
 
     private func configWithSecondaryWorkspace() -> KkaciConfig {
         KkaciConfig(
-            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
             shortcuts: KkaciConfig.default.shortcuts
         )
     }

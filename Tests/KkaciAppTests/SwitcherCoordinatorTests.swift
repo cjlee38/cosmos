@@ -66,8 +66,8 @@ final class SwitcherCoordinatorTests: XCTestCase {
 
         try controller.applyConfig(KkaciConfig(
             workspaces: [
-                WorkspaceConfig(name: "1"),
-                WorkspaceConfig(name: "3")
+                WorkspaceConfig(id: "1"),
+                WorkspaceConfig(id: "3")
             ]
         ))
         coordinator.handleContentChanged()

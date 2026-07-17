@@ -32,11 +32,11 @@ final class WorkspaceSettingsTests: XCTestCase {
             displays: [main, extended, mirrored]
         )
 
-        XCTAssertEqual(snapshot.displays[0].workspaceNames, ["1"])
+        XCTAssertEqual(snapshot.displays[0].workspaceIDs, ["1"])
         XCTAssertEqual(snapshot.displays[0].name, "Built-in Retina Display")
-        XCTAssertEqual(snapshot.displays[1].workspaceNames, ["a"])
+        XCTAssertEqual(snapshot.displays[1].workspaceIDs, ["A"])
         XCTAssertEqual(snapshot.displays[2].mirroredSourceMonitorSlot, 1)
-        XCTAssertEqual(snapshot.displays[2].workspaceNames, [])
+        XCTAssertEqual(snapshot.displays[2].workspaceIDs, [])
         XCTAssertEqual(snapshot.connectedDisplays.compactMap(\.monitorSlot), [1, 2])
         XCTAssertEqual(snapshot.disconnectedMonitorSlots, [3])
         XCTAssertEqual(snapshot.navigation.next, "ctrl+tab")
@@ -44,6 +44,9 @@ final class WorkspaceSettingsTests: XCTestCase {
         XCTAssertEqual(snapshot.workspaces[0].switchShortcut, "option+1")
         XCTAssertEqual(snapshot.workspaces[0].moveShortcut, "option+shift+1")
         XCTAssertNil(snapshot.workspaces[1].switchShortcut)
+        XCTAssertFalse(snapshot.availableWorkspaceIDs.contains("1"))
+        XCTAssertFalse(snapshot.availableWorkspaceIDs.contains("A"))
+        XCTAssertTrue(snapshot.availableWorkspaceIDs.contains("B"))
     }
 
     func testShortcutFormatterUsesMacModifierSymbols() {
@@ -59,7 +62,9 @@ final class WorkspaceSettingsTests: XCTestCase {
             snapshotProvider: { snapshot },
             updateMonitorHandler: { workspace, monitorSlot in
                 update = (workspace, monitorSlot)
-            }
+            },
+            addWorkspaceHandler: { _ in },
+            removeWorkspaceHandler: { _ in }
         )
 
         _ = viewController.view
@@ -78,6 +83,39 @@ final class WorkspaceSettingsTests: XCTestCase {
         XCTAssertEqual(update?.monitorSlot, 2)
     }
 
+    func testWorkspaceControlsExposeAddAndPreventDeletingTheLastWorkspace() throws {
+        let snapshot = settingsSnapshot()
+        let viewController = WorkspaceSettingsViewController(
+            snapshotProvider: { snapshot },
+            updateMonitorHandler: { _, _ in },
+            addWorkspaceHandler: { _ in },
+            removeWorkspaceHandler: { _ in }
+        )
+
+        _ = viewController.view
+        let buttons = descendants(of: viewController.view).compactMap { $0 as? NSButton }
+        let addButton = try XCTUnwrap(buttons.first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.add"
+        })
+        let removeButton = try XCTUnwrap(buttons.first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.1.remove"
+        })
+
+        XCTAssertTrue(addButton.isEnabled)
+        XCTAssertFalse(removeButton.isEnabled)
+    }
+
+    func testWorkspaceAddMenuListsAllIDsAtOneLevel() {
+        let menu = WorkspaceAddMenu(
+            workspaceIDs: ["2", "10", "A"],
+            target: self,
+            action: #selector(ignoreMenuAction(_:))
+        )
+
+        XCTAssertEqual(menu.items.map(\.title), ["2", "10", "A"])
+        XCTAssertTrue(menu.items.allSatisfy { $0.submenu == nil })
+    }
+
     private func settingsSnapshot() -> WorkspaceSettingsSnapshot {
         let main = DisplaySnapshot(
             id: 1,
@@ -93,7 +131,7 @@ final class WorkspaceSettingsTests: XCTestCase {
         )
         return WorkspaceSettingsSnapshot(
             config: KkaciConfig(
-                workspaces: [WorkspaceConfig(name: "1")]
+                workspaces: [WorkspaceConfig(id: "1")]
             ),
             monitorSlots: [
                 MonitorSlotSnapshot(slot: 1, display: main),
@@ -107,14 +145,14 @@ final class WorkspaceSettingsTests: XCTestCase {
         KkaciConfig(
             workspaces: [
                 WorkspaceConfig(
-                    name: "1",
+                    id: "1",
                     shortcuts: WorkspaceShortcutConfig(
                         switchWorkspace: "option+1",
                         moveWindow: "option+shift+1"
                     )
                 ),
-                WorkspaceConfig(name: "a", display: 2),
-                WorkspaceConfig(name: "offline", display: 3)
+                WorkspaceConfig(id: "A", display: 2),
+                WorkspaceConfig(id: "C", display: 3)
             ],
             shortcuts: ShortcutConfig(
                 workspaceSwitcher: SwitcherShortcutConfig(
@@ -128,4 +166,6 @@ final class WorkspaceSettingsTests: XCTestCase {
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews + view.subviews.flatMap(descendants)
     }
+
+    @objc private func ignoreMenuAction(_: NSMenuItem) {}
 }

@@ -7,11 +7,13 @@ struct WorkspaceCatalog {
     private var visibleWorkspaceByMonitorSlot: [MonitorSlot: String]
 
     init(workspaces: [WorkspaceConfig]) {
-        workspaceOrder = workspaces.map(\.name)
-        currentWorkspace = workspaces[0].name
-        monitorSlotsByWorkspace = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.name, $0.display) })
+        workspaceOrder = workspaces.map(\.id.rawValue)
+        currentWorkspace = workspaces[0].id.rawValue
+        monitorSlotsByWorkspace = Dictionary(uniqueKeysWithValues: workspaces.map {
+            ($0.id.rawValue, $0.display)
+        })
         visibleWorkspaceByMonitorSlot = [
-            workspaces[0].display: workspaces[0].name
+            workspaces[0].display: workspaces[0].id.rawValue
         ]
         seedVisibleWorkspaces()
     }
@@ -25,8 +27,10 @@ struct WorkspaceCatalog {
     }
 
     mutating func apply(_ workspaces: [WorkspaceConfig]) {
-        workspaceOrder = workspaces.map(\.name)
-        monitorSlotsByWorkspace = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.name, $0.display) })
+        workspaceOrder = workspaces.map(\.id.rawValue)
+        monitorSlotsByWorkspace = Dictionary(uniqueKeysWithValues: workspaces.map {
+            ($0.id.rawValue, $0.display)
+        })
         if !workspaceOrder.contains(currentWorkspace) {
             currentWorkspace = workspaceOrder[0]
         }
