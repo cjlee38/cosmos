@@ -2,24 +2,24 @@ import Foundation
 
 final class WorkspaceConfigurationRuntime {
     private let configStore: (any KkaciConfigStore)?
-    private var bindings: [HotKeyBinding]
+    private var config: KkaciConfig
     private var isPersistenceEnabled: Bool
     let startupLoadError: Error?
 
     init(
         configStore: (any KkaciConfigStore)?,
-        bindings: [HotKeyBinding],
+        config: KkaciConfig,
         isPersistenceEnabled: Bool,
         startupLoadError: Error?
     ) {
         self.configStore = configStore
-        self.bindings = bindings
+        self.config = config
         self.isPersistenceEnabled = configStore != nil && isPersistenceEnabled
         self.startupLoadError = startupLoadError
     }
 
-    func currentConfig(workspaces: WorkspaceConfig) -> KkaciConfig {
-        KkaciConfig(workspaces: workspaces, bindings: bindings)
+    var currentConfig: KkaciConfig {
+        config
     }
 
     private func apply(
@@ -31,7 +31,7 @@ final class WorkspaceConfigurationRuntime {
             isPersistenceEnabled = configStore != nil && enablePersistence
         }
         state.applyWorkspaces(config.workspaces)
-        bindings = config.bindings
+        self.config = config
     }
 
     func applyTransaction(
@@ -48,7 +48,7 @@ final class WorkspaceConfigurationRuntime {
         do {
             try applyVisibility(&state)
             if saveConfig {
-                try saveIfEnabled(currentConfig(workspaces: state.workspaceConfig))
+                try saveIfEnabled(config)
             }
         } catch let applyError {
             restore(previousConfiguration)
@@ -74,13 +74,13 @@ final class WorkspaceConfigurationRuntime {
 
     private var snapshot: WorkspaceConfigurationSnapshot {
         WorkspaceConfigurationSnapshot(
-            bindings: bindings,
+            config: config,
             isPersistenceEnabled: isPersistenceEnabled
         )
     }
 
     private func restore(_ snapshot: WorkspaceConfigurationSnapshot) {
-        bindings = snapshot.bindings
+        config = snapshot.config
         isPersistenceEnabled = snapshot.isPersistenceEnabled
     }
 
@@ -101,7 +101,7 @@ final class WorkspaceConfigurationRuntime {
 
         let runtime = WorkspaceConfigurationRuntime(
             configStore: configStore,
-            bindings: startup.config.bindings,
+            config: startup.config,
             isPersistenceEnabled: isPersistenceEnabled && startup.loadError == nil,
             startupLoadError: startup.loadError
         )
@@ -115,6 +115,6 @@ struct WorkspaceConfigurationBootstrap {
 }
 
 private struct WorkspaceConfigurationSnapshot {
-    let bindings: [HotKeyBinding]
+    let config: KkaciConfig
     let isPersistenceEnabled: Bool
 }

@@ -28,6 +28,15 @@ extension WindowSnapshot {
     }
 }
 
+func workspaceConfigs(
+    _ names: [String],
+    displays: [String: MonitorSlot] = [:]
+) -> [WorkspaceConfig] {
+    names.map { name in
+        WorkspaceConfig(name: name, display: displays[name] ?? 1)
+    }
+}
+
 func assertReassigned(
     _ actual: [HiddenWindowRecordAssignment],
     _ expected: [(WindowID, String)],

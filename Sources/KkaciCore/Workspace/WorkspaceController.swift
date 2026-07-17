@@ -32,7 +32,7 @@ public final class WorkspaceController {
     }
 
     public var currentConfig: KkaciConfig {
-        configuration.currentConfig(workspaces: state.workspaceConfig)
+        configuration.currentConfig
     }
 
     public var startupConfigLoadError: Error? {
@@ -396,5 +396,4 @@ private extension WorkspaceController {
         }
         return result.sync
     }
-
 }

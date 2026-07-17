@@ -65,8 +65,10 @@ final class SwitcherCoordinatorTests: XCTestCase {
         coordinator.stepWorkspace(direction: .forward)
 
         try controller.applyConfig(KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "3"]),
-            bindings: []
+            workspaces: [
+                WorkspaceConfig(name: "1"),
+                WorkspaceConfig(name: "3")
+            ]
         ))
         coordinator.handleContentChanged()
         coordinator.commitWorkspaceSelection()

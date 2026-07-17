@@ -1,12 +1,34 @@
 import Foundation
-import TOMLKit
+import Yams
 
 public final class FileKkaciConfigStore: KkaciConfigStore {
+    private static let fileHeader = """
+    # Kkaci configuration file
+    #
+    # - Warning
+    #   - This file may be rewritten by Kkaci Settings.
+    #   - Custom comments and formatting may be removed. The last save wins.
+    #   - Invalid changes are not applied; Kkaci keeps the previous valid configuration.
+    #
+    # - Shortcut modifiers
+    #   - Control: 'control'
+    #   - Option: 'option'
+    #   - Shift: 'shift'
+    #   - Command: 'command'
+    #   - Combine modifiers and a key with '+'. Example: 'option+shift+1'
+    #
+    # - Display slots
+    #   - A display slot is an integer assigned to each display by Kkaci.
+    #   - Check assigned slots in Settings > Workspaces or run 'kkaci displays'.
+    #   - The main display is slot 1. Other displays are assigned slots 2, 3, and so on.
+    #   - Workspaces cannot be assigned to mirrored displays.
+    """
+
     public static let `default` = FileKkaciConfigStore(
         url: FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config", isDirectory: true)
             .appendingPathComponent("kkaci", isDirectory: true)
-            .appendingPathComponent("config.toml")
+            .appendingPathComponent("config.yaml")
     )
 
     public let url: URL
@@ -24,17 +46,16 @@ public final class FileKkaciConfigStore: KkaciConfigStore {
             return config
         }
 
-        let toml = try String(contentsOf: url, encoding: .utf8)
-        let table = try TOMLTable(string: toml)
-        return try TOMLDecoder().decode(KkaciConfig.self, from: table)
+        let yaml = try String(contentsOf: url, encoding: .utf8)
+        return try YAMLDecoder().decode(KkaciConfig.self, from: yaml)
     }
 
     public func save(_ config: KkaciConfig) throws {
         let directory = url.deletingLastPathComponent()
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        let table: TOMLTable = try TOMLEncoder().encode(config)
-        let toml = table.convert(to: .toml)
-        try toml.write(to: url, atomically: true, encoding: .utf8)
+        let yaml = try YAMLEncoder().encode(config)
+        let content = "\(Self.fileHeader)\n\(yaml)"
+        try content.write(to: url, atomically: true, encoding: .utf8)
     }
 }

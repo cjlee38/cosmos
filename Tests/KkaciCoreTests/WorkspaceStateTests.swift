@@ -28,10 +28,7 @@ final class WorkspaceStateTests: XCTestCase {
     }
 
     func testNewWindowsAreAutoAssignedToTheVisibleWorkspaceOnTheirMonitorSlot() {
-        var state = WorkspaceState(workspaces: WorkspaceConfig(
-            names: ["1", "2"],
-            monitorSlotsByName: ["2": 2]
-        ))
+        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]))
         _ = state.sync(windows: []) { _ in 1 }
 
         _ = state.sync(windows: [
@@ -85,11 +82,11 @@ final class WorkspaceStateTests: XCTestCase {
     }
 
     func testApplyingWorkspacesReassignsRemovedWorkspaceWindowsToCurrentWorkspace() {
-        var state = WorkspaceState(workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]))
+        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2", "scratch"]))
         state.assign(100, to: "scratch")
         state.activate("scratch")
 
-        state.applyWorkspaces(WorkspaceConfig(names: ["1", "2", "3"]))
+        state.applyWorkspaces(workspaceConfigs(["1", "2", "3"]))
 
         XCTAssertEqual(state.workspaces, ["1", "2", "3"])
         XCTAssertEqual(state.currentWorkspace, "1")
@@ -97,21 +94,18 @@ final class WorkspaceStateTests: XCTestCase {
     }
 
     func testApplyingWorkspacesRemovesDeletedCurrentWorkspace() {
-        var state = WorkspaceState(workspaces: WorkspaceConfig(
-            names: ["1", "2"],
-            monitorSlotsByName: ["2": 2]
-        ))
+        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]))
 
-        state.applyWorkspaces(WorkspaceConfig(names: ["1", "3"]))
+        state.applyWorkspaces(workspaceConfigs(["1", "3"]))
 
         XCTAssertEqual(state.workspaces, ["1", "3"])
         XCTAssertFalse(state.visibleWorkspaces(availableMonitorSlots: [1, 2]).contains("2"))
     }
 
     func testApplyingWorkspacesRemovesUnreferencedRuntimeWorkspaces() {
-        var state = WorkspaceState(workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]))
+        var state = WorkspaceState(workspaces: workspaceConfigs(["1", "2", "scratch"]))
 
-        state.applyWorkspaces(WorkspaceConfig(names: ["1", "2", "3"]))
+        state.applyWorkspaces(workspaceConfigs(["1", "2", "3"]))
 
         XCTAssertEqual(state.workspaces, ["1", "2", "3"])
         XCTAssertEqual(state.currentWorkspace, "1")

@@ -88,31 +88,6 @@ final class ConfigRuntimeTests: XCTestCase {
         XCTAssertEqual(runtime.status, .valid)
     }
 
-    func testReloadCanReplaceInvalidPreviouslyLoadedBindings() throws {
-        let invalidConfig = KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2"]),
-            bindings: [HotKeyBinding(key: "option+1", command: "unknown-command")]
-        )
-        let loadedConfig = config(key: "option+2", workspace: "2")
-        let controller = RuntimeConfigControllerSpy(currentConfig: invalidConfig)
-        let shortcutInstaller = ShortcutInstallerSpy()
-        let runtime = makeRuntime(
-            loadedConfig: loadedConfig,
-            controller: controller,
-            shortcutInstaller: shortcutInstaller
-        )
-
-        XCTAssertThrowsError(try runtime.installInitialShortcuts(actions: NoopShortcutActions()))
-        guard case .invalid = runtime.status else {
-            return XCTFail("Expected invalid config status")
-        }
-
-        try runtime.reload(actions: NoopShortcutActions())
-
-        XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+2"]])
-        XCTAssertEqual(controller.currentConfig, loadedConfig)
-    }
-
     func testMonitorUpdateDelegatesToCoreWithoutSavingInConfigRuntime() throws {
         let store = ConfigStoreSpy(loadedConfig: .default)
         let controller = RuntimeConfigControllerSpy(currentConfig: .default)
@@ -165,8 +140,14 @@ final class ConfigRuntimeTests: XCTestCase {
 
     private func config(key: String, workspace: String) -> KkaciConfig {
         KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2"]),
-            bindings: [HotKeyBinding(key: key, command: "workspace", workspace: workspace)]
+            workspaces: ["1", "2"].map { name in
+                WorkspaceConfig(
+                    name: name,
+                    shortcuts: WorkspaceShortcutConfig(
+                        switchWorkspace: name == workspace ? key : nil
+                    )
+                )
+            }
         )
     }
 }

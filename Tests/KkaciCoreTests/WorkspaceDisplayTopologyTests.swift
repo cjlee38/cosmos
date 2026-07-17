@@ -30,7 +30,7 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(controller.workspaceFrame(for: 200), .frame(x: 100, y: 100, width: 300, height: 200))
-        XCTAssertEqual(controller.currentConfig.workspaces.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "a"), 2)
 
         displayProvider.snapshots = [mainDisplay(), secondaryDisplay()]
         _ = try controller.handleDisplayConfigurationChanged()
@@ -132,16 +132,13 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.displays.map(\.id), [1, 2])
         XCTAssertEqual(controller.monitorSlots.map(\.display.id), [1])
         XCTAssertEqual(controller.effectiveMonitorSlot(for: "a"), 1)
-        XCTAssertEqual(controller.currentConfig.workspaces.monitorSlot(for: "a"), 2)
+        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "a"), 2)
     }
 
     private func configWithSecondaryWorkspace() -> KkaciConfig {
         KkaciConfig(
-            workspaces: WorkspaceConfig(
-                names: ["1", "a"],
-                monitorSlotsByName: ["a": 2]
-            ),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         )
     }
 

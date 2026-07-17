@@ -11,7 +11,7 @@ class WorkspaceHeadlessIntegrationTestCase: XCTestCase {
         in directory: URL,
         recordStore: FileHiddenWindowRecordStore
     ) throws -> WorkspaceController {
-        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml"))
+        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.yaml"))
         return WorkspaceController(
             windowSystem: windowSystem,
             displayProvider: FakeDisplayProvider(point: hidePoint),
@@ -216,10 +216,10 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.toml"))
+        let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.yaml"))
         try configStore.save(KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2", "3", "dev"]),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "2", "3", "dev"]),
+            shortcuts: KkaciConfig.default.shortcuts
         ))
 
         let firstSystem = FakeWindowSystem(windows: windows())
@@ -233,7 +233,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         try firstController.restoreHiddenWindowsForShutdown()
 
         let persistedConfig = try configStore.load()
-        XCTAssertEqual(persistedConfig.workspaces.names, ["1", "2", "3", "dev"])
+        XCTAssertEqual(persistedConfig.workspaceNames, ["1", "2", "3", "dev"])
         XCTAssertEqual(try firstRecordStore.loadRecords().map(\.workspace), ["dev"])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))

@@ -15,7 +15,7 @@ private func runREPL() {
     )
 
     if let configLoadError = controller.startupConfigLoadError {
-        print("warning: failed to load config.toml; using defaults: \(configLoadError)")
+        print("warning: failed to load config.yaml; using defaults: \(configLoadError)")
     }
 
     defer {

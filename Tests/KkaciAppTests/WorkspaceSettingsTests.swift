@@ -23,21 +23,8 @@ final class WorkspaceSettingsTests: XCTestCase {
             frame: main.frame,
             role: .mirrored(source: 1)
         )
-        let config = KkaciConfig(
-            workspaces: WorkspaceConfig(
-                names: ["1", "a", "offline"],
-                monitorSlotsByName: ["a": 2, "offline": 3]
-            ),
-            bindings: [
-                HotKeyBinding(key: "ctrl+tab", command: "next-workspace"),
-                HotKeyBinding(key: "ctrl+shift+tab", command: "previous-workspace"),
-                HotKeyBinding(key: "option+1", command: "workspace", workspace: "1"),
-                HotKeyBinding(key: "option+shift+1", command: "move-window-to-workspace", workspace: "1")
-            ]
-        )
-
         let snapshot = WorkspaceSettingsSnapshot(
-            config: config,
+            config: snapshotConfig(),
             monitorSlots: [
                 MonitorSlotSnapshot(slot: 1, display: main),
                 MonitorSlotSnapshot(slot: 2, display: extended)
@@ -106,14 +93,35 @@ final class WorkspaceSettingsTests: XCTestCase {
         )
         return WorkspaceSettingsSnapshot(
             config: KkaciConfig(
-                workspaces: WorkspaceConfig(names: ["1"]),
-                bindings: []
+                workspaces: [WorkspaceConfig(name: "1")]
             ),
             monitorSlots: [
                 MonitorSlotSnapshot(slot: 1, display: main),
                 MonitorSlotSnapshot(slot: 2, display: extended)
             ],
             displays: [main, extended]
+        )
+    }
+
+    private func snapshotConfig() -> KkaciConfig {
+        KkaciConfig(
+            workspaces: [
+                WorkspaceConfig(
+                    name: "1",
+                    shortcuts: WorkspaceShortcutConfig(
+                        switchWorkspace: "option+1",
+                        moveWindow: "option+shift+1"
+                    )
+                ),
+                WorkspaceConfig(name: "a", display: 2),
+                WorkspaceConfig(name: "offline", display: 3)
+            ],
+            shortcuts: ShortcutConfig(
+                workspaceSwitcher: SwitcherShortcutConfig(
+                    next: "ctrl+tab",
+                    previous: "ctrl+shift+tab"
+                )
+            )
         )
     }
 

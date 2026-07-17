@@ -207,7 +207,7 @@ private extension GeneralSettingsViewController {
         fileIcon.widthAnchor.constraint(equalToConstant: 28).isActive = true
         fileIcon.heightAnchor.constraint(equalToConstant: 28).isActive = true
 
-        let fileName = NSTextField(labelWithString: "config.toml")
+        let fileName = NSTextField(labelWithString: "config.yaml")
         fileName.font = .systemFont(ofSize: 14, weight: .semibold)
         let fileDetails = NSStackView(views: [fileName, configPathLabel])
         fileDetails.orientation = .vertical

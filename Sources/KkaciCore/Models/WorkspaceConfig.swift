@@ -1,75 +1,83 @@
 import Foundation
 
-public struct WorkspaceConfig: Codable, Equatable {
-    public let names: [String]
-    public let monitorSlotsByName: [String: MonitorSlot]
+public struct SwitcherShortcutConfig: Codable, Equatable {
+    public static let empty = SwitcherShortcutConfig()
 
-    public init(names: [String], monitorSlotsByName: [String: MonitorSlot] = [:]) {
-        let normalized = names
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .reduce(into: [String]()) { result, name in
-                if !result.contains(name) {
-                    result.append(name)
-                }
-            }
+    public let next: String?
+    public let previous: String?
 
-        let names = normalized.isEmpty ? ["1", "2", "3"] : normalized
-        self.names = names
-        self.monitorSlotsByName = monitorSlotsByName.reduce(into: [:]) { result, entry in
-            let name = entry.key.trimmingCharacters(in: .whitespacesAndNewlines)
-            if names.contains(name), entry.value >= 1 {
-                result[name] = entry.value
-            }
-        }
+    public init(next: String? = nil, previous: String? = nil) {
+        self.next = next
+        self.previous = previous
     }
+}
 
-    public func addingWorkspace(named name: String, monitorSlot: MonitorSlot = 1) -> WorkspaceConfig {
-        var monitorSlotsByName = monitorSlotsByName
-        monitorSlotsByName[name] = monitorSlot
-        return WorkspaceConfig(names: names + [name], monitorSlotsByName: monitorSlotsByName)
-    }
+public struct ShortcutConfig: Codable, Equatable {
+    public static let empty = ShortcutConfig()
 
-    public func assigningWorkspace(_ workspace: String, toMonitorSlot monitorSlot: MonitorSlot) -> WorkspaceConfig {
-        let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard names.contains(workspace), monitorSlot >= 1 else {
-            return self
-        }
+    public let workspaceSwitcher: SwitcherShortcutConfig
+    public let windowSwitcher: SwitcherShortcutConfig
 
-        var monitorSlotsByName = monitorSlotsByName
-        monitorSlotsByName[workspace] = monitorSlot
-        return WorkspaceConfig(names: names, monitorSlotsByName: monitorSlotsByName)
-    }
-
-    public func monitorSlot(for workspace: String) -> MonitorSlot {
-        monitorSlotsByName[workspace] ?? 1
+    public init(
+        workspaceSwitcher: SwitcherShortcutConfig = .empty,
+        windowSwitcher: SwitcherShortcutConfig = .empty
+    ) {
+        self.workspaceSwitcher = workspaceSwitcher
+        self.windowSwitcher = windowSwitcher
     }
 
     private enum CodingKeys: String, CodingKey {
-        case names
-        case monitorSlotsByName = "monitors"
+        case workspaceSwitcher = "workspace_switcher"
+        case windowSwitcher = "window_switcher"
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let names = try container.decodeIfPresent([String].self, forKey: .names) ?? ["1", "2", "3"]
-        let monitorSlotsByName = try container.decodeIfPresent(
-            [String: MonitorSlot].self,
-            forKey: .monitorSlotsByName
-        ) ?? [:]
-        self.init(names: names, monitorSlotsByName: monitorSlotsByName)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(names, forKey: .names)
-        if !monitorSlotsByName.isEmpty {
-            try container.encode(monitorSlotsByName, forKey: .monitorSlotsByName)
-        }
+        workspaceSwitcher = try container.decodeIfPresent(
+            SwitcherShortcutConfig.self,
+            forKey: .workspaceSwitcher
+        ) ?? .empty
+        windowSwitcher = try container.decodeIfPresent(
+            SwitcherShortcutConfig.self,
+            forKey: .windowSwitcher
+        ) ?? .empty
     }
 }
 
-public struct HotKeyBinding: Codable, Equatable {
+public struct WorkspaceShortcutConfig: Codable, Equatable {
+    public static let empty = WorkspaceShortcutConfig()
+
+    public let switchWorkspace: String?
+    public let moveWindow: String?
+
+    public init(switchWorkspace: String? = nil, moveWindow: String? = nil) {
+        self.switchWorkspace = switchWorkspace
+        self.moveWindow = moveWindow
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case switchWorkspace = "switch"
+        case moveWindow = "move_window"
+    }
+}
+
+public struct WorkspaceConfig: Codable, Equatable {
+    public let name: String
+    public let display: MonitorSlot
+    public let shortcuts: WorkspaceShortcutConfig
+
+    public init(
+        name: String,
+        display: MonitorSlot = 1,
+        shortcuts: WorkspaceShortcutConfig = .empty
+    ) {
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.display = max(display, 1)
+        self.shortcuts = shortcuts
+    }
+}
+
+public struct HotKeyBinding: Equatable {
     public let key: String
     public let command: String
     public let workspace: String?
@@ -125,42 +133,152 @@ public struct WorkspaceShortcutBindings {
 }
 
 public struct KkaciConfig: Codable, Equatable {
+    public static let currentVersion = 1
     public static let `default` = KkaciConfig(
-        workspaces: WorkspaceConfig(names: ["1", "2", "3"]),
-        bindings: [
-            HotKeyBinding(key: "ctrl+tab", command: "next-workspace"),
-            HotKeyBinding(key: "ctrl+shift+tab", command: "previous-workspace"),
-            HotKeyBinding(key: "option+tab", command: "next-window"),
-            HotKeyBinding(key: "option+shift+tab", command: "previous-window"),
-            HotKeyBinding(key: "option+1", command: "workspace", workspace: "1"),
-            HotKeyBinding(key: "option+2", command: "workspace", workspace: "2"),
-            HotKeyBinding(key: "option+3", command: "workspace", workspace: "3"),
-            HotKeyBinding(key: "option+shift+1", command: "move-window-to-workspace", workspace: "1"),
-            HotKeyBinding(key: "option+shift+2", command: "move-window-to-workspace", workspace: "2"),
-            HotKeyBinding(key: "option+shift+3", command: "move-window-to-workspace", workspace: "3")
-        ]
+        workspaces: [
+            WorkspaceConfig(
+                name: "1",
+                shortcuts: WorkspaceShortcutConfig(
+                    switchWorkspace: "option+1",
+                    moveWindow: "option+shift+1"
+                )
+            ),
+            WorkspaceConfig(
+                name: "2",
+                shortcuts: WorkspaceShortcutConfig(
+                    switchWorkspace: "option+2",
+                    moveWindow: "option+shift+2"
+                )
+            ),
+            WorkspaceConfig(
+                name: "3",
+                shortcuts: WorkspaceShortcutConfig(
+                    switchWorkspace: "option+3",
+                    moveWindow: "option+shift+3"
+                )
+            )
+        ],
+        shortcuts: ShortcutConfig(
+            workspaceSwitcher: SwitcherShortcutConfig(
+                next: "ctrl+tab",
+                previous: "ctrl+shift+tab"
+            ),
+            windowSwitcher: SwitcherShortcutConfig(
+                next: "option+tab",
+                previous: "option+shift+tab"
+            )
+        )
     )
 
-    public let workspaces: WorkspaceConfig
-    public let bindings: [HotKeyBinding]
+    public let version: Int
+    public let shortcuts: ShortcutConfig
+    public let workspaces: [WorkspaceConfig]
 
-    public init(workspaces: WorkspaceConfig, bindings: [HotKeyBinding]) {
-        self.workspaces = workspaces
-        self.bindings = bindings
+    public init(
+        version: Int = KkaciConfig.currentVersion,
+        workspaces: [WorkspaceConfig],
+        shortcuts: ShortcutConfig = .empty
+    ) {
+        self.version = version
+        self.shortcuts = shortcuts
+        self.workspaces = Self.normalized(workspaces)
     }
 
-    public func addingWorkspace(named name: String, monitorSlot: MonitorSlot = 1) -> KkaciConfig {
-        KkaciConfig(
-            workspaces: workspaces.addingWorkspace(named: name, monitorSlot: monitorSlot),
-            bindings: bindings
-        )
+    public var bindings: [HotKeyBinding] {
+        var result: [HotKeyBinding] = []
+        result.append(shortcuts.workspaceSwitcher.next, command: "next-workspace")
+        result.append(shortcuts.workspaceSwitcher.previous, command: "previous-workspace")
+        result.append(shortcuts.windowSwitcher.next, command: "next-window")
+        result.append(shortcuts.windowSwitcher.previous, command: "previous-window")
+        for workspace in workspaces {
+            result.append(
+                workspace.shortcuts.switchWorkspace,
+                command: "workspace",
+                workspace: workspace.name
+            )
+            result.append(
+                workspace.shortcuts.moveWindow,
+                command: "move-window-to-workspace",
+                workspace: workspace.name
+            )
+        }
+        return result
+    }
+
+    public var workspaceNames: [String] {
+        workspaces.map(\.name)
+    }
+
+    public func monitorSlot(for workspace: String) -> MonitorSlot {
+        workspaces.first { $0.name == workspace }?.display ?? 1
     }
 
     public func assigningWorkspace(_ workspace: String, toMonitorSlot monitorSlot: MonitorSlot) -> KkaciConfig {
-        KkaciConfig(
-            workspaces: workspaces.assigningWorkspace(workspace, toMonitorSlot: monitorSlot),
-            bindings: bindings
+        let workspace = workspace.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard workspaces.contains(where: { $0.name == workspace }), monitorSlot >= 1 else {
+            return self
+        }
+
+        return KkaciConfig(
+            version: version,
+            workspaces: workspaces.map { configuredWorkspace in
+                guard configuredWorkspace.name == workspace else {
+                    return configuredWorkspace
+                }
+                return WorkspaceConfig(
+                    name: configuredWorkspace.name,
+                    display: monitorSlot,
+                    shortcuts: configuredWorkspace.shortcuts
+                )
+            },
+            shortcuts: shortcuts
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case shortcuts
+        case workspaces
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try container.decode(Int.self, forKey: .version)
+        guard version == Self.currentVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version,
+                in: container,
+                debugDescription: "Unsupported config version: \(version)"
+            )
+        }
+
+        let shortcuts = try container.decodeIfPresent(ShortcutConfig.self, forKey: .shortcuts) ?? .empty
+        let workspaces = try container.decode([WorkspaceConfig].self, forKey: .workspaces)
+        guard workspaces.contains(where: { !$0.name.isEmpty }) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .workspaces,
+                in: container,
+                debugDescription: "At least one workspace is required"
+            )
+        }
+        self.init(version: version, workspaces: workspaces, shortcuts: shortcuts)
+    }
+
+    private static func normalized(_ workspaces: [WorkspaceConfig]) -> [WorkspaceConfig] {
+        workspaces.reduce(into: []) { result, workspace in
+            if !workspace.name.isEmpty, !result.contains(where: { $0.name == workspace.name }) {
+                result.append(workspace)
+            }
+        }
+    }
+}
+
+private extension [HotKeyBinding] {
+    mutating func append(_ key: String?, command: String, workspace: String? = nil) {
+        guard let key else {
+            return
+        }
+        append(HotKeyBinding(key: key, command: command, workspace: workspace))
     }
 }
 

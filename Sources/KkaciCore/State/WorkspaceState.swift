@@ -6,7 +6,7 @@ struct WorkspaceState {
     private var liveWindows = LiveWindowSetTracker()
     private var hiddenFrames = HiddenWindowFrameStore()
 
-    init(workspaces: WorkspaceConfig = WorkspaceConfig(names: ["1", "2", "3"])) {
+    init(workspaces: [WorkspaceConfig] = KkaciConfig.default.workspaces) {
         catalog = WorkspaceCatalog(workspaces: workspaces)
     }
 
@@ -20,10 +20,6 @@ struct WorkspaceState {
 
     var workspaces: [String] {
         catalog.workspaces
-    }
-
-    var workspaceConfig: WorkspaceConfig {
-        catalog.workspaceConfig
     }
 
     mutating func sync(
@@ -115,10 +111,10 @@ struct WorkspaceState {
         return catalog.contains(workspace) ? workspace : nil
     }
 
-    mutating func applyWorkspaces(_ workspaces: WorkspaceConfig) {
+    mutating func applyWorkspaces(_ workspaces: [WorkspaceConfig]) {
         catalog.apply(workspaces)
         memberships.reassignInvalidWorkspaces(
-            validWorkspaces: Set(workspaces.names),
+            validWorkspaces: Set(workspaces.map(\.name)),
             to: currentWorkspace
         )
     }

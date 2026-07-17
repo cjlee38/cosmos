@@ -168,11 +168,8 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: WorkspaceConfig(
-                names: ["1", "a"],
-                monitorSlotsByName: ["a": 2]
-            ),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
             windowSystem,
@@ -201,11 +198,8 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: WorkspaceConfig(
-                names: ["1", "a", "b"],
-                monitorSlotsByName: ["a": 2, "b": 2]
-            ),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "a", "b"], displays: ["a": 2, "b": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
             windowSystem,
@@ -235,11 +229,8 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: WorkspaceConfig(
-                names: ["1", "a"],
-                monitorSlotsByName: ["a": 2]
-            ),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "a"], displays: ["a": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(
             windowSystem,

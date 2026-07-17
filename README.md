@@ -13,7 +13,7 @@ The current runtime supports:
 - prune closed/missing windows from runtime state
 - switch workspaces by hiding/restoring assigned windows
 - cycle configured workspaces and focus windows within the active workspace
-- configure workspaces and global hotkeys through TOML
+- configure workspaces and global hotkeys through YAML
 
 ## Run
 
@@ -35,43 +35,33 @@ It also opens a debug status window; use `Show Debug Status` from the menu bar i
 Workspace config is stored at:
 
 ```text
-~/.config/kkaci/config.toml
+~/.config/kkaci/config.yaml
 ```
 
 If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
 
-```toml
-[workspaces]
-names = ["1", "2", "3", "dev"]
+```yaml
+version: 1
 
-[workspaces.monitors]
-dev = 2
+shortcuts:
+  workspace_switcher:
+    next: ctrl+tab
+    previous: ctrl+shift+tab
+  window_switcher:
+    next: option+tab
+    previous: option+shift+tab
 
-[[bindings]]
-key = "ctrl+tab"
-command = "next-workspace"
-
-[[bindings]]
-key = "ctrl+shift+tab"
-command = "previous-workspace"
-
-[[bindings]]
-key = "option+tab"
-command = "next-window"
-
-[[bindings]]
-key = "option+shift+tab"
-command = "previous-window"
-
-[[bindings]]
-key = "option+1"
-command = "workspace"
-workspace = "1"
-
-[[bindings]]
-key = "option+shift+1"
-command = "move-window-to-workspace"
-workspace = "1"
+workspaces:
+  - name: "1"
+    display: 1
+    shortcuts:
+      switch: option+1
+      move_window: option+shift+1
+  - name: dev
+    display: 2
+    shortcuts:
+      switch: option+d
+      move_window: option+shift+d
 ```
 
 The default config registers these global hotkeys:
@@ -85,8 +75,9 @@ Option+1/2/3          switch to workspace 1/2/3
 Option+Shift+1/2/3    move focused window to workspace 1/2/3
 ```
 
-Use `Reload Config` from the menu bar item after editing `config.toml`.
+Use `Reload Config` from the menu bar item after editing `config.yaml`.
 If reload fails, kkaci keeps the previous valid config. If the initial load fails, kkaci runs with defaults until a later reload succeeds and avoids overwriting the broken config.
+Settings rewrites the complete YAML file with a standard help header. Custom comments and formatting may be removed, and the last editor or Settings save wins.
 
 Workspace monitor slots are config-level roles. `monitor 1` is the current macOS main display. Other monitors are ordered by distance from the main display, then by x/y position as deterministic ties. Kkaci does not store physical display IDs in the config.
 

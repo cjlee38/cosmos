@@ -109,20 +109,12 @@ struct WorkspaceSettingsSnapshot: Equatable {
         let slotByDisplayID = Dictionary(uniqueKeysWithValues: monitorSlots.map {
             ($0.display.id, $0.slot)
         })
-        let workspaceItems = config.workspaces.names.map { workspace in
+        let workspaceItems = config.workspaces.map { workspace in
             WorkspaceSettingsItem(
-                name: workspace,
-                monitorSlot: config.workspaces.monitorSlot(for: workspace),
-                switchShortcut: Self.shortcut(
-                    command: "workspace",
-                    workspace: workspace,
-                    in: config.bindings
-                ),
-                moveShortcut: Self.shortcut(
-                    command: "move-window-to-workspace",
-                    workspace: workspace,
-                    in: config.bindings
-                )
+                name: workspace.name,
+                monitorSlot: workspace.display,
+                switchShortcut: workspace.shortcuts.switchWorkspace,
+                moveShortcut: workspace.shortcuts.moveWindow
             )
         }
         let namesByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
@@ -130,11 +122,10 @@ struct WorkspaceSettingsSnapshot: Equatable {
 
         self.displays = displays.map { display in
             let monitorSlot = slotByDisplayID[display.id]
-            let mirroredSourceMonitorSlot: MonitorSlot?
-            if case let .mirrored(source) = display.role {
-                mirroredSourceMonitorSlot = slotByDisplayID[source]
+            let mirroredSourceMonitorSlot: MonitorSlot? = if case let .mirrored(source) = display.role {
+                slotByDisplayID[source]
             } else {
-                mirroredSourceMonitorSlot = nil
+                nil
             }
             return WorkspaceSettingsDisplay(
                 name: display.name,
@@ -151,20 +142,10 @@ struct WorkspaceSettingsSnapshot: Equatable {
             .subtracting(connectedSlots)
             .sorted()
         navigation = WorkspaceNavigationShortcuts(
-            next: Self.shortcut(command: "next-workspace", workspace: nil, in: config.bindings),
-            previous: Self.shortcut(command: "previous-workspace", workspace: nil, in: config.bindings)
+            next: config.shortcuts.workspaceSwitcher.next,
+            previous: config.shortcuts.workspaceSwitcher.previous
         )
         workspaces = workspaceItems
-    }
-
-    private static func shortcut(
-        command: String,
-        workspace: String?,
-        in bindings: [HotKeyBinding]
-    ) -> String? {
-        bindings.first {
-            $0.command == command && $0.workspace == workspace
-        }?.key
     }
 }
 

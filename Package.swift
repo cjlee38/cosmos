@@ -14,7 +14,7 @@ let package = Package(
         .executable(name: "kkaci-fixture-app", targets: ["KkaciFixtureApp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.5.0")
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2")
     ],
     targets: [
         .target(
@@ -26,7 +26,7 @@ let package = Package(
             name: "KkaciCore",
             dependencies: [
                 "PrivateApi",
-                .product(name: "TOMLKit", package: "TOMLKit")
+                .product(name: "Yams", package: "Yams")
             ],
             path: "Sources/KkaciCore"
         ),

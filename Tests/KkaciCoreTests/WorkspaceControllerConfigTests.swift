@@ -67,8 +67,8 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
 
     func testConfigVisibilityFailureRestoresPreviousConfigAndVisibility() throws {
         let initialConfig = KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2"], monitorSlotsByName: ["2": 2]),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         )
         let store = InMemoryWorkspaceConfigStore()
         try store.save(initialConfig)
@@ -87,9 +87,10 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         try controller.assignWindow(200, to: "2")
         windowSystem.frameWriteFailures.insert(200)
 
-        XCTAssertThrowsError(try controller.applyConfig(KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2"]),
-            bindings: [HotKeyBinding(key: "option+x", command: "workspace", workspace: "1")]
+        XCTAssertThrowsError(try controller.applyConfig(configWithSwitchShortcut(
+            "option+x",
+            workspace: "1",
+            workspaceNames: ["1", "2"]
         )))
 
         XCTAssertEqual(controller.currentConfig, initialConfig)
@@ -99,8 +100,8 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
 
     func testMonitorUpdateSaveFailureRestoresRuntimeAndHiddenRecords() throws {
         let initialConfig = KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2"], monitorSlotsByName: ["2": 2]),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         )
         let store = FailingSaveWorkspaceConfigStore(loadedConfig: initialConfig)
         let recordStore = InMemoryHiddenWindowRecordStore()
@@ -170,8 +171,8 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         }
 
         XCTAssertThrowsError(try controller.applyConfig(KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2"], monitorSlotsByName: ["2": 2]),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]),
+            shortcuts: KkaciConfig.default.shortcuts
         ))) { error in
             guard let transactionError = error as? WorkspaceTransactionError else {
                 return XCTFail("Expected WorkspaceTransactionError, got \(error)")
@@ -270,8 +271,8 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         ])
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
-            workspaces: WorkspaceConfig(names: ["1", "2", "scratch"]),
-            bindings: KkaciConfig.default.bindings
+            workspaces: workspaceConfigs(["1", "2", "scratch"]),
+            shortcuts: KkaciConfig.default.shortcuts
         ))
         let controller = makeController(windowSystem, configStore: store)
 
@@ -279,9 +280,10 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         try controller.assignWindow(100, to: "scratch")
         _ = try controller.switchWorkspace(to: "scratch")
         try controller.applyConfig(
-            KkaciConfig(
-                workspaces: WorkspaceConfig(names: ["1", "2", "3"]),
-                bindings: [HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")]
+            configWithSwitchShortcut(
+                "option+d",
+                workspace: "3",
+                workspaceNames: ["1", "2", "3"]
             ),
             enablePersistence: true
         )
@@ -290,7 +292,24 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertEqual(controller.currentConfig.bindings, [
-            HotKeyBinding(key: "option+d", command: "workspace", workspace: "dev")
+            HotKeyBinding(key: "option+d", command: "workspace", workspace: "3")
         ])
     }
+}
+
+private func configWithSwitchShortcut(
+    _ shortcut: String,
+    workspace: String,
+    workspaceNames: [String]
+) -> KkaciConfig {
+    KkaciConfig(
+        workspaces: workspaceNames.map { name in
+            WorkspaceConfig(
+                name: name,
+                shortcuts: WorkspaceShortcutConfig(
+                    switchWorkspace: name == workspace ? shortcut : nil
+                )
+            )
+        }
+    )
 }
