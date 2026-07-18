@@ -9,6 +9,96 @@ public enum ShortcutTarget: Hashable {
     case moveWindow(WorkspaceID)
 }
 
+public enum ShortcutModifier: String, CaseIterable, Hashable {
+    case control
+    case option
+    case shift
+    case command
+}
+
+public struct Shortcut: Equatable {
+    public let modifiers: [ShortcutModifier]
+    public let key: String
+
+    public init(parsing value: String) throws {
+        let parts = value
+            .split(separator: "+")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+
+        guard !parts.isEmpty else {
+            throw ShortcutParsingError.empty
+        }
+
+        var modifiers = Set<ShortcutModifier>()
+        var key: String?
+        for part in parts {
+            if let modifier = ShortcutModifier(configName: part) {
+                modifiers.insert(modifier)
+            } else if key == nil {
+                key = part
+            } else {
+                throw ShortcutParsingError.multipleKeys(value)
+            }
+        }
+
+        guard let key else {
+            throw ShortcutParsingError.missingKey(value)
+        }
+
+        self.modifiers = ShortcutModifier.allCases.filter(modifiers.contains)
+        self.key = key
+    }
+}
+
+enum ShortcutParsingError: Error, CustomStringConvertible {
+    case empty
+    case missingKey(String)
+    case multipleKeys(String)
+
+    var description: String {
+        switch self {
+        case .empty:
+            "empty key"
+        case let .missingKey(value):
+            "missing key in \(value)"
+        case let .multipleKeys(value):
+            "multiple keys in \(value)"
+        }
+    }
+}
+
+private extension ShortcutModifier {
+    init?(configName: String) {
+        switch configName {
+        case "ctrl", "control":
+            self = .control
+        case "option", "alt":
+            self = .option
+        case "shift":
+            self = .shift
+        case "cmd", "command":
+            self = .command
+        default:
+            return nil
+        }
+    }
+}
+
+public struct ConfiguredShortcut: Equatable {
+    public let key: String
+    public let target: ShortcutTarget
+
+    public init(key: String, target: ShortcutTarget) {
+        self.key = key
+        self.target = target
+    }
+
+    public func parsed() throws -> Shortcut {
+        try Shortcut(parsing: key)
+    }
+}
+
 public extension KkaciConfig {
     func updatingShortcut(_ shortcut: String?, for target: ShortcutTarget) -> KkaciConfig? {
         let shortcut = normalizedShortcut(shortcut)

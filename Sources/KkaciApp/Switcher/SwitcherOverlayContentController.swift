@@ -1,7 +1,7 @@
 import AppKit
 import KkaciCore
 
-final class SwitcherOverlayViewFactory {
+final class SwitcherOverlayContentController {
     private let appSettingsStore: AppSettingsStore
     private let rootView = SwitcherOverlayRootView()
     private let windowListView = WindowSwitcherListView(frame: .zero)
@@ -15,12 +15,20 @@ final class SwitcherOverlayViewFactory {
         rootView
     }
 
-    func makeRootContent(content: NSView) -> NSView {
+    func beginWindowPresentation() {
+        windowListView.beginPresentation()
+    }
+
+    func beginWorkspacePresentation() {
+        workspaceListView.beginPresentation()
+    }
+
+    func configureRootContent(_ content: NSView) -> NSView {
         rootView.configure(content: content)
         return rootView
     }
 
-    func makeWindowList(
+    func configureWindowList(
         items: [WindowSwitcherItem],
         selectedID: WindowID,
         availableFrame: NSRect,
@@ -42,7 +50,7 @@ final class SwitcherOverlayViewFactory {
         return windowListView
     }
 
-    func makeWorkspaceList(
+    func configureWorkspaceList(
         groups: [WorkspaceSwitcherGroup],
         selectedID: String,
         availableFrame: NSRect,
@@ -58,6 +66,22 @@ final class SwitcherOverlayViewFactory {
             interactions: WorkspaceSwitcherInteractions(onHover: onHover, onClick: onClick)
         )
         return workspaceListView
+    }
+
+    func updateWindowPreviews(_ items: [WindowSwitcherItem]) {
+        windowListView.updatePreviews(items: items)
+    }
+
+    func updateWindowSelection(_ selectedID: WindowID) {
+        windowListView.updateSelection(selectedID: selectedID)
+    }
+
+    func updateWorkspacePreviews(_ groups: [WorkspaceSwitcherGroup]) {
+        workspaceListView.updatePreviews(groups: groups)
+    }
+
+    func updateWorkspaceSelection(_ selectedID: String) {
+        workspaceListView.updateSelection(selectedID: selectedID)
     }
 
     private func tileMetrics(
@@ -192,24 +216,22 @@ struct WorkspaceOverviewLayout {
         let spacing = dimensions.spacing
         let columns = Self.columnCount(groupCount: count)
         let rows = Int(ceil(Double(count) / Double(columns)))
-        let contentSize = NSSize(
+        let maximumContentSize = NSSize(
             width: floor(availableFrame.width * dimensions.widthRatio),
             height: floor(availableFrame.height * dimensions.heightRatio)
         )
-        let cellWidth = (contentSize.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
-        let cellHeight = (contentSize.height - CGFloat(rows - 1) * spacing) / CGFloat(rows)
-        let screenAspect = min(max(availableFrame.width / max(availableFrame.height, 1), 1.35), 1.9)
-        let chromeHeight: CGFloat = 82
-        let horizontalChrome: CGFloat = 24
-        let maxCanvasWidth = max(160, cellWidth - horizontalChrome)
-        let maxCanvasHeight = max(100, cellHeight - chromeHeight)
-        let canvasWidth = min(maxCanvasWidth, maxCanvasHeight * screenAspect)
-        let canvasHeight = canvasWidth / screenAspect
-
-        self.contentSize = contentSize
-        cardSize = NSSize(
-            width: canvasWidth + horizontalChrome, height: canvasHeight + chromeHeight
+        let cellWidth = (maximumContentSize.width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+        let cellHeight = (maximumContentSize.height - CGFloat(rows - 1) * spacing) / CGFloat(rows)
+        let cardAspect: CGFloat = 1.45
+        let cardWidth = min(cellWidth, cellHeight * cardAspect)
+        let cardHeight = min(cellHeight, cardWidth / cardAspect)
+        let contentSize = NSSize(
+            width: CGFloat(columns) * cardWidth + CGFloat(columns - 1) * spacing,
+            height: CGFloat(rows) * cardHeight + CGFloat(rows - 1) * spacing
         )
+
+        self.contentSize = NSSize(width: floor(contentSize.width), height: floor(contentSize.height))
+        cardSize = NSSize(width: floor(cardWidth), height: floor(cardHeight))
         self.columns = columns
         self.rows = rows
         self.spacing = spacing
@@ -309,15 +331,26 @@ private final class SwitcherOverlayRootView: NSView {
 }
 
 final class SwitcherHoverGate {
-    private let initialLocation = NSEvent.mouseLocation
+    private let pointerLocation: () -> NSPoint
+    private var initialLocation: NSPoint
     private var isEnabled = false
+
+    init(pointerLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }) {
+        self.pointerLocation = pointerLocation
+        initialLocation = pointerLocation()
+    }
+
+    func reset() {
+        initialLocation = pointerLocation()
+        isEnabled = false
+    }
 
     func allowHoverIfPointerMoved() -> Bool {
         if isEnabled {
             return true
         }
 
-        let location = NSEvent.mouseLocation
+        let location = pointerLocation()
         if abs(location.x - initialLocation.x) >= 1 || abs(location.y - initialLocation.y) >= 1 {
             isEnabled = true
         }

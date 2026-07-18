@@ -12,17 +12,14 @@ final class AppRuntime {
     private let keyboardShortcutManager: KeyboardShortcutManager
     private let previewService: SwitcherPreviewService
     private var windowEventMonitor: WindowEventMonitor?
-    private var settingsWindowController: SettingsWindowController?
+    private var settingsCoordinator: SettingsCoordinator?
 
     private lazy var actionController = WorkspaceActionController(
         controller: controller,
         previewService: previewService,
         appSettingsStore: appSettingsStore,
-        refreshSurfaces: { [weak self] in
-            self?.refreshRuntimeSurfaces()
-        },
-        suppressNextFocusSync: { [weak self] windowID in
-            self?.suppressNextFocusSync(for: windowID)
+        refreshStatusSurfaces: { [weak self] in
+            self?.refreshStatusSurfaces()
         }
     )
 
@@ -32,8 +29,8 @@ final class AppRuntime {
         refreshSwitcherContent: { [weak self] in
             self?.refreshSwitcherContent()
         },
-        refreshSurfaces: { [weak self] in
-            self?.refreshRuntimeSurfaces()
+        refreshStatusSurfaces: { [weak self] in
+            self?.refreshStatusSurfaces()
         }
     )
 
@@ -68,8 +65,6 @@ final class AppRuntime {
     }
 
     func start() {
-        NSApp.setActivationPolicy(.accessory)
-
         statusMenuController.showDebugStatusWindow()
         startKeyboardShortcuts()
 
@@ -108,9 +103,7 @@ final class AppRuntime {
         do {
             try keyboardShortcutManager.start()
             try configRuntime.reload(actions: actionController)
-            previewService.refreshAll()
-            actionController.refreshSwitcherContent()
-            refreshAllSurfaces()
+            refreshWorkspacePresentation()
             log.info("Config reloaded")
         } catch {
             let errorMessage = String(describing: error)
@@ -119,119 +112,40 @@ final class AppRuntime {
         }
     }
 
-    private func refreshRuntimeSurfaces() {
+    private func refreshStatusSurfaces() {
         statusMenuController.refreshSurfaces()
     }
 
     private func refreshAllSurfaces() {
-        refreshRuntimeSurfaces()
-        settingsWindowController?.refresh()
+        refreshStatusSurfaces()
+        settingsCoordinator?.refresh()
     }
 }
 
 private extension AppRuntime {
     func showSettingsWindow() {
-        if settingsWindowController == nil {
-            settingsWindowController = makeSettingsWindowController()
+        if settingsCoordinator == nil {
+            settingsCoordinator = makeSettingsCoordinator()
         }
-        settingsWindowController?.show()
+        settingsCoordinator?.show()
     }
 
-    func makeSettingsWindowController() -> SettingsWindowController {
-        SettingsWindowController(
+    func makeSettingsCoordinator() -> SettingsCoordinator {
+        SettingsCoordinator(
+            controller: controller,
+            configRuntime: configRuntime,
             generalSettingsService: generalSettingsService,
             appSettingsStore: appSettingsStore,
-            appearanceChangedHandler: { [unowned self] in refreshRuntimeSurfaces() },
-            visibilityChangedHandler: { [unowned self] in handleSettingsVisibilityChanged() },
-            workspaceSnapshotProvider: { [unowned self] in workspaceSettingsSnapshot() },
-            workspaceMonitorChangedHandler: { [unowned self] workspace, displayID in
-                try updateWorkspaceMonitor(workspace, displayID: displayID)
-            },
-            workspaceAddedHandler: { [unowned self] workspaceIDs, displayID in
-                try addWorkspaces(workspaceIDs, displayID: displayID)
-            },
-            workspaceRemovedHandler: { [unowned self] workspaceID in try removeWorkspace(workspaceID) },
-            shortcutRecordingBeganHandler: configRuntime.beginShortcutRecording,
-            shortcutRecordingCancelledHandler: configRuntime.cancelShortcutRecording,
-            shortcutChangedHandler: { [unowned self] target, shortcut in
-                try updateShortcut(shortcut, for: target)
-            },
-            configURLProvider: { [unowned self] in configRuntime.configURL },
-            configStatusProvider: { [unowned self] in configRuntime.status },
-            reloadConfigHandler: { [unowned self] in reloadConfig() }
+            actions: actionController,
+            appearanceChanged: { [unowned self] in refreshStatusSurfaces() },
+            workspaceConfigChanged: { [unowned self] in refreshWorkspacePresentation() },
+            ownWindowVisibilityChanged: { [unowned self] in handleSettingsVisibilityChanged() },
+            ownWindowChanged: { [unowned self] windowID in handleSettingsWindowChanged(windowID) },
+            reloadConfig: { [unowned self] in reloadConfig() }
         )
     }
 
-    func workspaceSettingsSnapshot() -> WorkspaceSettingsSnapshot {
-        WorkspaceSettingsSnapshot(
-            config: configRuntime.settingsConfig,
-            monitorSlots: controller.monitorSlots,
-            displays: controller.displays,
-            isEditable: configRuntime.isSettingsEditable,
-            shortcutValidationMessages: configRuntime.shortcutValidationMessages
-        )
-    }
-
-    func updateShortcut(_ shortcut: String?, for target: ShortcutTarget) throws {
-        let result = try configRuntime.updateShortcut(shortcut, for: target, actions: actionController)
-        refreshAfterWorkspaceConfigChange()
-        switch result {
-        case .applied:
-            log.info("Updated shortcut to \(shortcut ?? "not set")")
-        case let .rejected(error):
-            log.warning("Saved shortcut but kept previous runtime config: \(error)")
-        }
-    }
-
-    func updateWorkspaceMonitor(_ workspace: String, displayID: DisplayID) throws {
-        let monitorSlot = try WorkspaceDisplayAssignment.monitorSlot(
-            for: displayID,
-            monitorSlots: controller.monitorSlots
-        )
-        let config = try editableConfig().assigningWorkspace(workspace, toMonitorSlot: monitorSlot)
-        try updateWorkspaceConfig(config)
-        log.info("Assigned workspace \(workspace) to display \(displayID)")
-    }
-
-    func addWorkspaces(_ workspaceIDs: [WorkspaceID], displayID: DisplayID) throws {
-        let monitorSlot = try WorkspaceDisplayAssignment.monitorSlot(
-            for: displayID,
-            monitorSlots: controller.monitorSlots
-        )
-        guard let config = try editableConfig().addingWorkspaces(workspaceIDs, display: monitorSlot) else {
-            return
-        }
-        try updateWorkspaceConfig(config)
-        log.info(
-            "Added workspaces \(workspaceIDs.map(\.rawValue).joined(separator: ",")) "
-                + "to display \(displayID)"
-        )
-    }
-
-    func removeWorkspace(_ workspaceID: WorkspaceID) throws {
-        guard let config = try editableConfig().removingWorkspace(workspaceID) else {
-            return
-        }
-        try updateWorkspaceConfig(config)
-        log.info("Removed workspace \(workspaceID.rawValue)")
-    }
-
-    func updateWorkspaceConfig(_ config: KkaciConfig) throws {
-        let result = try configRuntime.updateConfig(config, actions: actionController)
-        refreshAfterWorkspaceConfigChange()
-        if case let .rejected(error) = result {
-            log.warning("Saved config but kept previous runtime config: \(error)")
-        }
-    }
-
-    func editableConfig() throws -> KkaciConfig {
-        guard let desiredConfig = configRuntime.desiredConfig else {
-            throw ConfigEditingUnavailableError()
-        }
-        return desiredConfig
-    }
-
-    func refreshAfterWorkspaceConfigChange() {
+    func refreshWorkspacePresentation() {
         previewService.refreshAll()
         actionController.refreshSwitcherContent()
         refreshAllSurfaces()
@@ -243,17 +157,15 @@ private extension AppRuntime {
         guard windowEventMonitor != nil else {
             return
         }
-        windowRuntimeEventHandler.handle(WindowRuntimeEventBatch(events: [
-            WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
-        ]))
+        windowRuntimeEventHandler.handleOwnWindowVisibilityChanged()
+    }
+
+    func handleSettingsWindowChanged(_ windowID: WindowID) {
+        windowEventMonitor?.scheduleOwnWindowChanged(windowID)
     }
 
     func refreshSwitcherContent() {
         actionController.refreshSwitcherContent()
-    }
-
-    func suppressNextFocusSync(for windowID: WindowID) {
-        windowRuntimeEventHandler.suppressNextFocusSync(for: windowID)
     }
 
     func startWindowEventMonitor() {
@@ -270,12 +182,10 @@ private extension AppRuntime {
 
     @discardableResult
     func bootstrapWindowStateAfterPermission() -> Bool {
+        startWindowEventMonitor()
         do {
-            let hiddenRecords = try controller.bootstrapWindowState(defaultWorkspace: "1")
-            startWindowEventMonitor()
-            previewService.refreshAll()
-            actionController.refreshSwitcherContent()
-            statusMenuController.refreshSurfaces()
+            let hiddenRecords = try controller.bootstrapWindowState()
+            refreshWorkspacePresentation()
             let message = bootstrapMessage(for: hiddenRecords)
             log.info(message)
             return true
@@ -290,6 +200,7 @@ private extension AppRuntime {
             return "Captured visible windows to visible workspaces"
         }
 
-        return "Applied \(recordResult.reassigned.count) records, restored \(recordResult.restored.count)"
+        return "Applied \(recordResult.reassigned.count) records, restored \(recordResult.restored.count), "
+            + "failed \(recordResult.failed.count)"
     }
 }

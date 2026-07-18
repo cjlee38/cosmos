@@ -3,6 +3,46 @@ import KkaciCore
 import XCTest
 
 final class SwitcherCoordinatorTests: XCTestCase {
+    func testWorkspaceShortcutBindingsUseTheNonModifierKey() {
+        let shortcuts = WorkspaceShortcutBindings([
+            ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
+            ConfiguredShortcut(key: "option+b", target: .switchWorkspace("B")),
+            ConfiguredShortcut(key: "option+shift+c", target: .moveWindow("C"))
+        ])
+
+        XCTAssertEqual(shortcuts.key(for: "1"), "1")
+        XCTAssertEqual(shortcuts.key(for: "B"), "b")
+        XCTAssertEqual(shortcuts.workspaceID(for: "B"), "B")
+        XCTAssertNil(shortcuts.workspaceID(for: "c"))
+    }
+
+    func testHoverGateResetsAtTheCurrentPointerLocation() {
+        var pointerLocation = NSPoint(x: 10, y: 20)
+        let gate = SwitcherHoverGate(pointerLocation: { pointerLocation })
+
+        XCTAssertFalse(gate.allowHoverIfPointerMoved())
+        pointerLocation.x += 1
+        XCTAssertTrue(gate.allowHoverIfPointerMoved())
+
+        gate.reset()
+        XCTAssertFalse(gate.allowHoverIfPointerMoved())
+        pointerLocation.y += 1
+        XCTAssertTrue(gate.allowHoverIfPointerMoved())
+    }
+
+    func testOutsideClickDecisionUsesTheProvidedEventLocation() {
+        let overlayFrame = CGRect(x: 100, y: 100, width: 200, height: 100)
+
+        XCTAssertFalse(SwitcherOutsideClickMonitor.isOutsideClick(
+            at: CGPoint(x: 150, y: 150),
+            overlayFrame: overlayFrame
+        ))
+        XCTAssertTrue(SwitcherOutsideClickMonitor.isOutsideClick(
+            at: CGPoint(x: 50, y: 150),
+            overlayFrame: overlayFrame
+        ))
+    }
+
     func testContentChangeBeforePresentationUsesTheLatestWindowSet() throws {
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 10, title: "One"),
@@ -90,7 +130,14 @@ final class SwitcherCoordinatorTests: XCTestCase {
         let shown = expectation(description: "window overlay shown")
         let previewUpdated = expectation(description: "window preview updated")
         overlay.onWindowShown = shown.fulfill
-        overlay.onWindowPreviewsUpdated = previewUpdated.fulfill
+        overlay.onWindowPreviewsUpdated = {
+            let updatedWindowIDs = Set(overlay.updatedWindowIDs.flatMap { $0 })
+            guard updatedWindowIDs == [10, 20] else {
+                return
+            }
+            overlay.onWindowPreviewsUpdated = nil
+            previewUpdated.fulfill()
+        }
         let coordinator = SwitcherCoordinator(
             controller: controller,
             previewService: previewService,
@@ -102,7 +149,7 @@ final class SwitcherCoordinatorTests: XCTestCase {
         coordinator.stepWindow(direction: .forward, wraps: true)
         wait(for: [shown, previewUpdated], timeout: 1)
 
-        XCTAssertEqual(overlay.updatedWindowIDs, [[10, 20]])
+        XCTAssertEqual(Set(overlay.updatedWindowIDs.flatMap { $0 }), [10, 20])
         XCTAssertTrue(overlay.reboundWindowIDs.isEmpty)
 
         coordinator.commitWindowSelection()
@@ -140,6 +187,49 @@ final class SwitcherCoordinatorTests: XCTestCase {
 
         wait(for: [overlayCreated, thumbnailCaptured], timeout: 0.25)
         XCTAssertEqual(windowSystem.focusedWindowIDs, [20])
+    }
+
+    func testOverlayArrowKeyMovesTheActiveWindowSessionSelection() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One"),
+            makeSwitcherTestWindow(id: 20, title: "Two"),
+            makeSwitcherTestWindow(id: 30, title: "Three")
+        ])
+        let overlay = SwitcherOverlaySpy()
+        let coordinator = makeCoordinator(controller: controller, overlay: overlay)
+
+        coordinator.stepWindow(direction: .forward, wraps: true)
+        overlay.onArrowKey?(.right)
+        coordinator.commitWindowSelection()
+
+        XCTAssertEqual(windowSystem.focusedWindowIDs, [30])
+    }
+
+    func testOverlayOutsideClickCancelsWithoutCommitting() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One"),
+            makeSwitcherTestWindow(id: 20, title: "Two")
+        ])
+        let overlay = SwitcherOverlaySpy()
+        let coordinator = makeCoordinator(controller: controller, overlay: overlay)
+
+        coordinator.stepWindow(direction: .forward, wraps: true)
+        overlay.onOutsideClick?()
+        coordinator.commitWindowSelection()
+
+        XCTAssertTrue(windowSystem.focusedWindowIDs.isEmpty)
+    }
+
+    func testOverlayWorkspaceKeyCommitsTheMatchingWorkspace() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        let overlay = SwitcherOverlaySpy()
+        let coordinator = makeCoordinator(controller: controller, overlay: overlay)
+
+        coordinator.stepWorkspace(direction: .forward)
+        let handled = overlay.onWorkspaceKey?("3")
+
+        XCTAssertEqual(handled, true)
+        XCTAssertEqual(controller.currentWorkspace, "3")
     }
 
     private func makeCoordinator(

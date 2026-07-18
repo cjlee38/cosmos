@@ -58,7 +58,7 @@ final class AppearanceSettingsViewController: NSViewController {
         configureValueLabel(windowSwitcherSizeValueLabel)
         configureValueLabel(workspaceSwitcherSizeValueLabel)
 
-        let header = makeHeader()
+        let header = SettingsControlFactory.header(title: "Appearance", symbolName: "paintbrush.fill")
         let menuBarSection = makeMenuBarSection()
         let switcherSection = makeSwitcherSection()
         let root = NSStackView(views: [header, menuBarSection, switcherSection])
@@ -93,27 +93,8 @@ final class AppearanceSettingsViewController: NSViewController {
         updateSizeLabels()
     }
 
-    private func makeHeader() -> NSView {
-        let icon = NSImageView()
-        icon.image = NSImage(systemSymbolName: "paintbrush.fill", accessibilityDescription: "Appearance")
-        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
-        icon.contentTintColor = .labelColor
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 28).isActive = true
-
-        let title = NSTextField(labelWithString: "Appearance")
-        title.font = .systemFont(ofSize: 22, weight: .bold)
-
-        let header = NSStackView(views: [icon, title])
-        header.orientation = .horizontal
-        header.alignment = .centerY
-        header.spacing = 10
-        return header
-    }
-
     private func makeMenuBarSection() -> NSView {
-        titledSection(
+        SettingsControlFactory.titledSection(
             title: "Menu Bar",
             content: SettingsControlFactory.groupBox(
                 content: SettingsControlFactory.padded(
@@ -153,7 +134,7 @@ final class AppearanceSettingsViewController: NSViewController {
             row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
         }
 
-        return titledSection(
+        return SettingsControlFactory.titledSection(
             title: "Switcher Size",
             content: SettingsControlFactory.groupBox(content: rows)
         )
@@ -162,24 +143,11 @@ final class AppearanceSettingsViewController: NSViewController {
     private func optionRow(title: String, control: NSView) -> NSView {
         let titleLabel = NSTextField(labelWithString: title)
         titleLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        let row = NSStackView(views: [titleLabel, flexibleSpacer(), control])
+        let row = NSStackView(views: [titleLabel, SettingsControlFactory.flexibleSpacer(), control])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 12
         return row
-    }
-
-    private func titledSection(title: String, content: NSView) -> NSView {
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.textColor = .secondaryLabelColor
-
-        let section = NSStackView(views: [titleLabel, content])
-        section.orientation = .vertical
-        section.alignment = .leading
-        section.spacing = 8
-        content.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
-        return section
     }
 
     private func configure(_ control: NSSegmentedControl, action: Selector, width: CGFloat) {
@@ -212,13 +180,6 @@ final class AppearanceSettingsViewController: NSViewController {
         control.alignment = .centerY
         control.spacing = 10
         return control
-    }
-
-    private func flexibleSpacer() -> NSView {
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return spacer
     }
 
     @objc private func menuBarStyleChanged() {

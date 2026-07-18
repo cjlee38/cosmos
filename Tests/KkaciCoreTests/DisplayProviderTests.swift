@@ -4,7 +4,7 @@ import XCTest
 
 final class DisplayProviderTests: XCTestCase {
     func testUsesBottomLeftWhenAnotherDisplayBlocksTheRightEdge() throws {
-        let provider = DisplayProvider()
+        let provider = WindowParkingPointProvider(displayProvider: FakeDisplayProvider())
         let point = try XCTUnwrap(provider.hidePoint(
             for: .frame(x: 100, y: 100, width: 300, height: 200),
             displays: [
@@ -17,7 +17,7 @@ final class DisplayProviderTests: XCTestCase {
     }
 
     func testUsesBottomRightWhenAnotherDisplayBlocksTheLeftEdge() throws {
-        let provider = DisplayProvider()
+        let provider = WindowParkingPointProvider(displayProvider: FakeDisplayProvider())
         let point = try XCTUnwrap(provider.hidePoint(
             for: .frame(x: 1100, y: 100, width: 300, height: 200),
             displays: [
@@ -30,7 +30,7 @@ final class DisplayProviderTests: XCTestCase {
     }
 
     func testDiagonalDisplayObstructionUsesTheOtherCorner() throws {
-        let provider = DisplayProvider()
+        let provider = WindowParkingPointProvider(displayProvider: FakeDisplayProvider())
         let point = try XCTUnwrap(provider.hidePoint(
             for: .frame(x: 100, y: 100, width: 300, height: 200),
             displays: [
@@ -43,7 +43,7 @@ final class DisplayProviderTests: XCTestCase {
     }
 
     func testParkingPointUsesTheSelectedDisplaysVisibleFrame() throws {
-        let provider = DisplayProvider()
+        let provider = WindowParkingPointProvider(displayProvider: FakeDisplayProvider())
         let point = try XCTUnwrap(provider.hidePoint(
             for: .frame(x: 100, y: 100, width: 300, height: 200),
             displays: [

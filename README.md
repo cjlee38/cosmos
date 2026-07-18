@@ -21,7 +21,7 @@ The current runtime supports:
 just repl
 ```
 
-Grant Accessibility permission when prompted. If it is granted after startup, relaunch the app or use `Request Accessibility Permission` from the menu bar. The menu bar runtime also requests Input Monitoring permission for modifier-release detection; after granting it, relaunch the app or use `Reload Config`.
+Grant Accessibility permission when prompted. If it is granted after startup, relaunch the app or check the permission state in Settings. The menu bar runtime also requests Input Monitoring permission for modifier-release detection; after granting it, relaunch the app or use `Reload Config`.
 
 Run the menu bar runtime app with:
 
@@ -29,7 +29,7 @@ Run the menu bar runtime app with:
 just dev
 ```
 
-The menu bar app captures currently visible windows into the active workspace for each window's monitor on launch.
+The menu bar app captures non-minimized windows discovered during startup into the active workspace for each window's monitor.
 It also opens a debug status window; use `Show Debug Status` from the menu bar item to reopen it.
 
 Workspace config is stored at:
@@ -40,7 +40,7 @@ Workspace config is stored at:
 
 The development app uses `~/.config/kkaci-dev/config.yaml` so it can run alongside the release app without sharing runtime state.
 
-If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Workspace IDs are limited to `0...9` and `A...Z`; letter IDs are normalized to uppercase. A workspace may have an optional display-only `name`, while commands and shortcuts continue to use its ID. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
+If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Workspace IDs are limited to `0...9` and `A...Z`; letter IDs are normalized to uppercase. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
 
 ```yaml
 version: 1
@@ -60,7 +60,6 @@ workspaces:
       switch: option+1
       move_window: option+shift+1
   - id: D
-    name: Deploy
     display: 2
     shortcuts:
       switch: option+d
@@ -90,26 +89,17 @@ Workspace monitor slots are config-level roles. `monitor 1` is the current macOS
 help
 permission
 list
+displays
 focused
-assign 1
-assign 2 <window-id>
-capture <workspace>
 switch 1
 switch 2
-next-workspace
-prev-workspace
-next-window
-prev-window
-hide <window-id>
-restore <window-id>
-restore <window-id> <window-id>
+move 2
+unhide-all
 workspaces
 quit
 ```
 
-The first window scan is treated as the baseline. Windows discovered after that are assigned to the currently active workspace.
-
-The CLI REPL keeps the manual baseline flow. The menu bar app restores matching hidden-window records, then captures each still-unassigned visible window into the active workspace on that window's monitor.
+The CLI is a client of the same Core command model as the menu bar app. It restores matching hidden-window records, then captures each still-unassigned visible window into the active workspace on that window's monitor. It does not expose CLI-only window or workspace behavior.
 
 The acceptance test for the core primitive is two windows from the same app assigned to different workspaces, then switching workspaces so only the assigned window is restored.
 

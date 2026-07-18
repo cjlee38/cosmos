@@ -3,7 +3,7 @@ import KkaciCore
 
 struct SwitcherPreviewUpdate {
     let windowIDs: Set<WindowID>
-    let workspaceNames: Set<String>
+    let workspaceIDs: Set<String>
 }
 
 final class SwitcherPreviewService {
@@ -11,9 +11,8 @@ final class SwitcherPreviewService {
     private let windowThumbnailCache: WindowThumbnailCache
     private let workspaceThumbnailCache: WorkspaceThumbnailCache
     private let applicationIconCache: ApplicationIconCache
-    private var pendingWorkspaceNames: Set<String> = []
     private var pendingUpdatedWindowIDs: Set<WindowID> = []
-    private var pendingUpdatedWorkspaceNames: Set<String> = []
+    private var pendingUpdatedWorkspaceIDs: Set<String> = []
     private var isUpdateNotificationScheduled = false
     private var onUpdate: ((SwitcherPreviewUpdate) -> Void)?
 
@@ -28,16 +27,11 @@ final class SwitcherPreviewService {
         self.workspaceThumbnailCache = workspaceThumbnailCache
         self.applicationIconCache = applicationIconCache
 
-        windowThumbnailCache.setUpdateHandlers(
-            onThumbnailUpdated: { [weak self] windowID in
-                self?.notify(windowIDs: [windowID])
-            },
-            onCaptureCycleCompleted: { [weak self] in
-                self?.flushPendingWorkspaceThumbnails()
-            }
-        )
-        workspaceThumbnailCache.setUpdateHandler { [weak self] workspaceNames in
-            self?.notify(workspaceNames: workspaceNames)
+        windowThumbnailCache.setUpdateHandler { [weak self] windowID in
+            self?.handleWindowThumbnailUpdated(windowID)
+        }
+        workspaceThumbnailCache.setUpdateHandler { [weak self] workspaceIDs in
+            self?.notify(workspaceIDs: workspaceIDs)
         }
         applicationIconCache.setUpdateHandler { [weak self] pid in
             self?.handleApplicationIconUpdated(pid)
@@ -59,7 +53,7 @@ final class SwitcherPreviewService {
 
     func workspaceGroups(ids: [String]) -> [WorkspaceSwitcherGroup] {
         let liveWorkspaceIDs = Set(controller.workspaces)
-        let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.bindings)
+        let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.configuredShortcuts)
         return ids.compactMap { workspaceID in
             guard liveWorkspaceIDs.contains(workspaceID) else {
                 return nil
@@ -75,35 +69,34 @@ final class SwitcherPreviewService {
 
     func refresh(
         windowIDs: Set<WindowID>,
-        workspaceNames: Set<String>,
+        workspaceIDs: Set<String>,
         priorityIDs: [WindowID] = []
     ) {
         let windows = controller.currentWindows()
         let liveWindowIDs = Set(windows.map(\.id))
-        let liveWorkspaceNames = Set(controller.workspaces)
+        let liveWorkspaceIDs = Set(controller.workspaces)
 
         windowThumbnailCache.removeStaleThumbnails(keeping: liveWindowIDs)
-        workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceNames)
+        workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceIDs)
         refreshApplicationIcons(windows: windows)
-        pendingWorkspaceNames.formUnion(workspaceNames.intersection(liveWorkspaceNames))
+        let requestedWorkspaceIDs = workspaceIDs.intersection(liveWorkspaceIDs)
+        let priorityWorkspaceIDs = priorityIDs.compactMap(controller.membership(for:))
+        refreshWorkspaces(ids: requestedWorkspaceIDs, priorityIDs: priorityWorkspaceIDs)
         windowThumbnailCache.refresh(windowIDs: orderedWindowIDs(
             windowIDs.intersection(liveWindowIDs),
             windows: windows,
             priorityIDs: priorityIDs
         ))
-
-        if !windowThumbnailCache.isRefreshing {
-            flushPendingWorkspaceThumbnails()
-        }
     }
 
-    func refreshWorkspaces(names: Set<String>) {
-        let liveWorkspaceNames = Set(controller.workspaces)
-        let names = names.intersection(liveWorkspaceNames)
-        workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceNames)
+    func refreshWorkspaces(ids: Set<String>, priorityIDs: [String] = []) {
+        let liveWorkspaceIDs = Set(controller.workspaces)
+        let ids = ids.intersection(liveWorkspaceIDs)
+        workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceIDs)
         workspaceThumbnailCache.refresh(
-            groups: workspaceGroups(ids: controller.workspaces.filter(names.contains)),
-            displayBounds: controller.monitorSlots.map(\.display.frame)
+            groups: workspaceGroups(ids: controller.workspaces.filter(ids.contains)),
+            displayBounds: controller.displayTopology.displays.map(\.frame),
+            priorityWorkspaceIDs: priorityIDs
         )
     }
 
@@ -111,19 +104,9 @@ final class SwitcherPreviewService {
         let windows = controller.currentWindows()
         refresh(
             windowIDs: Set(windows.map(\.id)),
-            workspaceNames: Set(controller.workspaces),
+            workspaceIDs: Set(controller.workspaces),
             priorityIDs: priorityIDs
         )
-    }
-
-    private func flushPendingWorkspaceThumbnails() {
-        guard !pendingWorkspaceNames.isEmpty else {
-            return
-        }
-
-        let workspaceNames = pendingWorkspaceNames
-        pendingWorkspaceNames.removeAll()
-        refreshWorkspaces(names: workspaceNames)
     }
 
     private func orderedWindowIDs(
@@ -159,18 +142,23 @@ final class SwitcherPreviewService {
         }
 
         notify(windowIDs: windowIDs)
-        pendingWorkspaceNames.formUnion(windowIDs.compactMap(controller.membership(for:)))
-        if !windowThumbnailCache.isRefreshing {
-            flushPendingWorkspaceThumbnails()
+        refreshWorkspaces(ids: Set(windowIDs.compactMap(controller.membership(for:))))
+    }
+
+    private func handleWindowThumbnailUpdated(_ windowID: WindowID) {
+        notify(windowIDs: [windowID])
+        guard let workspaceID = controller.membership(for: windowID) else {
+            return
         }
+        refreshWorkspaces(ids: [workspaceID], priorityIDs: [workspaceID])
     }
 
     private func notify(
         windowIDs: Set<WindowID> = [],
-        workspaceNames: Set<String> = []
+        workspaceIDs: Set<String> = []
     ) {
         pendingUpdatedWindowIDs.formUnion(windowIDs)
-        pendingUpdatedWorkspaceNames.formUnion(workspaceNames)
+        pendingUpdatedWorkspaceIDs.formUnion(workspaceIDs)
         guard !isUpdateNotificationScheduled else {
             return
         }
@@ -183,10 +171,10 @@ final class SwitcherPreviewService {
 
             let update = SwitcherPreviewUpdate(
                 windowIDs: pendingUpdatedWindowIDs,
-                workspaceNames: pendingUpdatedWorkspaceNames
+                workspaceIDs: pendingUpdatedWorkspaceIDs
             )
             pendingUpdatedWindowIDs.removeAll()
-            pendingUpdatedWorkspaceNames.removeAll()
+            pendingUpdatedWorkspaceIDs.removeAll()
             isUpdateNotificationScheduled = false
             onUpdate?(update)
         }

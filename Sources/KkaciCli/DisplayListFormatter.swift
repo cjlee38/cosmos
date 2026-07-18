@@ -1,5 +1,7 @@
-public enum DisplayListFormatter {
-    public static func lines(for topology: DisplayTopologySnapshot) -> [String] {
+import KkaciCore
+
+enum DisplayListFormatter {
+    static func lines(for topology: DisplayTopologySnapshot) -> [String] {
         topology.monitorSlots.sorted { $0.slot < $1.slot }.map { monitor in
             "\(monitor.slot) (\(monitor.display.name))  \(roleName(monitor.display.role))"
         }

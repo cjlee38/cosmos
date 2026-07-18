@@ -5,6 +5,12 @@ final class WorkspaceMonitorPopUpButton: NSPopUpButton {
     let workspaceID: WorkspaceID
     let currentDisplayID: DisplayID?
 
+    override var intrinsicContentSize: NSSize {
+        var size = super.intrinsicContentSize
+        size.height *= 1.5
+        return size
+    }
+
     init(
         workspaceID: WorkspaceID,
         currentMonitorSlot: MonitorSlot,
@@ -16,15 +22,18 @@ final class WorkspaceMonitorPopUpButton: NSPopUpButton {
 
         setAccessibilityIdentifier("kkaci.settings.workspace.\(workspaceID.rawValue).monitor")
         menu?.autoenablesItems = false
-        bezelStyle = .rounded
-        controlSize = .regular
+        bezelStyle = .badge
+        controlSize = .large
         font = .systemFont(ofSize: 12, weight: .medium)
+        wantsLayer = true
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.82).cgColor
+        layer?.cornerCurve = .continuous
         for display in displays.sorted(by: displayOrder) {
             let option = WorkspaceDisplayOption(display: display)
             addItem(withTitle: option.title)
             let item = itemArray[itemArray.count - 1]
             item.representedObject = display.id
-            item.isEnabled = option.isEnabled
             if display.monitorSlot == currentMonitorSlot {
                 select(item)
             }
@@ -36,13 +45,20 @@ final class WorkspaceMonitorPopUpButton: NSPopUpButton {
         }
     }
 
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = bounds.height / 2
+    }
+
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func displayOrder(_ lhs: WorkspaceSettingsDisplay, _ rhs: WorkspaceSettingsDisplay) -> Bool {
-        (lhs.monitorSlot ?? .max) < (rhs.monitorSlot ?? .max)
+    private func displayOrder(_ lhs: WorkspaceSettingsDisplay, _ rhs: WorkspaceSettingsDisplay)
+        -> Bool
+    {
+        lhs.monitorSlot < rhs.monitorSlot
     }
 }
 
@@ -75,25 +91,6 @@ final class WorkspaceRemoveButton: NSButton {
 }
 
 enum WorkspaceSettingsControlFactory {
-    static func header() -> NSView {
-        let icon = NSImageView()
-        icon.image = NSImage(systemSymbolName: "rectangle.3.group.fill", accessibilityDescription: "Workspaces")
-        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
-        icon.contentTintColor = .labelColor
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 28).isActive = true
-
-        let title = NSTextField(labelWithString: "Workspaces")
-        title.font = .systemFont(ofSize: 22, weight: .bold)
-
-        let header = NSStackView(views: [icon, title])
-        header.orientation = .horizontal
-        header.alignment = .centerY
-        header.spacing = 10
-        return header
-    }
-
     static func configErrorNotice(label: NSTextField) -> NSStackView {
         let icon = NSImageView()
         icon.image = NSImage(
@@ -141,19 +138,6 @@ enum WorkspaceSettingsControlFactory {
         row.alignment = .centerY
         row.spacing = 7
         return row
-    }
-
-    static func titledSection(title: String, content: NSView) -> NSView {
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.textColor = .secondaryLabelColor
-
-        let section = NSStackView(views: [titleLabel, content])
-        section.orientation = .vertical
-        section.alignment = .leading
-        section.spacing = 8
-        content.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
-        return section
     }
 
     static func switcherRow(
@@ -241,10 +225,12 @@ enum WorkspaceSettingsControlFactory {
         action: Selector
     ) -> NSButton {
         let button = WorkspaceRemoveButton(workspaceID: workspaceID)
-        button.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
+        button.image = NSImage(
+            systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
         button.imagePosition = .imageOnly
         button.bezelStyle = .accessoryBarAction
-        button.toolTip = isEnabled
+        button.toolTip =
+            isEnabled
             ? "Delete Workspace \(workspaceID.rawValue)"
             : "At least one workspace is required"
         button.target = target

@@ -12,9 +12,11 @@ class WorkspaceHeadlessIntegrationTestCase: XCTestCase {
         recordStore: FileHiddenWindowRecordStore
     ) throws -> WorkspaceController {
         let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.yaml"))
+        let displayProvider = FakeDisplayProvider(point: hidePoint)
         return WorkspaceController(
             windowSystem: windowSystem,
-            displayProvider: FakeDisplayProvider(point: hidePoint),
+            displayProvider: displayProvider,
+            hidePointProvider: displayProvider,
             configStore: configStore,
             recordStore: recordStore
         )
@@ -45,6 +47,30 @@ class WorkspaceHeadlessIntegrationTestCase: XCTestCase {
             )
         ]
     }
+
+    @discardableResult
+    func moveWindow(
+        _ id: WindowID,
+        to workspace: String,
+        controller: WorkspaceController,
+        windowSystem: FakeWindowSystem
+    ) throws -> WindowMoveResult? {
+        let originalWorkspace = controller.currentWorkspace
+        if controller.membership(for: id) == workspace {
+            return nil
+        }
+        if let sourceWorkspace = controller.membership(for: id),
+           sourceWorkspace != controller.currentWorkspace {
+            _ = try controller.switchWorkspace(to: sourceWorkspace)
+        }
+        windowSystem.focusedWindow = id
+        _ = try controller.handleFocusedWindowChanged()
+        let result = try controller.moveFocusedWindow(to: workspace)
+        if controller.currentWorkspace != originalWorkspace {
+            _ = try controller.switchWorkspace(to: originalWorkspace)
+        }
+        return result
+    }
 }
 
 final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestCase {
@@ -57,8 +83,8 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
-        _ = try firstController.bootstrapWindowState(defaultWorkspace: "1")
-        try firstController.assignWindow(200, to: "2")
+        _ = try firstController.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
         try firstRecordStore.flushPendingWrites()
         XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
         XCTAssertEqual(firstSystem.positions[200], hidePoint)
@@ -71,7 +97,7 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.bootstrapWindowState(defaultWorkspace: "1")
+        let startup = try secondController.bootstrapWindowState()
         try secondRecordStore.flushPendingWrites()
 
         XCTAssertTrue(startup.restored.isEmpty)
@@ -92,15 +118,18 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
-        _ = try firstController.bootstrapWindowState(defaultWorkspace: "1")
-        try firstController.assignWindow(200, to: "2")
+        _ = try firstController.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
         try firstRecordStore.flushPendingWrites()
         XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
 
         let result = try firstController.restoreAllHiddenWindows()
         try firstController.restoreHiddenWindowsForShutdown()
 
-        XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [200], skipped: []))
+        XCTAssertEqual(
+            result,
+            RestoreAllHiddenWindowsResult(restored: [200], unavailable: [], failed: [])
+        )
         XCTAssertEqual(firstSystem.frames[200], window200Frame)
         XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
         XCTAssertTrue(try firstRecordStore.loadRecords().isEmpty)
@@ -109,7 +138,7 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.bootstrapWindowState(defaultWorkspace: "1")
+        let startup = try secondController.bootstrapWindowState()
         try secondRecordStore.flushPendingWrites()
 
         XCTAssertTrue(startup.isEmpty)
@@ -128,8 +157,8 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let firstRecordStore = recordStore(in: directory)
         let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
 
-        _ = try firstController.bootstrapWindowState(defaultWorkspace: "1")
-        try firstController.assignWindow(200, to: "2")
+        _ = try firstController.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
         try firstRecordStore.flushPendingWrites()
         XCTAssertEqual(firstSystem.positions[200], hidePoint)
 
@@ -138,7 +167,7 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.bootstrapWindowState(defaultWorkspace: "1")
+        let startup = try secondController.bootstrapWindowState()
         XCTAssertEqual(startup.restored, [200])
         try secondRecordStore.flushPendingWrites()
 
@@ -157,8 +186,8 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let recordStore = recordStore(in: directory)
         let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
 
-        _ = try controller.bootstrapWindowState(defaultWorkspace: "1")
-        try controller.assignWindow(200, to: "2")
+        _ = try controller.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         _ = try controller.switchWorkspace(to: "1")
         try recordStore.flushPendingWrites()
         XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200])
@@ -183,8 +212,8 @@ final class WorkspaceHeadlessIntegrationTests: WorkspaceHeadlessIntegrationTestC
         let recordStore = recordStore(in: directory)
         let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
 
-        _ = try controller.bootstrapWindowState(defaultWorkspace: "1")
-        try controller.assignWindow(200, to: "2")
+        _ = try controller.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         _ = try controller.switchWorkspace(to: "2")
 
         let newWindow = WindowSnapshot.window(
@@ -227,20 +256,20 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
-        _ = try firstController.bootstrapWindowState(defaultWorkspace: "1")
-        try firstController.assignWindow(200, to: "D")
+        _ = try firstController.bootstrapWindowState()
+        try moveWindow(200, to: "D", controller: firstController, windowSystem: firstSystem)
         try firstRecordStore.flushPendingWrites()
         try firstController.restoreHiddenWindowsForShutdown()
 
         let persistedConfig = try configStore.load()
-        XCTAssertEqual(persistedConfig.workspaceIDs, ["1", "2", "3", "D"])
+        XCTAssertEqual(persistedConfig.workspaces.map(\.id), ["1", "2", "3", "D"])
         XCTAssertEqual(try firstRecordStore.loadRecords().map(\.workspace), ["D"])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.bootstrapWindowState(defaultWorkspace: "1")
+        let startup = try secondController.bootstrapWindowState()
         try secondRecordStore.flushPendingWrites()
 
         XCTAssertEqual(secondController.workspaces, ["1", "2", "3", "D"])
@@ -258,8 +287,8 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let firstRecordStore = recordStore(in: directory)
         let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
 
-        _ = try firstController.bootstrapWindowState(defaultWorkspace: "1")
-        try firstController.assignWindow(200, to: "2")
+        _ = try firstController.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
         try firstRecordStore.flushPendingWrites()
         XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
 
@@ -275,7 +304,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let secondRecordStore = recordStore(in: directory)
         let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
 
-        let startup = try secondController.bootstrapWindowState(defaultWorkspace: "1")
+        let startup = try secondController.bootstrapWindowState()
 
         XCTAssertTrue(startup.isEmpty)
         XCTAssertEqual(secondController.membership(for: 100), "1")
@@ -298,16 +327,19 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let window200Frame = try XCTUnwrap(windowSystem.frames[200])
         let window300Frame = try XCTUnwrap(windowSystem.frames[300])
 
-        _ = try controller.bootstrapWindowState(defaultWorkspace: "1")
-        try controller.assignWindow(200, to: "2")
-        try controller.assignWindow(300, to: "3")
+        _ = try controller.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        try moveWindow(300, to: "3", controller: controller, windowSystem: windowSystem)
         try recordStore.flushPendingWrites()
         XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200, 300])
 
         let result = try controller.restoreAllHiddenWindows()
         try controller.restoreHiddenWindowsForShutdown()
 
-        XCTAssertEqual(result, RestoreAllHiddenWindowsResult(restored: [200, 300], skipped: []))
+        XCTAssertEqual(
+            result,
+            RestoreAllHiddenWindowsResult(restored: [200, 300], unavailable: [], failed: [])
+        )
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
         XCTAssertFalse(controller.isHiddenByWorkspace(300))
         XCTAssertEqual(windowSystem.frames[200], window200Frame)

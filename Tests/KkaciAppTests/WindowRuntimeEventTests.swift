@@ -4,6 +4,46 @@ import KkaciCore
 import XCTest
 
 final class WindowRuntimeEventTests: XCTestCase {
+    func testEventBufferDeduplicatesEventsIntoOneDelivery() {
+        let event = WindowRuntimeEvent(kind: .thumbnailChanged, windowID: 100)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.append(event)
+        buffer.append(event)
+
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertFalse(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [event])
+        XCTAssertNil(buffer.takeDelivery())
+    }
+
+    func testEventBufferDefersDeliveryUntilWindowDragEnds() {
+        let event = WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.beginWindowDrag()
+        buffer.append(event)
+
+        XCTAssertFalse(buffer.reserveDelivery())
+        buffer.endWindowDrag()
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [event])
+    }
+
+    func testEventBufferKeepsReservedEventsWhenDragStartsBeforeDelivery() {
+        let event = WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.append(event)
+        XCTAssertTrue(buffer.reserveDelivery())
+        buffer.beginWindowDrag()
+
+        XCTAssertNil(buffer.takeDelivery())
+        buffer.endWindowDrag()
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [event])
+    }
+
     func testResizeRequiresLayoutSyncAndThumbnailCapture() {
         let kinds = WindowRuntimeEventKind.kinds(
             forAXNotification: kAXWindowResizedNotification as String
@@ -41,23 +81,6 @@ final class WindowRuntimeEventTests: XCTestCase {
         )
     }
 
-    func testFocusSuppressionSurvivesUnrelatedEventsAndIsConsumedOnce() {
-        var suppression = FocusSyncSuppression()
-        suppression.suppress(100)
-
-        XCTAssertFalse(suppression.shouldFollow(requested: false, focusedWindowID: 100))
-        XCTAssertFalse(suppression.shouldFollow(requested: true, focusedWindowID: 100))
-        XCTAssertTrue(suppression.shouldFollow(requested: true, focusedWindowID: 100))
-    }
-
-    func testFocusSuppressionAllowsAndConsumesADifferentFocusedWindow() {
-        var suppression = FocusSyncSuppression()
-        suppression.suppress(100)
-
-        XCTAssertTrue(suppression.shouldFollow(requested: true, focusedWindowID: 200))
-        XCTAssertTrue(suppression.shouldFollow(requested: true, focusedWindowID: 100))
-    }
-
     func testSuccessfulWindowEventAlwaysRefreshesSwitcherContent() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "Window")
@@ -70,7 +93,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             refreshSwitcherContent: {
                 switcherRefreshCount += 1
             },
-            refreshSurfaces: {
+            refreshStatusSurfaces: {
                 surfaceRefreshCount += 1
             }
         )
@@ -88,11 +111,29 @@ final class WindowRuntimeEventTests: XCTestCase {
             makeSwitcherTestWindow(id: 100, title: "One"),
             makeSwitcherTestWindow(id: 200, title: "Two")
         ])
-        try controller.assignWindow(200, to: "2")
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindowIDValue = 200
         let handler = makeHandler(controller: controller)
 
         handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
+        ]))
+
+        XCTAssertEqual(controller.currentWorkspace, "2")
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+    }
+
+    func testDisplayAndFocusEventsInOneBatchBothApply() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "One"),
+            makeSwitcherTestWindow(id: 200, title: "Two")
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.focusedWindowIDValue = 200
+        let handler = makeHandler(controller: controller)
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .displayChanged, windowID: nil),
             WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
         ]))
 
@@ -105,7 +146,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             makeSwitcherTestWindow(id: 100, title: "One"),
             makeSwitcherTestWindow(id: 200, title: "Two")
         ])
-        try controller.assignWindow(200, to: "2")
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindowIDValue = 200
         let handler = makeHandler(controller: controller)
 
@@ -148,7 +189,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             makeSwitcherTestWindow(id: 100, title: "One"),
             makeSwitcherTestWindow(id: 200, title: "Two")
         ])
-        try controller.assignWindow(200, to: "2")
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindowIDValue = 200
         windowSystem.frameWriteFailures.insert(200)
         var switcherRefreshCount = 0
@@ -157,7 +198,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             controller: controller,
             previewService: makeSwitcherTestPreviewService(controller: controller),
             refreshSwitcherContent: { switcherRefreshCount += 1 },
-            refreshSurfaces: { surfaceRefreshCount += 1 }
+            refreshStatusSurfaces: { surfaceRefreshCount += 1 }
         )
 
         handler.handle(WindowRuntimeEventBatch(events: [
@@ -177,7 +218,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             controller: controller,
             previewService: previewService ?? makeSwitcherTestPreviewService(controller: controller),
             refreshSwitcherContent: {},
-            refreshSurfaces: {}
+            refreshStatusSurfaces: {}
         )
     }
 }

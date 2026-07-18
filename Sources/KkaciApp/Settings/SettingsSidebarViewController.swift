@@ -1,7 +1,7 @@
 import AppKit
 
 final class SettingsSidebarViewController: NSViewController {
-    var onSelectionChanged: ((SettingsSection) -> Void)?
+    var onSelectionChanged: ((SettingsSection) -> Bool)?
 
     private let sections = SettingsSection.allCases
     private var buttons: [SettingsSection: SettingsSidebarButton] = [:]
@@ -50,8 +50,10 @@ final class SettingsSidebarViewController: NSViewController {
             return
         }
         let section = sections[sender.tag]
+        guard onSelectionChanged?(section) != false else {
+            return
+        }
         select(section)
-        onSelectionChanged?(section)
     }
 }
 

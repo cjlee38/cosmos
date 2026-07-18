@@ -1,7 +1,6 @@
 import Foundation
 
 enum WorkspaceError: Error, Equatable, CustomStringConvertible {
-    case invalidWorkspaceName(String)
     case displayNotFound(DisplayID)
     case windowNotFound(WindowID)
     case windowNotInCurrentWorkspace(WindowID, String)
@@ -11,8 +10,6 @@ enum WorkspaceError: Error, Equatable, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case let .invalidWorkspaceName(workspace):
-            "Invalid workspace name: \(workspace)"
         case let .displayNotFound(displayID):
             "Display not found: \(displayID)"
         case let .windowNotFound(id):
@@ -51,24 +48,9 @@ struct ShutdownRestoreError: Error, CustomStringConvertible {
     }
 }
 
-public enum RestoreResult: Equatable {
+enum RestoreResult: Equatable {
     case restored
     case alreadyVisible
-}
-
-public struct WorkspaceSwitchResult {
-    public let workspace: String
-    public let sync: WorkspaceSyncSummary
-
-    public init(workspace: String, sync: WorkspaceSyncSummary) {
-        self.workspace = workspace
-        self.sync = sync
-    }
-}
-
-public enum WindowFocusResult: Equatable {
-    case focused(WindowID)
-    case noWindowsInWorkspace(String)
 }
 
 public enum FocusedWindowWorkspaceSyncResult: Equatable {
@@ -78,33 +60,77 @@ public enum FocusedWindowWorkspaceSyncResult: Equatable {
     case switched(windowID: WindowID, workspace: String)
 }
 
+public enum WindowMoveOutcome: Equatable {
+    case moved
+    case alreadyInWorkspace
+}
+
 public struct WindowMoveResult: Equatable {
     public let windowID: WindowID
+    public let previousWorkspace: String
     public let workspace: String
+    public let outcome: WindowMoveOutcome
 
-    public init(windowID: WindowID, workspace: String) {
+    public init(
+        windowID: WindowID,
+        previousWorkspace: String,
+        workspace: String,
+        outcome: WindowMoveOutcome
+    ) {
         self.windowID = windowID
+        self.previousWorkspace = previousWorkspace
+        self.workspace = workspace
+        self.outcome = outcome
+    }
+}
+
+public struct WorkspaceMembershipChange: Equatable {
+    public let windowID: WindowID
+    public let previousWorkspace: String?
+    public let workspace: String?
+
+    public init(windowID: WindowID, previousWorkspace: String?, workspace: String?) {
+        self.windowID = windowID
+        self.previousWorkspace = previousWorkspace
         self.workspace = workspace
     }
 }
 
 public struct WorkspaceSyncSummary {
-    public let autoAssigned: [(WindowID, String)]
-    public let removed: [WindowID]
+    public let membershipChanges: [WorkspaceMembershipChange]
 
-    public init(autoAssigned: [(WindowID, String)], removed: [WindowID]) {
-        self.autoAssigned = autoAssigned
-        self.removed = removed
+    public init(membershipChanges: [WorkspaceMembershipChange]) {
+        self.membershipChanges = membershipChanges
+    }
+
+    public var autoAssigned: [(WindowID, String)] {
+        membershipChanges.compactMap { change in
+            guard change.previousWorkspace == nil, let workspace = change.workspace else {
+                return nil
+            }
+            return (change.windowID, workspace)
+        }
+    }
+
+    public var removed: [WindowID] {
+        membershipChanges.compactMap { change in
+            change.workspace == nil ? change.windowID : nil
+        }
+    }
+
+    public var affectedWindowIDs: Set<WindowID> {
+        Set(membershipChanges.map(\.windowID))
+    }
+
+    public var affectedWorkspaces: Set<String> {
+        Set(membershipChanges.flatMap { change in
+            [change.previousWorkspace, change.workspace].compactMap { $0 }
+        })
     }
 
     public var isEmpty: Bool {
-        autoAssigned.isEmpty && removed.isEmpty
+        membershipChanges.isEmpty
     }
-}
-
-struct WindowDiscoveryResult {
-    let windows: [WindowSnapshot]
-    let sync: WorkspaceSyncSummary
 }
 
 public struct ExternalWindowEventResult {
@@ -120,12 +146,33 @@ public struct ExternalWindowEventResult {
     }
 }
 
+public enum ExternalWindowFocusPolicy {
+    case never
+    case always
+    case visibleFocusedWindow
+}
+
+public struct ExternalWindowChange {
+    public let displayConfigurationChanged: Bool
+    public let focusPolicy: ExternalWindowFocusPolicy
+
+    public init(
+        displayConfigurationChanged: Bool = false,
+        focusPolicy: ExternalWindowFocusPolicy = .never
+    ) {
+        self.displayConfigurationChanged = displayConfigurationChanged
+        self.focusPolicy = focusPolicy
+    }
+}
+
 public struct RestoreAllHiddenWindowsResult: Equatable {
     public let restored: [WindowID]
-    public let skipped: [WindowID]
+    public let unavailable: [WindowID]
+    public let failed: [WindowID]
 
-    public init(restored: [WindowID], skipped: [WindowID]) {
+    public init(restored: [WindowID], unavailable: [WindowID], failed: [WindowID]) {
         self.restored = restored
-        self.skipped = skipped
+        self.unavailable = unavailable
+        self.failed = failed
     }
 }

@@ -41,7 +41,7 @@ final class SwitcherOutsideClickMonitor {
     fileprivate func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         switch type {
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            guard isActive, !overlayFrame.contains(NSEvent.mouseLocation) else {
+            guard isActive, Self.isOutsideClick(at: event.unflippedLocation, overlayFrame: overlayFrame) else {
                 return Unmanaged.passUnretained(event)
             }
 
@@ -58,6 +58,10 @@ final class SwitcherOutsideClickMonitor {
         default:
             return Unmanaged.passUnretained(event)
         }
+    }
+
+    static func isOutsideClick(at location: CGPoint, overlayFrame: CGRect) -> Bool {
+        !overlayFrame.contains(location)
     }
 
     private func createEventTap() {

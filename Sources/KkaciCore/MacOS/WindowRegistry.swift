@@ -10,13 +10,14 @@ public final class WindowRegistry: WindowSystem {
     }
 
     @discardableResult
-    public func refresh() -> [WindowSnapshot] {
-        let handles = axClient.enumerateWindows()
-        handlesByID = Dictionary(uniqueKeysWithValues: handles.map { ($0.id, $0) })
+    public func refresh() throws -> [WindowSnapshot] {
+        let handles = try axClient.enumerateWindows()
         let frontToBackIndex = CGWindowStackOrder.frontToBackIndexByWindowID()
-        return handles.map(axClient.snapshot).sorted {
+        let windows = handles.map(axClient.snapshot).sorted {
             Self.sortByFrontToBackOrder($0, $1, frontToBackIndex: frontToBackIndex)
         }
+        handlesByID = Dictionary(uniqueKeysWithValues: handles.map { ($0.id, $0) })
+        return windows
     }
 
     func handle(for id: WindowID) -> WindowHandle? {
@@ -59,7 +60,7 @@ public final class WindowRegistry: WindowSystem {
         axClient.focus(handle)
     }
 
-    private static func sortByFrontToBackOrder(
+    static func sortByFrontToBackOrder(
         _ lhs: WindowSnapshot,
         _ rhs: WindowSnapshot,
         frontToBackIndex: [WindowID: Int]

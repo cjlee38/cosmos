@@ -1,55 +1,48 @@
 import Foundation
 
 struct WorkspaceCatalog {
-    private(set) var currentWorkspace: String
-    private var workspaceOrder: [String]
-    private var monitorSlotsByWorkspace: [String: MonitorSlot]
-    private var visibleWorkspaceByMonitorSlot: [MonitorSlot: String]
+    private(set) var config: KkaciConfig
+    private(set) var currentWorkspace: WorkspaceID
+    private var visibleWorkspaceByMonitorSlot: [MonitorSlot: WorkspaceID]
 
-    init(workspaces: [WorkspaceConfig]) {
-        workspaceOrder = workspaces.map(\.id.rawValue)
-        currentWorkspace = workspaces[0].id.rawValue
-        monitorSlotsByWorkspace = Dictionary(uniqueKeysWithValues: workspaces.map {
-            ($0.id.rawValue, $0.display)
-        })
+    init(config: KkaciConfig) {
+        self.config = config
+        currentWorkspace = config.workspaces[0].id
         visibleWorkspaceByMonitorSlot = [
-            workspaces[0].display: workspaces[0].id.rawValue
+            config.workspaces[0].display: config.workspaces[0].id
         ]
         seedVisibleWorkspaces()
     }
 
-    var workspaces: [String] {
-        workspaceOrder
+    var workspaces: [WorkspaceID] {
+        config.workspaces.map(\.id)
     }
 
-    func contains(_ workspace: String) -> Bool {
-        workspaceOrder.contains(workspace)
+    func contains(_ workspace: WorkspaceID) -> Bool {
+        config.workspaces.contains { $0.id == workspace }
     }
 
-    mutating func apply(_ workspaces: [WorkspaceConfig]) {
-        workspaceOrder = workspaces.map(\.id.rawValue)
-        monitorSlotsByWorkspace = Dictionary(uniqueKeysWithValues: workspaces.map {
-            ($0.id.rawValue, $0.display)
-        })
-        if !workspaceOrder.contains(currentWorkspace) {
-            currentWorkspace = workspaceOrder[0]
+    mutating func apply(_ config: KkaciConfig) {
+        self.config = config
+        if !contains(currentWorkspace) {
+            currentWorkspace = config.workspaces[0].id
         }
         pruneVisibleWorkspaces()
         visibleWorkspaceByMonitorSlot[monitorSlot(for: currentWorkspace)] = currentWorkspace
         seedVisibleWorkspaces()
     }
 
-    mutating func activate(_ workspace: String) {
+    mutating func activate(_ workspace: WorkspaceID) {
         currentWorkspace = workspace
         visibleWorkspaceByMonitorSlot[monitorSlot(for: workspace)] = workspace
     }
 
-    func monitorSlot(for workspace: String) -> MonitorSlot {
-        monitorSlotsByWorkspace[workspace] ?? 1
+    func monitorSlot(for workspace: WorkspaceID) -> MonitorSlot {
+        config.workspaces.first { $0.id == workspace }?.display ?? 1
     }
 
     func effectiveMonitorSlot(
-        for workspace: String,
+        for workspace: WorkspaceID,
         availableMonitorSlots: Set<MonitorSlot>
     ) -> MonitorSlot {
         let homeSlot = monitorSlot(for: workspace)
@@ -59,7 +52,7 @@ struct WorkspaceCatalog {
     func visibleWorkspace(
         on monitorSlot: MonitorSlot,
         availableMonitorSlots: Set<MonitorSlot>
-    ) -> String {
+    ) -> WorkspaceID {
         if effectiveMonitorSlot(
             for: currentWorkspace,
             availableMonitorSlots: availableMonitorSlots
@@ -68,13 +61,13 @@ struct WorkspaceCatalog {
         }
 
         return visibleWorkspaceByMonitorSlot[monitorSlot]
-            ?? workspaceOrder.first {
+            ?? workspaces.first {
                 effectiveMonitorSlot(for: $0, availableMonitorSlots: availableMonitorSlots) == monitorSlot
             }
             ?? currentWorkspace
     }
 
-    func visibleWorkspaces(availableMonitorSlots: Set<MonitorSlot>) -> Set<String> {
+    func visibleWorkspaces(availableMonitorSlots: Set<MonitorSlot>) -> Set<WorkspaceID> {
         guard !availableMonitorSlots.isEmpty else {
             return [currentWorkspace]
         }
@@ -83,39 +76,15 @@ struct WorkspaceCatalog {
             for: currentWorkspace,
             availableMonitorSlots: availableMonitorSlots
         )
-        var result: Set<String> = [currentWorkspace]
+        var result: Set<WorkspaceID> = [currentWorkspace]
         for slot in availableMonitorSlots where slot != currentSlot {
             result.insert(visibleWorkspace(on: slot, availableMonitorSlots: availableMonitorSlots))
         }
-        return result.intersection(workspaceOrder)
-    }
-
-    func nextWorkspace(
-        after workspace: String,
-        on monitorSlot: MonitorSlot,
-        availableMonitorSlots: Set<MonitorSlot>
-    ) -> String {
-        let order = workspaceOrder.filter {
-            effectiveMonitorSlot(for: $0, availableMonitorSlots: availableMonitorSlots) == monitorSlot
-        }
-        return cycledValue(in: order, after: workspace, direction: .forward)
-            ?? visibleWorkspace(on: monitorSlot, availableMonitorSlots: availableMonitorSlots)
-    }
-
-    func previousWorkspace(
-        before workspace: String,
-        on monitorSlot: MonitorSlot,
-        availableMonitorSlots: Set<MonitorSlot>
-    ) -> String {
-        let order = workspaceOrder.filter {
-            effectiveMonitorSlot(for: $0, availableMonitorSlots: availableMonitorSlots) == monitorSlot
-        }
-        return cycledValue(in: order, after: workspace, direction: .backward)
-            ?? visibleWorkspace(on: monitorSlot, availableMonitorSlots: availableMonitorSlots)
+        return result.intersection(workspaces)
     }
 
     private mutating func seedVisibleWorkspaces() {
-        for workspace in workspaceOrder {
+        for workspace in workspaces {
             let slot = monitorSlot(for: workspace)
             if visibleWorkspaceByMonitorSlot[slot] == nil {
                 visibleWorkspaceByMonitorSlot[slot] = workspace
@@ -125,7 +94,7 @@ struct WorkspaceCatalog {
 
     private mutating func pruneVisibleWorkspaces() {
         visibleWorkspaceByMonitorSlot = visibleWorkspaceByMonitorSlot.reduce(into: [:]) { result, entry in
-            if workspaceOrder.contains(entry.value), monitorSlot(for: entry.value) == entry.key {
+            if contains(entry.value), monitorSlot(for: entry.value) == entry.key {
                 result[entry.key] = entry.value
             }
         }

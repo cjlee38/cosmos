@@ -2,18 +2,18 @@ import Foundation
 
 final class StartupHiddenWindowRecordApplier {
     private let windowSystem: any WindowSystem
-    private let windowStore: WindowRuntimeStore
+    private let windowCache: WindowStateCache
     private let recordRepository: HiddenWindowRecordRepository
     private let restorableFrameResolver: RestorableFrameResolver
 
     init(
         windowSystem: any WindowSystem,
-        windowStore: WindowRuntimeStore,
+        windowCache: WindowStateCache,
         recordRepository: HiddenWindowRecordRepository,
         restorableFrameResolver: RestorableFrameResolver
     ) {
         self.windowSystem = windowSystem
-        self.windowStore = windowStore
+        self.windowCache = windowCache
         self.recordRepository = recordRepository
         self.restorableFrameResolver = restorableFrameResolver
     }
@@ -29,32 +29,46 @@ final class StartupHiddenWindowRecordApplier {
         var restored: [WindowID] = []
         var reassigned: [HiddenWindowRecordAssignment] = []
         var ignored: [HiddenWindowRecord] = []
+        var failed: [WindowID] = []
 
         for record in records {
             let action = HiddenWindowRecordPolicy.startupAction(
                 for: record,
-                liveWindow: windowStore.snapshot(for: record.windowID)
+                liveWindow: windowCache.snapshot(for: record.windowID)
             )
             guard let targetWorkspace = action.workspace else {
                 ignored.append(record)
                 continue
             }
 
-            let workspace = state.findWorkspace(targetWorkspace) ?? state.currentWorkspace
+            let workspace = state.containsWorkspace(targetWorkspace) ? targetWorkspace : state.currentWorkspace
             if action.shouldRestore {
-                try windowSystem.setFrameOrMove(
-                    restorableFrameResolver.frameForRestore(record.originalFrame),
-                    for: record.windowID
-                )
+                do {
+                    try windowSystem.setFrameOrMove(
+                        restorableFrameResolver.frameForRestore(record.originalFrame),
+                        for: record.windowID
+                    )
+                } catch {
+                    failed.append(record.windowID)
+                    continue
+                }
                 restored.append(record.windowID)
             }
 
             state.assign(record.windowID, to: workspace)
-            reassigned.append(HiddenWindowRecordAssignment(windowID: record.windowID, workspace: workspace))
+            reassigned.append(HiddenWindowRecordAssignment(
+                windowID: record.windowID,
+                workspace: workspace
+            ))
             recordRepository.removeRecord(windowID: record.windowID, pid: record.pid)
         }
 
         try recordRepository.flushPendingWrites()
-        return HiddenWindowRecordStartupApplyResult(restored: restored, reassigned: reassigned, ignored: ignored)
+        return HiddenWindowRecordStartupApplyResult(
+            restored: restored,
+            reassigned: reassigned,
+            ignored: ignored,
+            failed: failed
+        )
     }
 }

@@ -4,25 +4,22 @@ import Foundation
 public struct HiddenWindowRecord: Codable, Equatable {
     public let windowID: WindowID
     public let pid: pid_t
-    public let workspace: String
+    public let workspace: WorkspaceID
     public let originalFrame: WindowFrame
     public let hiddenPosition: CGPoint
-    public let updatedAt: Date
 
     public init(
         windowID: WindowID,
         pid: pid_t,
-        workspace: String,
+        workspace: WorkspaceID,
         originalFrame: WindowFrame,
-        hiddenPosition: CGPoint,
-        updatedAt: Date = Date()
+        hiddenPosition: CGPoint
     ) {
         self.windowID = windowID
         self.pid = pid
         self.workspace = workspace
         self.originalFrame = originalFrame
         self.hiddenPosition = hiddenPosition
-        self.updatedAt = updatedAt
     }
 }
 

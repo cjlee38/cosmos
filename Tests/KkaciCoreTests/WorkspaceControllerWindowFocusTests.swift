@@ -2,105 +2,7 @@ import CoreGraphics
 @testable import KkaciCore
 import XCTest
 
-final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
-    func testCaptureVisibleWindowsAssignsOnlyVisibleWindows() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two", isMinimized: true)
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = try controller.captureVisibleWindows(into: "1")
-
-        XCTAssertEqual(controller.membership(for: 100), "1")
-        XCTAssertNil(controller.membership(for: 200))
-    }
-
-    func testCaptureVisibleWindowsDoesNotRecaptureAWorkspaceHiddenWindow() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Visible"),
-            .window(id: 200, title: "Hidden")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = try controller.captureVisibleWindows(into: "1")
-        try controller.assignWindow(200, to: "2")
-
-        _ = try controller.captureVisibleWindows(into: "1")
-
-        XCTAssertEqual(controller.membership(for: 100), "1")
-        XCTAssertEqual(controller.membership(for: 200), "2")
-        XCTAssertTrue(controller.isHiddenByWorkspace(200))
-    }
-
-    func testNextWindowFocusesNextWindowInCurrentWorkspace() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two"),
-            .window(id: 300, title: "Three")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "1")
-        try controller.assignWindow(300, to: "2")
-        windowSystem.focusedWindow = 100
-
-        let result = controller.focusNextWindow()
-
-        XCTAssertEqual(result, .focused(200))
-        XCTAssertEqual(windowSystem.focusedIDs.last, 200)
-        XCTAssertEqual(controller.currentFocusedWindowID(), 200)
-    }
-
-    func testPreviousWindowWrapsInsideCurrentWorkspace() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One"),
-            .window(id: 200, title: "Two")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "1")
-        windowSystem.focusedWindow = 100
-
-        let result = controller.focusPreviousWindow()
-
-        XCTAssertEqual(result, .focused(200))
-        XCTAssertEqual(windowSystem.focusedIDs.last, 200)
-    }
-
-    func testNextWindowStartsAtFrontmostWindowWhenFocusIsOutsideCurrentWorkspace() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "Front"),
-            .window(id: 200, title: "Back")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "1")
-        windowSystem.focusedWindow = nil
-
-        XCTAssertEqual(controller.focusNextWindow(), .focused(100))
-    }
-
-    func testWindowFocusCycleReportsEmptyWorkspace() throws {
-        let windowSystem = FakeWindowSystem(windows: [
-            .window(id: 100, title: "One")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.discoverWindows()
-        _ = try controller.switchWorkspace(to: "2")
-
-        let result = controller.focusNextWindow()
-
-        XCTAssertEqual(result, .noWindowsInWorkspace("2"))
-    }
-
+final class WorkspaceWindowFocusTests: WorkspaceControllerTestCase {
     func testMoveFocusedWindowToInactiveWorkspaceHidesItAndFocusesNextSourceWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -108,14 +10,17 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(101, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(101, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         let result = try controller.moveFocusedWindow(to: "2")
 
-        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "2"))
+        XCTAssertEqual(
+            result,
+            WindowMoveResult(windowID: 100, previousWorkspace: "1", workspace: "2", outcome: .moved)
+        )
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertTrue(controller.isHiddenByWorkspace(100))
         XCTAssertFalse(controller.isHiddenByWorkspace(101))
@@ -129,8 +34,8 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         _ = try controller.moveFocusedWindow(to: "2")
@@ -149,13 +54,21 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         let result = try controller.moveFocusedWindow(to: "1")
 
-        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "1"))
+        XCTAssertEqual(
+            result,
+            WindowMoveResult(
+                windowID: 100,
+                previousWorkspace: "1",
+                workspace: "1",
+                outcome: .alreadyInWorkspace
+            )
+        )
         XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
@@ -177,14 +90,17 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(101, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(101, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         let result = try controller.moveFocusedWindow(to: "A")
 
-        XCTAssertEqual(result, WindowMoveResult(windowID: 100, workspace: "A"))
+        XCTAssertEqual(
+            result,
+            WindowMoveResult(windowID: 100, previousWorkspace: "1", workspace: "A", outcome: .moved)
+        )
         XCTAssertEqual(controller.membership(for: 100), "A")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1050, y: 50, width: 150, height: 100))
@@ -207,8 +123,8 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         _ = try controller.moveFocusedWindow(to: "B")
@@ -238,27 +154,30 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
         windowSystem.frames[100] = .frame(x: 1050, y: 50, width: 150, height: 100)
 
-        _ = try controller.handleFocusedWindowChanged()
+        let result = try controller.handleWindowLayoutChanged()
 
         XCTAssertEqual(controller.membership(for: 100), "A")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertEqual(controller.currentWorkspace, "A")
+        XCTAssertEqual(
+            result.sync.membershipChanges,
+            [WorkspaceMembershipChange(windowID: 100, previousWorkspace: "1", workspace: "A")]
+        )
     }
 
     func testMoveFocusedWindowToMissingWorkspaceIsNoOp() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
-        let store = InMemoryWorkspaceConfigStore()
-        let controller = makeController(windowSystem, configStore: store)
+        let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         let result = try controller.moveFocusedWindow(to: "dev")
@@ -266,12 +185,30 @@ final class WorkspaceWindowCycleFocusTests: WorkspaceControllerTestCase {
         XCTAssertNil(result)
         XCTAssertEqual(controller.workspaces, ["1", "2", "3"])
         XCTAssertEqual(controller.membership(for: 100), "1")
-        XCTAssertTrue(store.savedConfigs.isEmpty)
         XCTAssertTrue(windowSystem.focusedIDs.isEmpty)
     }
 }
 
 final class WorkspaceExternalFocusTests: WorkspaceControllerTestCase {
+    func testLayoutChangeDoesNotFollowAWorkspaceHiddenFocusedWindow() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One"),
+            .window(id: 200, title: "Two")
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.focusedWindow = 200
+
+        let result = try controller.handleWindowLayoutChanged()
+
+        XCTAssertNil(result.focusedWindowSync)
+        XCTAssertEqual(controller.currentWorkspace, "1")
+        XCTAssertTrue(controller.isHiddenByWorkspace(200))
+    }
+
     func testFocusedWindowInOtherWorkspaceSwitchesCurrentWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),
@@ -279,9 +216,9 @@ final class WorkspaceExternalFocusTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "2")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 200
 
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
@@ -301,10 +238,10 @@ final class WorkspaceExternalFocusTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(201, to: "2")
-        try controller.assignWindow(200, to: "2")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(201, to: "2", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 201
 
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
@@ -319,8 +256,8 @@ final class WorkspaceExternalFocusTests: WorkspaceControllerTestCase {
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
 
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
@@ -329,18 +266,19 @@ final class WorkspaceExternalFocusTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.currentWorkspace, "1")
     }
 
-    func testUnassignedFocusedWindowDoesNotSwitchWorkspace() throws {
+    func testVisibleFocusedWindowIsAssignedBeforeFocusSync() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One")
         ])
         let controller = makeController(windowSystem)
 
-        _ = controller.discoverWindows()
+        _ = try controller.handleWindowSetChanged()
         windowSystem.focusedWindow = 100
 
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
 
-        XCTAssertEqual(result, .unmanagedWindow(100))
+        XCTAssertEqual(result, .alreadyActive(windowID: 100, workspace: "1"))
+        XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertEqual(controller.currentWorkspace, "1")
     }
 }

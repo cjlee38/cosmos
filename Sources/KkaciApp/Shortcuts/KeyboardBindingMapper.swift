@@ -1,4 +1,3 @@
-import Foundation
 import KkaciCore
 
 protocol KeyboardShortcutActionHandling: AnyObject {
@@ -6,163 +5,141 @@ protocol KeyboardShortcutActionHandling: AnyObject {
     func commitWorkspaceSwitcher()
     func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool)
     func commitWindowSwitcher()
-    func switchWorkspace(named workspace: String)
-    func moveFocusedWindow(to workspace: String)
+    func cancelSwitcher()
+    func switchWorkspace(to workspace: WorkspaceID)
+    func moveFocusedWindow(to workspace: WorkspaceID)
 }
 
 final class KeyboardBindingMapper {
     func registrations(
-        for bindings: [HotKeyBinding],
+        for shortcuts: [ConfiguredShortcut],
         actions: any KeyboardShortcutActionHandling
-    ) throws -> [KeyboardShortcutRegistration] {
-        try bindings.map { binding in
-            try registration(for: binding, actions: actions)
+    ) -> [KeyboardShortcutRegistration] {
+        shortcuts.map { shortcut in
+            registration(for: shortcut, actions: actions)
         }
     }
 
     private func registration(
-        for binding: HotKeyBinding,
+        for shortcut: ConfiguredShortcut,
         actions: any KeyboardShortcutActionHandling
-    ) throws -> KeyboardShortcutRegistration {
-        switch binding.command.lowercased() {
-        case "next-workspace":
-            return workspaceSwitcherRegistration(
-                binding,
+    ) -> KeyboardShortcutRegistration {
+        switch shortcut.target {
+        case .workspaceSwitcherNext:
+            workspaceSwitcherRegistration(
+                shortcut,
                 name: "Cycle Workspace Forward",
-                target: .workspaceSwitcherNext,
                 direction: .forward,
                 actions: actions
             )
-        case "previous-workspace", "prev-workspace":
-            return workspaceSwitcherRegistration(
-                binding,
+        case .workspaceSwitcherPrevious:
+            workspaceSwitcherRegistration(
+                shortcut,
                 name: "Cycle Workspace Backward",
-                target: .workspaceSwitcherPrevious,
                 direction: .backward,
                 actions: actions
             )
-        case "next-window":
-            return windowSwitcherRegistration(
-                binding,
+        case .windowSwitcherNext:
+            windowSwitcherRegistration(
+                shortcut,
                 name: "Cycle Window Forward",
-                target: .windowSwitcherNext,
                 direction: .forward,
                 actions: actions
             )
-        case "previous-window", "prev-window":
-            return windowSwitcherRegistration(
-                binding,
+        case .windowSwitcherPrevious:
+            windowSwitcherRegistration(
+                shortcut,
                 name: "Cycle Window Backward",
-                target: .windowSwitcherPrevious,
                 direction: .backward,
                 actions: actions
             )
-        case "workspace":
-            let workspace = try workspaceName(from: binding)
-            return switchWorkspaceRegistration(binding, workspace: workspace, actions: actions)
-        case "move-window-to-workspace", "move-focused-window-to-workspace":
-            let workspace = try workspaceName(from: binding)
-            return moveFocusedWindowRegistration(binding, workspace: workspace, actions: actions)
-        default:
-            throw KeyboardBindingError.unknownCommand(binding.command)
+        case let .switchWorkspace(workspace):
+            switchWorkspaceRegistration(shortcut, workspace: workspace, actions: actions)
+        case let .moveWindow(workspace):
+            moveFocusedWindowRegistration(shortcut, workspace: workspace, actions: actions)
         }
     }
 
     private func workspaceSwitcherRegistration(
-        _ binding: HotKeyBinding,
+        _ shortcut: ConfiguredShortcut,
         name: String,
-        target: ShortcutTarget,
         direction: SwitcherDirection,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .hold(
-            key: binding.key,
+            key: shortcut.key,
             name: name,
-            target: target,
+            target: shortcut.target,
             releaseGroup: "workspace-switcher",
-            onPress: { [weak actions] in
-                actions?.stepWorkspaceSwitcher(direction: direction)
-            },
-            onRelease: { [weak actions] in
-                actions?.commitWorkspaceSwitcher()
-            }
+            actions: .init(
+                onPress: { [weak actions] in
+                    actions?.stepWorkspaceSwitcher(direction: direction)
+                },
+                onRelease: { [weak actions] in
+                    actions?.commitWorkspaceSwitcher()
+                },
+                onCancel: { [weak actions] in
+                    actions?.cancelSwitcher()
+                }
+            )
         )
     }
 
     private func windowSwitcherRegistration(
-        _ binding: HotKeyBinding,
+        _ shortcut: ConfiguredShortcut,
         name: String,
-        target: ShortcutTarget,
         direction: SwitcherDirection,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .hold(
-            key: binding.key,
+            key: shortcut.key,
             name: name,
-            target: target,
+            target: shortcut.target,
             releaseGroup: "window-switcher",
-            onPress: { [weak actions] in
-                actions?.stepWindowSwitcher(direction: direction, wraps: true)
-            },
-            onRepeat: { [weak actions] in
-                actions?.stepWindowSwitcher(direction: direction, wraps: false)
-            },
-            onRelease: { [weak actions] in
-                actions?.commitWindowSwitcher()
-            }
+            actions: .init(
+                onPress: { [weak actions] in
+                    actions?.stepWindowSwitcher(direction: direction, wraps: true)
+                },
+                onRepeat: { [weak actions] in
+                    actions?.stepWindowSwitcher(direction: direction, wraps: false)
+                },
+                onRelease: { [weak actions] in
+                    actions?.commitWindowSwitcher()
+                },
+                onCancel: { [weak actions] in
+                    actions?.cancelSwitcher()
+                }
+            )
         )
     }
 
     private func switchWorkspaceRegistration(
-        _ binding: HotKeyBinding,
+        _ shortcut: ConfiguredShortcut,
         workspace: WorkspaceID,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .press(
-            key: binding.key,
+            key: shortcut.key,
             name: "Switch to Workspace \(workspace.rawValue)",
-            target: .switchWorkspace(workspace),
+            target: shortcut.target,
             onPress: { [weak actions] in
-                actions?.switchWorkspace(named: workspace.rawValue)
+                actions?.switchWorkspace(to: workspace)
             }
         )
     }
 
     private func moveFocusedWindowRegistration(
-        _ binding: HotKeyBinding,
+        _ shortcut: ConfiguredShortcut,
         workspace: WorkspaceID,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .press(
-            key: binding.key,
+            key: shortcut.key,
             name: "Move Window to Workspace \(workspace.rawValue)",
-            target: .moveWindow(workspace),
+            target: shortcut.target,
             onPress: { [weak actions] in
-                actions?.moveFocusedWindow(to: workspace.rawValue)
+                actions?.moveFocusedWindow(to: workspace)
             }
         )
-    }
-
-    private func workspaceName(from binding: HotKeyBinding) throws -> WorkspaceID {
-        guard let workspace = binding.workspace?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let workspaceID = WorkspaceID(rawValue: workspace)
-        else {
-            throw KeyboardBindingError.missingWorkspace
-        }
-        return workspaceID
-    }
-}
-
-private enum KeyboardBindingError: Error, CustomStringConvertible {
-    case unknownCommand(String)
-    case missingWorkspace
-
-    var description: String {
-        switch self {
-        case let .unknownCommand(command):
-            "unknown command \(command)"
-        case .missingWorkspace:
-            "workspace command needs a workspace"
-        }
     }
 }

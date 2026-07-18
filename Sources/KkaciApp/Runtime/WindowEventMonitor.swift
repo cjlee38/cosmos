@@ -70,6 +70,43 @@ struct WindowRuntimeEventBatch {
     }
 }
 
+struct WindowRuntimeEventBuffer {
+    private(set) var events: Set<WindowRuntimeEvent> = []
+    private(set) var isWindowDragActive = false
+    private var isDeliveryScheduled = false
+
+    mutating func append(_ event: WindowRuntimeEvent) {
+        events.insert(event)
+    }
+
+    mutating func beginWindowDrag() {
+        isWindowDragActive = true
+    }
+
+    mutating func endWindowDrag() {
+        isWindowDragActive = false
+    }
+
+    mutating func reserveDelivery() -> Bool {
+        guard !isWindowDragActive, !isDeliveryScheduled, !events.isEmpty else {
+            return false
+        }
+        isDeliveryScheduled = true
+        return true
+    }
+
+    mutating func takeDelivery() -> Set<WindowRuntimeEvent>? {
+        isDeliveryScheduled = false
+        guard !isWindowDragActive, !events.isEmpty else {
+            return nil
+        }
+
+        let delivery = events
+        events.removeAll()
+        return delivery
+    }
+}
+
 final class WindowEventMonitor {
     private let onEvents: (WindowRuntimeEventBatch) -> Void
     private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] element, notification in
@@ -78,10 +115,9 @@ final class WindowEventMonitor {
 
     private var workspaceObserverTokens: [NSObjectProtocol] = []
     private var appObserverTokens: [NSObjectProtocol] = []
-    private var pendingEvents: Set<WindowRuntimeEvent> = []
-    private var deliveryScheduled = false
-    private var isWindowDragActive = false
-    private var mouseUpMonitor: Any?
+    private var eventBuffer = WindowRuntimeEventBuffer()
+    private var globalMouseUpMonitor: Any?
+    private var localMouseUpMonitor: Any?
 
     init(onEvents: @escaping (WindowRuntimeEventBatch) -> Void) {
         self.onEvents = onEvents
@@ -115,6 +151,14 @@ final class WindowEventMonitor {
 
         axObserverRegistry.stop()
         stopMouseUpMonitor()
+    }
+
+    func scheduleOwnWindowChanged(_ windowID: WindowID) {
+        if isLeftMouseButtonDown {
+            startOwnWindowDragIfNeeded()
+        }
+        schedule(.init(kind: .layoutChanged, windowID: windowID))
+        schedule(.init(kind: .thumbnailChanged, windowID: windowID))
     }
 
     private func observeRunningApplications() {
@@ -187,7 +231,7 @@ final class WindowEventMonitor {
             return
         }
         if isMouseDrivenLayoutNotification(notification), isLeftMouseButtonDown {
-            startWindowDragIfNeeded()
+            startExternalWindowDragIfNeeded()
         }
         let windowID = AXClient.windowID(for: element)
         for kind in kinds {
@@ -204,8 +248,8 @@ final class WindowEventMonitor {
         CGEventSource.buttonState(.combinedSessionState, button: .left)
     }
 
-    private func startWindowDragIfNeeded() {
-        guard !isWindowDragActive else {
+    private func startExternalWindowDragIfNeeded() {
+        guard !eventBuffer.isWindowDragActive else {
             return
         }
         guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] _ in
@@ -214,50 +258,60 @@ final class WindowEventMonitor {
             return
         }
 
-        isWindowDragActive = true
-        mouseUpMonitor = monitor
+        globalMouseUpMonitor = monitor
+        eventBuffer.beginWindowDrag()
+    }
+
+    private func startOwnWindowDragIfNeeded() {
+        guard !eventBuffer.isWindowDragActive else {
+            return
+        }
+        guard let monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event in
+            self?.finishWindowDrag()
+            return event
+        }) else {
+            return
+        }
+
+        localMouseUpMonitor = monitor
+        eventBuffer.beginWindowDrag()
     }
 
     private func finishWindowDrag() {
-        isWindowDragActive = false
+        eventBuffer.endWindowDrag()
         stopMouseUpMonitor()
         scheduleDelivery()
     }
 
     private func stopMouseUpMonitor() {
-        guard let mouseUpMonitor else {
-            return
+        if let globalMouseUpMonitor {
+            NSEvent.removeMonitor(globalMouseUpMonitor)
+            self.globalMouseUpMonitor = nil
         }
-        NSEvent.removeMonitor(mouseUpMonitor)
-        self.mouseUpMonitor = nil
+        if let localMouseUpMonitor {
+            NSEvent.removeMonitor(localMouseUpMonitor)
+            self.localMouseUpMonitor = nil
+        }
     }
 
     private func schedule(_ event: WindowRuntimeEvent) {
-        pendingEvents.insert(event)
+        eventBuffer.append(event)
         scheduleDelivery()
     }
 
     private func scheduleDelivery() {
-        guard !isWindowDragActive else {
-            return
-        }
-        guard !deliveryScheduled else {
+        guard eventBuffer.reserveDelivery() else {
             return
         }
 
-        deliveryScheduled = true
         DispatchQueue.main.async { [weak self] in
             guard let self else {
                 return
             }
 
-            deliveryScheduled = false
-            guard !isWindowDragActive else {
+            guard let events = eventBuffer.takeDelivery() else {
                 return
             }
-
-            let events = pendingEvents
-            pendingEvents.removeAll()
             onEvents(WindowRuntimeEventBatch(events: events))
         }
     }

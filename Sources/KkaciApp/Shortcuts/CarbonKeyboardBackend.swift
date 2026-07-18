@@ -8,7 +8,7 @@ enum CarbonKeyboardEvent {
 
 protocol CarbonKeyboardHandling: AnyObject {
     func start() throws
-    func replaceHotKeys(_ keystrokes: [Keystroke]) throws -> [String: UInt32]
+    func replaceHotKeys(_ keystrokes: [Keystroke]) throws -> [Keystroke: UInt32]
     func stop()
 }
 
@@ -17,7 +17,7 @@ final class CarbonKeyboardBackend {
 
     private let onEvent: (CarbonKeyboardEvent) -> Void
     private var hotKeyHandler: EventHandlerRef?
-    private var registrationsByKeystroke: [String: CarbonHotKeyRegistration] = [:]
+    private var registrationsByKeystroke: [Keystroke: CarbonHotKeyRegistration] = [:]
     private var nextHotKeyID: UInt32 = 1
 
     init(onEvent: @escaping (CarbonKeyboardEvent) -> Void) {
@@ -54,37 +54,37 @@ final class CarbonKeyboardBackend {
         }
     }
 
-    func replaceHotKeys(_ keystrokes: [Keystroke]) throws -> [String: UInt32] {
+    func replaceHotKeys(_ keystrokes: [Keystroke]) throws -> [Keystroke: UInt32] {
         precondition(hotKeyHandler != nil, "CarbonKeyboardBackend must be started before registering hotkeys")
 
-        let desiredKeystrokes = Dictionary(uniqueKeysWithValues: keystrokes.map { ($0.description, $0) })
-        let addedKeystrokes = keystrokes.filter { registrationsByKeystroke[$0.description] == nil }
-        var newlyRegistered: [String] = []
+        let desiredKeystrokes = Set(keystrokes)
+        let addedKeystrokes = keystrokes.filter { registrationsByKeystroke[$0] == nil }
+        var newlyRegistered: [Keystroke] = []
 
         do {
             for keystroke in addedKeystrokes {
                 let registration = try register(keystroke)
-                registrationsByKeystroke[keystroke.description] = registration
-                newlyRegistered.append(keystroke.description)
+                registrationsByKeystroke[keystroke] = registration
+                newlyRegistered.append(keystroke)
             }
         } catch {
-            for description in newlyRegistered {
-                unregister(description)
+            for keystroke in newlyRegistered {
+                unregister(keystroke)
             }
             throw error
         }
 
-        let removedDescriptions = registrationsByKeystroke.keys.filter { desiredKeystrokes[$0] == nil }
-        for description in removedDescriptions {
-            unregister(description)
+        let removedKeystrokes = registrationsByKeystroke.keys.filter { !desiredKeystrokes.contains($0) }
+        for keystroke in removedKeystrokes {
+            unregister(keystroke)
         }
 
         return Dictionary(uniqueKeysWithValues: registrationsByKeystroke.map { ($0.key, $0.value.id) })
     }
 
     func stop() {
-        for description in Array(registrationsByKeystroke.keys) {
-            unregister(description)
+        for keystroke in Array(registrationsByKeystroke.keys) {
+            unregister(keystroke)
         }
         removeHandler(&hotKeyHandler)
     }
@@ -144,8 +144,8 @@ final class CarbonKeyboardBackend {
         return CarbonHotKeyRegistration(id: id, ref: hotKeyRef)
     }
 
-    private func unregister(_ description: String) {
-        guard let registration = registrationsByKeystroke.removeValue(forKey: description) else {
+    private func unregister(_ keystroke: Keystroke) {
+        guard let registration = registrationsByKeystroke.removeValue(forKey: keystroke) else {
             return
         }
         UnregisterEventHotKey(registration.ref)

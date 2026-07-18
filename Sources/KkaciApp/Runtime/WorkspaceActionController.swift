@@ -7,13 +7,12 @@ final class WorkspaceActionController {
     private let controller: WorkspaceController
     private let previewService: SwitcherPreviewService
     private let appSettingsStore: AppSettingsStore
-    private let refreshSurfaces: () -> Void
-    private let suppressNextFocusSync: (WindowID) -> Void
+    private let refreshStatusSurfaces: () -> Void
     private lazy var switcherCoordinator = SwitcherCoordinator(
         controller: controller,
         previewService: previewService,
         refreshStatus: { [weak self] in
-            self?.refreshSurfaces()
+            self?.refreshStatusSurfaces()
         },
         makeOverlay: { [appSettingsStore] in
             SwitcherOverlayWindowController(appSettingsStore: appSettingsStore)
@@ -23,14 +22,12 @@ final class WorkspaceActionController {
         controller: WorkspaceController,
         previewService: SwitcherPreviewService,
         appSettingsStore: AppSettingsStore,
-        refreshSurfaces: @escaping () -> Void,
-        suppressNextFocusSync: @escaping (WindowID) -> Void
+        refreshStatusSurfaces: @escaping () -> Void
     ) {
         self.controller = controller
         self.previewService = previewService
         self.appSettingsStore = appSettingsStore
-        self.refreshSurfaces = refreshSurfaces
-        self.suppressNextFocusSync = suppressNextFocusSync
+        self.refreshStatusSurfaces = refreshStatusSurfaces
     }
 
     func stepWindowSwitcher(direction: SwitcherDirection, wraps: Bool) {
@@ -57,30 +54,29 @@ final class WorkspaceActionController {
         switcherCoordinator.handleContentChanged()
     }
 
-    func switchWorkspace(named workspace: String) {
+    func switchWorkspace(to workspace: WorkspaceID) {
         cancelSwitcher()
-        perform("Switched to workspace \(workspace)") {
-            try controller.switchWorkspace(to: workspace) != nil
+        perform("Switched to workspace \(workspace.rawValue)") {
+            try controller.switchWorkspace(to: workspace.rawValue) != nil
         }
     }
 
-    func moveFocusedWindow(to workspace: String) {
+    func moveFocusedWindow(to workspace: WorkspaceID) {
         cancelSwitcher()
         do {
-            let previousWorkspace = controller.focusedWindowID().flatMap(controller.membership(for:))
-            guard let result = try controller.moveFocusedWindow(to: workspace) else {
+            guard let result = try controller.moveFocusedWindow(to: workspace.rawValue) else {
                 return
             }
-            if result.workspace != controller.currentWorkspace {
-                suppressNextFocusSync(result.windowID)
+            guard result.outcome == .moved else {
+                return
             }
             previewService.refresh(
                 windowIDs: [result.windowID],
-                workspaceNames: Set([previousWorkspace, result.workspace].compactMap { $0 }),
+                workspaceIDs: [result.previousWorkspace, result.workspace],
                 priorityIDs: [result.windowID]
             )
             switcherCoordinator.handleContentChanged()
-            refreshSurfaces()
+            refreshStatusSurfaces()
             log.info("Moved \(result.windowID) to workspace \(result.workspace)")
         } catch {
             log.error("Move focused window failed: \(String(describing: error))")
@@ -90,12 +86,15 @@ final class WorkspaceActionController {
     func restoreAllHiddenWindows() {
         do {
             let result = try controller.restoreAllHiddenWindows()
-            log.info("Emergency restored \(result.restored.count), skipped \(result.skipped.count)")
+            log.info(
+                "Emergency restored \(result.restored.count), unavailable \(result.unavailable.count), "
+                    + "failed \(result.failed.count)"
+            )
         } catch {
             log.error("Emergency restore record flush failed: \(String(describing: error))")
         }
-        previewService.refreshWorkspaces(names: Set(controller.workspaces))
-        refreshSurfaces()
+        previewService.refreshWorkspaces(ids: Set(controller.workspaces))
+        refreshStatusSurfaces()
     }
 
     private func perform(
@@ -107,7 +106,7 @@ final class WorkspaceActionController {
                 return
             }
             switcherCoordinator.handleContentChanged()
-            refreshSurfaces()
+            refreshStatusSurfaces()
             log.info(successMessage)
         } catch {
             log.error("Workspace action failed: \(String(describing: error))")

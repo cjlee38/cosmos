@@ -5,7 +5,7 @@ protocol RuntimeConfigControlling: AnyObject {
     var currentConfig: KkaciConfig { get }
 
     @discardableResult
-    func applyConfig(_ config: KkaciConfig, enablePersistence: Bool) throws -> WorkspaceSyncSummary
+    func applyConfig(_ config: KkaciConfig) throws -> WorkspaceSyncSummary
 }
 
 extension WorkspaceController: RuntimeConfigControlling {}
@@ -87,19 +87,20 @@ final class ConfigRuntime {
     }
 
     func installInitialShortcuts(actions: any KeyboardShortcutActionHandling) throws {
-        guard desiredConfig != nil else {
-            try installShortcuts(for: controller.currentConfig, actions: actions)
-            return
-        }
-
         do {
             try installShortcuts(for: controller.currentConfig, actions: actions)
+            return
         } catch {
+            guard desiredConfig != nil else {
+                throw error
+            }
             recordApplyFailure(error)
-            let fallback = KkaciConfig.default
-            try installShortcuts(for: fallback, actions: actions)
-            try controller.applyConfig(fallback, enablePersistence: true)
+            guard error is KeyboardShortcutValidationError else {
+                throw error
+            }
         }
+
+        try applyConfigWithShortcuts(.default, actions: actions)
     }
 
     func reload(actions: any KeyboardShortcutActionHandling) throws {
@@ -144,7 +145,7 @@ final class ConfigRuntime {
         _ shortcut: String?,
         for target: ShortcutTarget,
         actions: any KeyboardShortcutActionHandling
-    ) throws -> ConfigApplyResult {
+    ) throws -> ConfigApplyResult? {
         guard let desiredConfig else {
             throw ConfigEditingUnavailableError()
         }
@@ -152,7 +153,21 @@ final class ConfigRuntime {
               config != desiredConfig
         else {
             try cancelShortcutRecording()
-            return .applied
+            return nil
+        }
+        return try updateConfig(config, actions: actions)
+    }
+
+    @discardableResult
+    func editConfig(
+        actions: any KeyboardShortcutActionHandling,
+        _ edit: (KkaciConfig) throws -> KkaciConfig?
+    ) throws -> ConfigApplyResult? {
+        guard let desiredConfig else {
+            throw ConfigEditingUnavailableError()
+        }
+        guard let config = try edit(desiredConfig), config != desiredConfig else {
+            return nil
         }
         return try updateConfig(config, actions: actions)
     }
@@ -169,8 +184,13 @@ final class ConfigRuntime {
         guard isRecordingShortcut else {
             return
         }
-        try shortcutInstaller.replaceShortcuts(installedRegistrations)
-        isRecordingShortcut = false
+        do {
+            try shortcutInstaller.replaceShortcuts(installedRegistrations)
+            isRecordingShortcut = false
+        } catch {
+            recordApplyFailure(error)
+            throw error
+        }
     }
 
     private func applyConfigWithShortcuts(
@@ -179,9 +199,9 @@ final class ConfigRuntime {
     ) throws {
         let previousRegistrations = installedRegistrations
         do {
-            let updatedRegistrations = try registrations(for: config.bindings, actions: actions)
+            let updatedRegistrations = registrations(for: config.configuredShortcuts, actions: actions)
             try shortcutInstaller.replaceShortcuts(updatedRegistrations)
-            try controller.applyConfig(config, enablePersistence: true)
+            try controller.applyConfig(config)
             installedRegistrations = updatedRegistrations
             isRecordingShortcut = false
         } catch let applyError {
@@ -203,17 +223,17 @@ final class ConfigRuntime {
         for config: KkaciConfig,
         actions: any KeyboardShortcutActionHandling
     ) throws {
-        let registrations = try registrations(for: config.bindings, actions: actions)
+        let registrations = registrations(for: config.configuredShortcuts, actions: actions)
         try shortcutInstaller.replaceShortcuts(registrations)
         installedRegistrations = registrations
         isRecordingShortcut = false
     }
 
     private func registrations(
-        for bindings: [HotKeyBinding],
+        for shortcuts: [ConfiguredShortcut],
         actions: any KeyboardShortcutActionHandling
-    ) throws -> [KeyboardShortcutRegistration] {
-        try keyboardBindingMapper.registrations(for: bindings, actions: actions)
+    ) -> [KeyboardShortcutRegistration] {
+        keyboardBindingMapper.registrations(for: shortcuts, actions: actions)
     }
 
     private func recordValid() {

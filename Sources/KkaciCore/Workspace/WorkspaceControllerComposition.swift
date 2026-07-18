@@ -1,17 +1,16 @@
 import Foundation
 
 struct WorkspaceControllerComponents {
-    let windowStore: WindowRuntimeStore
-    let configuration: WorkspaceConfigurationRuntime
-    let windowSetSynchronizer: WindowSetSynchronizer
+    let windowCache: WindowStateCache
+    let runtimeSynchronizer: WorkspaceRuntimeSynchronizer
     let hiddenWindowOperator: HiddenWindowOperator
     let visibilityCoordinator: WorkspaceVisibilityCoordinator
     let startupHiddenWindowRecordApplier: StartupHiddenWindowRecordApplier
     let navigationCoordinator: WorkspaceNavigationCoordinator
     let assignmentCoordinator: WindowAssignmentCoordinator
     let emergencyHiddenWindowRestorer: EmergencyHiddenWindowRestorer
-    let monitorSlotResolver: MonitorSlotResolver
     let displayCoordinator: WorkspaceDisplayCoordinator
+    let startupConfigLoadError: Error?
     let state: WorkspaceState
 }
 
@@ -19,82 +18,90 @@ enum WorkspaceControllerComposition {
     static func build(
         windowSystem: any WindowSystem,
         displayProvider: any DisplayProviding,
+        hidePointProvider: (any HidePointProviding)?,
         configStore: (any KkaciConfigStore)?,
-        recordStore: (any HiddenWindowRecordStore)?,
-        isConfigPersistenceEnabled: Bool
+        recordStore: (any HiddenWindowRecordStore)?
     ) -> WorkspaceControllerComponents {
         let windows = buildWindowComponents(
             windowSystem: windowSystem,
             displayProvider: displayProvider,
+            hidePointProvider: hidePointProvider,
             recordStore: recordStore
         )
-        let bootstrap = WorkspaceConfigurationRuntime.bootstrap(
-            from: configStore,
-            isPersistenceEnabled: isConfigPersistenceEnabled
-        )
+        let startup = loadConfig(from: configStore)
 
         return WorkspaceControllerComponents(
-            windowStore: windows.store,
-            configuration: bootstrap.runtime,
-            windowSetSynchronizer: windows.synchronizer,
+            windowCache: windows.cache,
+            runtimeSynchronizer: windows.synchronizer,
             hiddenWindowOperator: windows.hiddenOperator,
             visibilityCoordinator: windows.visibilityCoordinator,
             startupHiddenWindowRecordApplier: StartupHiddenWindowRecordApplier(
                 windowSystem: windowSystem,
-                windowStore: windows.store,
+                windowCache: windows.cache,
                 recordRepository: windows.recordRepository,
                 restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider)
             ),
             navigationCoordinator: WorkspaceNavigationCoordinator(
-                windowSystem: windowSystem,
-                windowStore: windows.store,
+                windowCache: windows.cache,
                 visibilityCoordinator: windows.visibilityCoordinator
             ),
             assignmentCoordinator: WindowAssignmentCoordinator(
-                windowSystem: windowSystem,
-                windowStore: windows.store,
+                windowCache: windows.cache,
                 visibilityCoordinator: windows.visibilityCoordinator,
                 monitorSlotResolver: windows.monitorSlotResolver
             ),
             emergencyHiddenWindowRestorer: EmergencyHiddenWindowRestorer(
                 recordRepository: windows.recordRepository,
                 hiddenWindowOperator: windows.hiddenOperator,
-                windowStore: windows.store
+                windowCache: windows.cache
             ),
-            monitorSlotResolver: windows.monitorSlotResolver,
             displayCoordinator: WorkspaceDisplayCoordinator(
-                windowStore: windows.store,
-                windowSetSynchronizer: windows.synchronizer,
-                visibilityCoordinator: windows.visibilityCoordinator,
+                windowCache: windows.cache,
+                runtimeSynchronizer: windows.synchronizer,
                 monitorSlotResolver: windows.monitorSlotResolver
             ),
-            state: WorkspaceState(workspaces: bootstrap.config.workspaces)
+            startupConfigLoadError: startup.error,
+            state: WorkspaceState(config: startup.config)
         )
+    }
+
+    private static func loadConfig(
+        from store: (any KkaciConfigStore)?
+    ) -> (config: KkaciConfig, error: Error?) {
+        guard let store else {
+            return (.default, nil)
+        }
+        do {
+            return try (store.load(), nil)
+        } catch {
+            return (.default, error)
+        }
     }
 
     private static func buildWindowComponents(
         windowSystem: any WindowSystem,
         displayProvider: any DisplayProviding,
+        hidePointProvider: (any HidePointProviding)?,
         recordStore: (any HiddenWindowRecordStore)?
     ) -> WorkspaceControllerWindowComponents {
-        let store = WindowRuntimeStore()
+        let cache = WindowStateCache()
         let recordRepository = HiddenWindowRecordRepository(store: recordStore)
         let monitorSlotResolver = MonitorSlotResolver(displayProvider: displayProvider)
-        let synchronizer = WindowSetSynchronizer(
+        let synchronizer = WorkspaceRuntimeSynchronizer(
             windowSystem: windowSystem,
-            windowStore: store,
+            windowCache: cache,
             recordRepository: recordRepository,
             monitorSlotResolver: monitorSlotResolver
         )
         let hiddenOperator = HiddenWindowOperator(
             windowSystem: windowSystem,
-            displayProvider: displayProvider,
+            hidePointProvider: hidePointProvider ?? WindowParkingPointProvider(displayProvider: displayProvider),
             restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider),
-            windowStore: store,
+            windowCache: cache,
             recordRepository: recordRepository
         )
         return WorkspaceControllerWindowComponents(
-            store: store,
+            cache: cache,
             recordRepository: recordRepository,
             monitorSlotResolver: monitorSlotResolver,
             synchronizer: synchronizer,
@@ -102,17 +109,17 @@ enum WorkspaceControllerComposition {
             visibilityCoordinator: WorkspaceVisibilityCoordinator(
                 windowSystem: windowSystem,
                 hiddenWindowOperator: hiddenOperator,
-                windowStore: store
+                windowCache: cache
             )
         )
     }
 }
 
 private struct WorkspaceControllerWindowComponents {
-    let store: WindowRuntimeStore
+    let cache: WindowStateCache
     let recordRepository: HiddenWindowRecordRepository
     let monitorSlotResolver: MonitorSlotResolver
-    let synchronizer: WindowSetSynchronizer
+    let synchronizer: WorkspaceRuntimeSynchronizer
     let hiddenOperator: HiddenWindowOperator
     let visibilityCoordinator: WorkspaceVisibilityCoordinator
 }

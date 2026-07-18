@@ -56,7 +56,7 @@ final class GeneralSettingsViewController: NSViewController {
         root.alignment = .leading
         root.spacing = 20
 
-        let header = makeHeader()
+        let header = SettingsControlFactory.header(title: "General", symbolName: "gearshape.fill")
         let launchSection = makeLaunchAtLoginSection()
         let configurationSection = makeConfigurationSection()
         let permissionsSection = makePermissionsSection()
@@ -91,25 +91,6 @@ final class GeneralSettingsViewController: NSViewController {
 }
 
 private extension GeneralSettingsViewController {
-    private func makeHeader() -> NSView {
-        let icon = NSImageView()
-        icon.image = NSImage(systemSymbolName: "gearshape.fill", accessibilityDescription: "General")
-        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .semibold)
-        icon.contentTintColor = .labelColor
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 28).isActive = true
-
-        let title = NSTextField(labelWithString: "General")
-        title.font = .systemFont(ofSize: 22, weight: .bold)
-
-        let header = NSStackView(views: [icon, title])
-        header.orientation = .horizontal
-        header.alignment = .centerY
-        header.spacing = 10
-        return header
-    }
-
     private func makeLaunchAtLoginSection() -> NSView {
         launchAtLoginSwitch.target = self
         launchAtLoginSwitch.action = #selector(launchAtLoginChanged)
@@ -120,7 +101,7 @@ private extension GeneralSettingsViewController {
 
         let title = NSTextField(labelWithString: "Launch at Login")
         title.font = .systemFont(ofSize: 14, weight: .medium)
-        let spacer = flexibleSpacer()
+        let spacer = SettingsControlFactory.flexibleSpacer()
         let row = NSStackView(views: [
             title,
             spacer,
@@ -153,7 +134,7 @@ private extension GeneralSettingsViewController {
             row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
         }
 
-        return titledSection(
+        return SettingsControlFactory.titledSection(
             title: "Permissions",
             content: SettingsControlFactory.groupBox(content: rows)
         )
@@ -184,7 +165,13 @@ private extension GeneralSettingsViewController {
             settingsButton: settingsButton
         )
 
-        let row = NSStackView(views: [title, flexibleSpacer(), statusIcon, statusLabel, settingsButton])
+        let row = NSStackView(views: [
+            title,
+            SettingsControlFactory.flexibleSpacer(),
+            statusIcon,
+            statusLabel,
+            settingsButton
+        ])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 8
@@ -193,12 +180,39 @@ private extension GeneralSettingsViewController {
 
     private func makeConfigurationSection() -> NSView {
         configureReloadConfigButton()
-
         configPathLabel.isSelectable = true
         configPathLabel.textColor = .secondaryLabelColor
         configPathLabel.lineBreakMode = .byTruncatingMiddle
         configPathLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        configureConfigStatusIcon()
+        configErrorLabel.textColor = .systemRed
+        configErrorLabel.font = .systemFont(ofSize: 12)
+        configErrorLabel.maximumNumberOfLines = 2
+
+        let fileRow = makeConfigFileRow()
+        let details = NSStackView(views: [fileRow, configErrorLabel])
+        details.orientation = .vertical
+        details.alignment = .leading
+        details.spacing = 10
+        fileRow.widthAnchor.constraint(equalTo: details.widthAnchor).isActive = true
+
+        let buttons = SettingsControlFactory.filledButtonRow(
+            actions: [
+                (openConfigButton, #selector(openConfig)),
+                (revealConfigButton, #selector(revealConfig)),
+                (reloadConfigButton, #selector(reloadConfig))
+            ],
+            target: self
+        )
+
+        return SettingsControlFactory.titledSection(
+            title: "Configuration",
+            content: SettingsControlFactory.actionGroup(details: details, actions: buttons)
+        )
+    }
+
+    private func makeConfigFileRow() -> NSView {
         let fileIcon = NSImageView()
         fileIcon.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: "Config file")
         fileIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .medium)
@@ -214,41 +228,21 @@ private extension GeneralSettingsViewController {
         fileDetails.alignment = .leading
         fileDetails.spacing = 2
 
-        configureConfigStatusIcon()
-
         let status = NSStackView(views: [configStatusIcon, configStatusLabel])
         status.orientation = .horizontal
         status.alignment = .centerY
         status.spacing = 5
 
-        let fileRow = NSStackView(views: [fileIcon, fileDetails, flexibleSpacer(), status])
+        let fileRow = NSStackView(views: [
+            fileIcon,
+            fileDetails,
+            SettingsControlFactory.flexibleSpacer(),
+            status
+        ])
         fileRow.orientation = .horizontal
         fileRow.alignment = .centerY
         fileRow.spacing = 10
-
-        configErrorLabel.textColor = .systemRed
-        configErrorLabel.font = .systemFont(ofSize: 12)
-        configErrorLabel.maximumNumberOfLines = 2
-
-        let buttons = SettingsControlFactory.filledButtonRow(
-            actions: [
-                (openConfigButton, #selector(openConfig)),
-                (revealConfigButton, #selector(revealConfig)),
-                (reloadConfigButton, #selector(reloadConfig))
-            ],
-            target: self
-        )
-
-        let details = NSStackView(views: [fileRow, configErrorLabel])
-        details.orientation = .vertical
-        details.alignment = .leading
-        details.spacing = 10
-        fileRow.widthAnchor.constraint(equalTo: details.widthAnchor).isActive = true
-
-        return titledSection(
-            title: "Configuration",
-            content: SettingsControlFactory.actionGroup(details: details, actions: buttons)
-        )
+        return fileRow
     }
 
     private func configureReloadConfigButton() {
@@ -268,26 +262,6 @@ private extension GeneralSettingsViewController {
         configStatusIcon.widthAnchor.constraint(equalToConstant: 18).isActive = true
         configStatusIcon.heightAnchor.constraint(equalToConstant: 18).isActive = true
         configStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
-    }
-
-    private func titledSection(title: String, content: NSView) -> NSView {
-        let titleLabel = NSTextField(labelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.textColor = .secondaryLabelColor
-
-        let section = NSStackView(views: [titleLabel, content])
-        section.orientation = .vertical
-        section.alignment = .leading
-        section.spacing = 8
-        content.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
-        return section
-    }
-
-    private func flexibleSpacer() -> NSView {
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return spacer
     }
 }
 

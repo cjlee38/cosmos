@@ -3,6 +3,7 @@ import Foundation
 @testable import KkaciCore
 
 enum FakeWindowSystemError: Error, Equatable {
+    case refresh
     case frameWrite(WindowID)
 }
 
@@ -24,6 +25,7 @@ final class FakeWindowSystem: WindowSystem {
     var operationFailure: ((Operation) -> Error?)?
     var operationFailureAfterMutation: ((Operation) -> Error?)?
     var refreshCount = 0
+    var refreshError: Error?
 
     init(windows: [WindowSnapshot]) {
         self.windows = windows
@@ -32,9 +34,12 @@ final class FakeWindowSystem: WindowSystem {
         })
     }
 
-    func refresh() -> [WindowSnapshot] {
+    func refresh() throws -> [WindowSnapshot] {
         refreshCount += 1
         operations.append(.refresh)
+        if let refreshError {
+            throw refreshError
+        }
         return windows.map { snapshot in
             WindowSnapshot(
                 id: snapshot.id,
@@ -59,6 +64,9 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
+        guard contains(id) else {
+            throw WorkspaceError.windowNotFound(id)
+        }
         let operation = Operation.setPosition(id, point)
         operations.append(operation)
         if let error = operationFailure?(operation) {
@@ -79,6 +87,9 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
+        guard contains(id) else {
+            throw WorkspaceError.windowNotFound(id)
+        }
         let operation = Operation.setFrame(id, frame)
         operations.append(operation)
         if let error = operationFailure?(operation) {
@@ -96,6 +107,9 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func focus(_ id: WindowID) {
+        guard contains(id) else {
+            return
+        }
         operations.append(.focus(id))
         focusedWindow = id
         focusedIDs.append(id)

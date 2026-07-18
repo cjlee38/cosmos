@@ -158,45 +158,27 @@ public struct KkaciConfig: Codable, Equatable {
         self.workspaces = Self.normalized(workspaces)
     }
 
-    public var bindings: [HotKeyBinding] {
-        var result: [HotKeyBinding] = []
-        result.append(shortcuts.workspaceSwitcher.next, command: "next-workspace")
-        result.append(shortcuts.workspaceSwitcher.previous, command: "previous-workspace")
-        result.append(shortcuts.windowSwitcher.next, command: "next-window")
-        result.append(shortcuts.windowSwitcher.previous, command: "previous-window")
+    public var configuredShortcuts: [ConfiguredShortcut] {
+        var result: [ConfiguredShortcut] = []
+        result.append(shortcuts.workspaceSwitcher.next, target: .workspaceSwitcherNext)
+        result.append(shortcuts.workspaceSwitcher.previous, target: .workspaceSwitcherPrevious)
+        result.append(shortcuts.windowSwitcher.next, target: .windowSwitcherNext)
+        result.append(shortcuts.windowSwitcher.previous, target: .windowSwitcherPrevious)
         for workspace in workspaces {
             result.append(
                 workspace.shortcuts.switchWorkspace,
-                command: "workspace",
-                workspace: workspace.id.rawValue
+                target: .switchWorkspace(workspace.id)
             )
             result.append(
                 workspace.shortcuts.moveWindow,
-                command: "move-window-to-workspace",
-                workspace: workspace.id.rawValue
+                target: .moveWindow(workspace.id)
             )
         }
         return result
     }
 
-    public var workspaceIDs: [WorkspaceID] {
-        workspaces.map(\.id)
-    }
-
-    public func workspace(for id: String) -> WorkspaceConfig? {
-        guard let workspaceID = WorkspaceID(rawValue: id) else {
-            return nil
-        }
-        return workspaces.first { $0.id == workspaceID }
-    }
-
-    public func monitorSlot(for workspace: String) -> MonitorSlot {
-        workspaces.first { $0.id.rawValue == workspace.uppercased() }?.display ?? 1
-    }
-
-    public func assigningWorkspace(_ workspace: String, toMonitorSlot monitorSlot: MonitorSlot) -> KkaciConfig {
-        guard let workspaceID = WorkspaceID(rawValue: workspace),
-              workspaces.contains(where: { $0.id == workspaceID }),
+    public func assigningWorkspace(_ workspaceID: WorkspaceID, toMonitorSlot monitorSlot: MonitorSlot) -> KkaciConfig {
+        guard workspaces.contains(where: { $0.id == workspaceID }),
               monitorSlot >= 1
         else {
             return self
@@ -295,12 +277,12 @@ public struct KkaciConfig: Codable, Equatable {
     }
 }
 
-private extension [HotKeyBinding] {
-    mutating func append(_ key: String?, command: String, workspace: String? = nil) {
+private extension [ConfiguredShortcut] {
+    mutating func append(_ key: String?, target: ShortcutTarget) {
         guard let key else {
             return
         }
-        append(HotKeyBinding(key: key, command: command, workspace: workspace))
+        append(ConfiguredShortcut(key: key, target: target))
     }
 }
 

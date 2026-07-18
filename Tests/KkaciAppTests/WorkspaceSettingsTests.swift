@@ -4,7 +4,65 @@ import CoreGraphics
 import KkaciCore
 import XCTest
 
-final class WorkspaceSettingsTests: XCTestCase {
+final class WorkspaceSettingsServiceTests: XCTestCase {
+    func testServicePersistsAppliesAndRefreshesExplicitWorkspaceEdits() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        let configStore = ConfigStoreSpy(loadedConfig: controller.currentConfig)
+        let shortcutInstaller = WorkspaceSettingsShortcutInstaller()
+        let actions = NoopShortcutActions()
+        let configRuntime = ConfigRuntime(
+            configStore: configStore,
+            configURL: nil,
+            controller: controller,
+            keyboardShortcutManager: shortcutInstaller,
+            keyboardBindingMapper: KeyboardBindingMapper()
+        )
+        var refreshCount = 0
+        let service = WorkspaceSettingsService(
+            controller: controller,
+            configRuntime: configRuntime,
+            actions: actions,
+            refreshAfterChange: { refreshCount += 1 }
+        )
+
+        try service.addWorkspaces(["A"], displayID: 1)
+        try service.removeWorkspace("A")
+
+        XCTAssertEqual(configStore.savedConfigs.count, 2)
+        XCTAssertTrue(configStore.savedConfigs[0].workspaces.map(\.id).contains("A"))
+        XCTAssertFalse(configStore.savedConfigs[1].workspaces.map(\.id).contains("A"))
+        XCTAssertEqual(controller.currentConfig, configStore.savedConfigs[1])
+        XCTAssertEqual(shortcutInstaller.replacedKeys.count, 2)
+        XCTAssertEqual(refreshCount, 2)
+    }
+
+    func testServiceDoesNotPersistOrRefreshAnUnchangedMonitorAssignment() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        let configStore = ConfigStoreSpy(loadedConfig: controller.currentConfig)
+        let configRuntime = ConfigRuntime(
+            configStore: configStore,
+            configURL: nil,
+            controller: controller,
+            keyboardShortcutManager: WorkspaceSettingsShortcutInstaller(),
+            keyboardBindingMapper: KeyboardBindingMapper()
+        )
+        var refreshCount = 0
+        let service = WorkspaceSettingsService(
+            controller: controller,
+            configRuntime: configRuntime,
+            actions: NoopShortcutActions(),
+            refreshAfterChange: { refreshCount += 1 }
+        )
+
+        try service.updateMonitor("1", displayID: 1)
+        _ = try service.updateShortcut("option+1", for: .switchWorkspace("1"))
+
+        XCTAssertTrue(configStore.savedConfigs.isEmpty)
+        XCTAssertEqual(refreshCount, 0)
+    }
+}
+
+final class WorkspaceSettingsSnapshotTests: XCTestCase {
     func testSnapshotBuildsDisplayAssignmentsAndShortcutRows() {
         let main = DisplaySnapshot(
             id: 1,
@@ -23,8 +81,7 @@ final class WorkspaceSettingsTests: XCTestCase {
             monitorSlots: [
                 MonitorSlotSnapshot(slot: 1, display: main),
                 MonitorSlotSnapshot(slot: 2, display: extended)
-            ],
-            displays: [main, extended]
+            ]
         )
 
         XCTAssertEqual(snapshot.displays[0].workspaceIDs, ["1"])
@@ -48,21 +105,21 @@ final class WorkspaceSettingsTests: XCTestCase {
         XCTAssertEqual(ShortcutDisplayFormatter.format("option+a"), "⌥ A")
         XCTAssertEqual(ShortcutDisplayFormatter.format(nil), "Not set")
     }
+}
+
+final class WorkspaceSettingsViewTests: XCTestCase {
+    private enum TestError: Error {
+        case shortcutRestore
+    }
 
     func testMonitorSelectorSendsWorkspaceAndSelectedMonitor() throws {
         let snapshot = settingsSnapshot()
-        var update: (workspace: String, displayID: DisplayID)?
-        let viewController = WorkspaceSettingsViewController(
-            snapshotProvider: { snapshot },
-            updateMonitorHandler: { workspace, displayID in
-                update = (workspace, displayID)
-            },
-            addWorkspaceHandler: { _, _ in },
-            removeWorkspaceHandler: { _ in },
-            beginShortcutRecordingHandler: {},
-            cancelShortcutRecordingHandler: {},
-            updateShortcutHandler: { _, _ in }
-        )
+        var update: (workspace: WorkspaceID, displayID: DisplayID)?
+        let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
+        service.onUpdateMonitor = { workspace, displayID in
+            update = (workspace, displayID)
+        }
+        let viewController = WorkspaceSettingsViewController(service: service)
 
         _ = viewController.view
         let selector = try XCTUnwrap(
@@ -86,13 +143,7 @@ final class WorkspaceSettingsTests: XCTestCase {
     func testWorkspaceControlsExposeAddAndPreventDeletingTheLastWorkspace() throws {
         let snapshot = settingsSnapshot()
         let viewController = WorkspaceSettingsViewController(
-            snapshotProvider: { snapshot },
-            updateMonitorHandler: { _, _ in },
-            addWorkspaceHandler: { _, _ in },
-            removeWorkspaceHandler: { _ in },
-            beginShortcutRecordingHandler: {},
-            cancelShortcutRecordingHandler: {},
-            updateShortcutHandler: { _, _ in }
+            service: WorkspaceSettingsServiceStub(snapshot: snapshot)
         )
 
         _ = viewController.view
@@ -111,13 +162,7 @@ final class WorkspaceSettingsTests: XCTestCase {
     func testWorkspaceSettingsExposeRecordersForEveryShortcutTarget() {
         let snapshot = settingsSnapshot()
         let viewController = WorkspaceSettingsViewController(
-            snapshotProvider: { snapshot },
-            updateMonitorHandler: { _, _ in },
-            addWorkspaceHandler: { _, _ in },
-            removeWorkspaceHandler: { _ in },
-            beginShortcutRecordingHandler: {},
-            cancelShortcutRecordingHandler: {},
-            updateShortcutHandler: { _, _ in }
+            service: WorkspaceSettingsServiceStub(snapshot: snapshot)
         )
 
         let recorders = descendants(of: viewController.view).compactMap { $0 as? ShortcutRecorderButton }
@@ -142,17 +187,10 @@ final class WorkspaceSettingsTests: XCTestCase {
         let snapshot = WorkspaceSettingsSnapshot(
             config: KkaciConfig(workspaces: [WorkspaceConfig(id: "1")]),
             monitorSlots: [MonitorSlotSnapshot(slot: 1, display: main)],
-            displays: [main],
             isEditable: false
         )
         let viewController = WorkspaceSettingsViewController(
-            snapshotProvider: { snapshot },
-            updateMonitorHandler: { _, _ in },
-            addWorkspaceHandler: { _, _ in },
-            removeWorkspaceHandler: { _ in },
-            beginShortcutRecordingHandler: {},
-            cancelShortcutRecordingHandler: {},
-            updateShortcutHandler: { _, _ in }
+            service: WorkspaceSettingsServiceStub(snapshot: snapshot)
         )
 
         let controls = descendants(of: viewController.view).compactMap { $0 as? NSControl }
@@ -167,6 +205,24 @@ final class WorkspaceSettingsTests: XCTestCase {
             }).stringValue,
             "Configuration is invalid. Fix config.yaml in General before editing workspaces."
         )
+    }
+
+    func testRefreshKeepsTheCurrentRecorderWhenShortcutRestoreFails() throws {
+        let service = WorkspaceSettingsServiceStub(snapshot: settingsSnapshot())
+        service.cancelShortcutRecordingError = TestError.shortcutRestore
+        let viewController = WorkspaceSettingsViewController(service: service)
+        let recorder = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? ShortcutRecorderButton }
+                .first
+        )
+        recorder.performClick(nil)
+        XCTAssertTrue(recorder.isRecording)
+
+        viewController.refresh()
+
+        XCTAssertTrue(recorder.isRecording)
+        XCTAssertTrue(descendants(of: viewController.view).contains { $0 === recorder })
     }
 
     func testWorkspaceIDPickerDimsConfiguredIDsAndSelectsAvailableIDs() throws {
@@ -254,8 +310,7 @@ private func settingsSnapshot() -> WorkspaceSettingsSnapshot {
         monitorSlots: [
             MonitorSlotSnapshot(slot: 1, display: main),
             MonitorSlotSnapshot(slot: 2, display: extended)
-        ],
-        displays: [main, extended]
+        ]
     )
 }
 
@@ -287,4 +342,49 @@ private func snapshotConfig() -> KkaciConfig {
 
 private func descendants(of view: NSView) -> [NSView] {
     view.subviews + view.subviews.flatMap(descendants)
+}
+
+private final class WorkspaceSettingsServiceStub: WorkspaceSettingsServing {
+    let currentSnapshot: WorkspaceSettingsSnapshot
+    var onUpdateMonitor: (WorkspaceID, DisplayID) throws -> Void = { _, _ in }
+    var cancelShortcutRecordingError: Error?
+
+    init(snapshot: WorkspaceSettingsSnapshot) {
+        currentSnapshot = snapshot
+    }
+
+    func snapshot() -> WorkspaceSettingsSnapshot {
+        currentSnapshot
+    }
+
+    func updateShortcut(_: String?, for _: ShortcutTarget) throws -> Bool {
+        false
+    }
+
+    func updateMonitor(_ workspaceID: WorkspaceID, displayID: DisplayID) throws {
+        try onUpdateMonitor(workspaceID, displayID)
+    }
+
+    func addWorkspaces(_: [WorkspaceID], displayID _: DisplayID) throws {}
+
+    func removeWorkspace(_: WorkspaceID) throws {}
+
+    func beginShortcutRecording() throws {}
+
+    func cancelShortcutRecording() throws {
+        if let cancelShortcutRecordingError {
+            throw cancelShortcutRecordingError
+        }
+    }
+
+    func shortcutRecordingDidFinish(didPersistChange _: Bool) {}
+}
+
+private final class WorkspaceSettingsShortcutInstaller: KeyboardShortcutInstalling {
+    private(set) var replacedKeys: [[String]] = []
+
+    func replaceShortcuts(_ registrations: [KeyboardShortcutRegistration]) throws {
+        _ = try KeyboardShortcutResolver().resolve(registrations)
+        replacedKeys.append(registrations.map(\.key))
+    }
 }

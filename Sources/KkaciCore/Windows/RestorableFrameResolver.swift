@@ -8,8 +8,8 @@ final class RestorableFrameResolver {
         self.displayProvider = displayProvider
     }
 
-    func frameForRestore(_ frame: WindowFrame) -> WindowFrame {
-        let displays = displayProvider.displays()
+    func frameForRestore(_ frame: WindowFrame) throws -> WindowFrame {
+        let displays = try displayProvider.displays()
         guard !displays.isEmpty else {
             return frame
         }

@@ -7,9 +7,9 @@ final class ShortcutRecorderButton: NSButton {
     private(set) var currentShortcut: String?
     var onValidationMessageChanged: ((String?) -> Void)?
     private var eventMonitor: Any?
-    private var onCommit: ((String?) throws -> Void)?
-    private var onCancel: (() -> Void)?
-    private var onFinish: (() -> Void)?
+    private var onCommit: ((String?) throws -> Bool)?
+    private var onCancel: (() throws -> Void)?
+    private var onFinish: ((Bool) -> Void)?
     private var persistedValidationMessage: String?
     private(set) var isRecording = false
 
@@ -64,9 +64,9 @@ final class ShortcutRecorderButton: NSButton {
 
     @discardableResult
     func startRecording(
-        onCommit: @escaping (String?) throws -> Void,
-        onCancel: @escaping () -> Void,
-        onFinish: @escaping () -> Void
+        onCommit: @escaping (String?) throws -> Bool,
+        onCancel: @escaping () throws -> Void,
+        onFinish: @escaping (Bool) -> Void
     ) -> Bool {
         guard !isRecording else {
             return false
@@ -90,20 +90,30 @@ final class ShortcutRecorderButton: NSButton {
         return true
     }
 
-    func cancelRecording() {
+    @discardableResult
+    func cancelRecording() -> Bool {
         guard isRecording else {
-            return
+            return true
         }
-        onCancel?()
-        finishRecording(shortcut: currentShortcut, validationMessage: persistedValidationMessage)
+        do {
+            try onCancel?()
+        } catch {
+            NSSound.beep()
+            return false
+        }
+        finishRecording(
+            shortcut: currentShortcut,
+            validationMessage: persistedValidationMessage,
+            didPersistChange: false
+        )
+        return true
     }
 
     override func resignFirstResponder() -> Bool {
-        let result = super.resignFirstResponder()
-        if result, isRecording {
-            cancelRecording()
+        if isRecording, !cancelRecording() {
+            return false
         }
-        return result
+        return super.resignFirstResponder()
     }
 
     private func handle(_ event: NSEvent) {
@@ -116,7 +126,7 @@ final class ShortcutRecorderButton: NSButton {
         case kVK_Delete, kVK_ForwardDelete:
             commit(nil)
         default:
-            guard let shortcut = KeyboardShortcutResolver.shortcutString(for: event) else {
+            guard let shortcut = KeyboardShortcutKeyCodec.shortcutString(for: event) else {
                 NSSound.beep()
                 return
             }
@@ -126,21 +136,38 @@ final class ShortcutRecorderButton: NSButton {
 
     private func commit(_ shortcut: String?) {
         do {
-            try onCommit?(shortcut)
+            guard try onCommit?(shortcut) == true else {
+                finishRecording(
+                    shortcut: currentShortcut,
+                    validationMessage: persistedValidationMessage,
+                    didPersistChange: false
+                )
+                return
+            }
             currentShortcut = shortcut
             persistedValidationMessage = nil
-            finishRecording(shortcut: shortcut, validationMessage: nil)
+            finishRecording(shortcut: shortcut, validationMessage: nil, didPersistChange: true)
         } catch {
-            onCancel?()
-            persistedValidationMessage = String(describing: error)
+            do {
+                try onCancel?()
+            } catch {
+                NSSound.beep()
+                return
+            }
             finishRecording(
-                shortcut: currentShortcut, validationMessage: persistedValidationMessage
+                shortcut: currentShortcut,
+                validationMessage: persistedValidationMessage,
+                didPersistChange: false
             )
             NSSound.beep()
         }
     }
 
-    private func finishRecording(shortcut: String?, validationMessage: String?) {
+    private func finishRecording(
+        shortcut: String?,
+        validationMessage: String?,
+        didPersistChange: Bool
+    ) {
         isRecording = false
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
@@ -152,7 +179,7 @@ final class ShortcutRecorderButton: NSButton {
         onCancel = nil
         let finish = onFinish
         onFinish = nil
-        finish?()
+        finish?(didPersistChange)
     }
 
     private func applyValidationAppearance(_ message: String?) {

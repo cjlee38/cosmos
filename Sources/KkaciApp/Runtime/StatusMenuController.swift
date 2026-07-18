@@ -2,12 +2,6 @@ import AppKit
 import KkaciCore
 
 final class StatusMenuController: NSObject {
-    private struct WorkspaceMenuEntry {
-        let id: String
-        let title: String
-        let monitorSlot: MonitorSlot
-    }
-
     private let log = Log(category: "menu")
 
     private let controller: WorkspaceController
@@ -21,8 +15,8 @@ final class StatusMenuController: NSObject {
     private lazy var debugStatusWindowController = DebugStatusWindowController(
         controller: controller
     )
-    private var workspaceItems: [String: NSMenuItem] = [:]
-    private var renderedWorkspaceEntries: [WorkspaceMenuEntry] = []
+    private var workspaceItems: [WorkspaceID: NSMenuItem] = [:]
+    private var renderedWorkspaceMonitorSlots: [WorkspaceID: MonitorSlot] = [:]
     private var renderedMonitorSlots: [MonitorSlot] = []
 
     init(
@@ -55,7 +49,7 @@ final class StatusMenuController: NSObject {
     private func buildMenu() {
         menu.removeAllItems()
         workspaceItems.removeAll()
-        renderedWorkspaceEntries = workspaceMenuEntries()
+        renderedWorkspaceMonitorSlots = workspaceMonitorSlots()
         renderedMonitorSlots = displayedMonitorSlots()
 
         statusItem.button?.title = menuBarTitle()
@@ -67,7 +61,7 @@ final class StatusMenuController: NSObject {
         menu.addItem(commandItem(title: "Settings...", action: #selector(showSettings)))
         menu.addItem(diagnosticsItem())
         menu.addItem(.separator())
-        menu.addItem(commandItem(title: "Quit kkaci", action: #selector(quit)))
+        menu.addItem(commandItem(title: "Quit Kkaci", action: #selector(quit)))
     }
 
     private func buildWorkspaceItems() {
@@ -75,7 +69,10 @@ final class StatusMenuController: NSObject {
         workspaceItem.isEnabled = false
         menu.addItem(workspaceItem)
 
-        let workspacesByMonitor = Dictionary(grouping: controller.workspaces, by: controller.effectiveMonitorSlot)
+        let workspaces = controller.workspaces.compactMap(WorkspaceID.init(rawValue:))
+        let workspacesByMonitor = Dictionary(grouping: workspaces) {
+            controller.effectiveMonitorSlot(for: $0.rawValue)
+        }
 
         for monitorSlot in displayedMonitorSlots() {
             let monitorItem = NSMenuItem(title: "Monitor \(monitorSlot)", action: nil, keyEquivalent: "")
@@ -85,7 +82,7 @@ final class StatusMenuController: NSObject {
 
             for workspace in workspacesByMonitor[monitorSlot, default: []] {
                 let item = NSMenuItem(
-                    title: workspaceMenuTitle(workspace),
+                    title: workspace.rawValue,
                     action: #selector(switchWorkspace(_:)),
                     keyEquivalent: ""
                 )
@@ -116,42 +113,29 @@ final class StatusMenuController: NSObject {
 
     private func refreshMenu() {
         if renderedMonitorSlots != displayedMonitorSlots()
-            || !hasSameWorkspaceMenuEntries(as: workspaceMenuEntries()) {
+            || renderedWorkspaceMonitorSlots != workspaceMonitorSlots() {
             buildMenu()
         }
 
         statusItem.button?.title = menuBarTitle()
         workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
         for (workspace, item) in workspaceItems {
-            item.state = controller.isWorkspaceVisible(workspace) ? .on : .off
+            item.state = controller.isWorkspaceVisible(workspace.rawValue) ? .on : .off
         }
     }
 
-    private func workspaceMenuEntries() -> [WorkspaceMenuEntry] {
-        controller.workspaces.map {
-            WorkspaceMenuEntry(
-                id: $0,
-                title: workspaceMenuTitle($0),
-                monitorSlot: controller.effectiveMonitorSlot(for: $0)
-            )
-        }
+    private func workspaceMonitorSlots() -> [WorkspaceID: MonitorSlot] {
+        Dictionary(uniqueKeysWithValues: controller.workspaces.compactMap { rawValue in
+            guard let id = WorkspaceID(rawValue: rawValue) else {
+                return nil
+            }
+            return (id, controller.effectiveMonitorSlot(for: rawValue))
+        })
     }
 
     private func displayedMonitorSlots() -> [MonitorSlot] {
-        let monitorSlots = controller.monitorSlots.map(\.slot)
+        let monitorSlots = controller.displayTopology.monitorSlots.map(\.slot)
         return monitorSlots.isEmpty ? [1] : monitorSlots
-    }
-
-    private func hasSameWorkspaceMenuEntries(as entries: [WorkspaceMenuEntry]) -> Bool {
-        guard renderedWorkspaceEntries.count == entries.count else {
-            return false
-        }
-
-        return zip(renderedWorkspaceEntries, entries).allSatisfy { current, updated in
-            current.id == updated.id
-                && current.title == updated.title
-                && current.monitorSlot == updated.monitorSlot
-        }
     }
 
     private func menuBarTitle() -> String {
@@ -165,16 +149,12 @@ final class StatusMenuController: NSObject {
         )
     }
 
-    private func workspaceMenuTitle(_ workspace: String) -> String {
-        workspace
-    }
-
     @objc private func switchWorkspace(_ sender: NSMenuItem) {
-        guard let workspace = sender.representedObject as? String else {
+        guard let workspace = sender.representedObject as? WorkspaceID else {
             log.error("Missing workspace for menu item")
             return
         }
-        actions.switchWorkspace(named: workspace)
+        actions.switchWorkspace(to: workspace)
     }
 
     @objc private func showDebugStatus() {

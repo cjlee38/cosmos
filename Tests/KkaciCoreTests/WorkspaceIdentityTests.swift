@@ -18,5 +18,4 @@ final class WorkspaceIdentityTests: XCTestCase {
             moveWindow: "option+shift+0"
         ))
     }
-
 }

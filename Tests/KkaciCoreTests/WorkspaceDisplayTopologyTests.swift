@@ -17,20 +17,20 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "A")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "A", controller: controller, windowSystem: windowSystem)
 
         displayProvider.snapshots = [mainDisplay()]
         _ = try controller.handleDisplayConfigurationChanged()
 
-        XCTAssertEqual(controller.monitorSlot(for: "A"), 2)
+        XCTAssertEqual(configuredMonitorSlot(for: "A", in: controller), 2)
         XCTAssertEqual(controller.effectiveMonitorSlot(for: "A"), 1)
         XCTAssertEqual(controller.visibleWorkspaces, ["1"])
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
         XCTAssertEqual(controller.workspaceFrame(for: 200), .frame(x: 100, y: 100, width: 300, height: 200))
-        XCTAssertEqual(controller.currentConfig.monitorSlot(for: "A"), 2)
+        XCTAssertEqual(configuredMonitorSlot(for: "A", in: controller), 2)
 
         displayProvider.snapshots = [mainDisplay(), secondaryDisplay()]
         _ = try controller.handleDisplayConfigurationChanged()
@@ -56,9 +56,9 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "A")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "A", controller: controller, windowSystem: windowSystem)
         _ = try controller.switchWorkspace(to: "A")
         displayProvider.snapshots = [mainDisplay()]
 
@@ -88,9 +88,9 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
             configStore: store
         )
 
-        _ = controller.discoverWindows()
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(200, to: "A")
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "A", controller: controller, windowSystem: windowSystem)
         displayProvider.snapshots = [
             DisplaySnapshot(id: 2, frame: CGRect(x: 0, y: 0, width: 500, height: 500), role: .main),
             DisplaySnapshot(id: 1, frame: CGRect(x: 500, y: 0, width: 1000, height: 1000), role: .extended)
@@ -98,13 +98,41 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
 
         _ = try controller.handleDisplayConfigurationChanged()
 
-        XCTAssertEqual(controller.monitorSlots.map(\.display.id), [2, 1])
-        XCTAssertEqual(controller.monitorSlot(for: "1"), 1)
-        XCTAssertEqual(controller.monitorSlot(for: "A"), 2)
+        XCTAssertEqual(controller.displayTopology.displays.map(\.id), [2, 1])
+        XCTAssertEqual(configuredMonitorSlot(for: "1", in: controller), 1)
+        XCTAssertEqual(configuredMonitorSlot(for: "A", in: controller), 2)
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 50, y: 50, width: 150, height: 100))
         XCTAssertEqual(windowSystem.frames[200], .frame(x: 600, y: 100, width: 300, height: 200))
         XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertEqual(controller.membership(for: 200), "A")
+    }
+
+    func testCombinedDisplayAndFocusChangeMigratesFrameAndFollowsFocusedWorkspace() throws {
+        let displayProvider = twoDisplayProvider()
+        let store = InMemoryWorkspaceConfigStore()
+        try store.save(configWithSecondaryWorkspace())
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: .frame(x: 100, y: 100, width: 300, height: 200)),
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100, width: 300, height: 200))
+        ])
+        let controller = makeController(
+            windowSystem,
+            displayProvider: displayProvider,
+            configStore: store
+        )
+        _ = try controller.bootstrapWindowState()
+        windowSystem.focusedWindow = 200
+        displayProvider.snapshots = [mainDisplay()]
+
+        _ = try controller.handleExternalWindowChange(ExternalWindowChange(
+            displayConfigurationChanged: true,
+            focusPolicy: .always
+        ))
+
+        XCTAssertEqual(controller.currentWorkspace, "A")
+        XCTAssertEqual(controller.membership(for: 200), "A")
+        XCTAssertEqual(windowSystem.frames[200], .frame(x: 100, y: 100, width: 300, height: 200))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
     }
 
     private func configWithSecondaryWorkspace() -> KkaciConfig {

@@ -7,6 +7,7 @@ import XCTest
 
 enum SwitcherTestWindowSystemError: Error {
     case frameWrite(WindowID)
+    case windowNotFound(WindowID)
 }
 
 final class SwitcherTestWindowSystem: WindowSystem {
@@ -30,7 +31,7 @@ final class SwitcherTestWindowSystem: WindowSystem {
         })
     }
 
-    func refresh() -> [WindowSnapshot] {
+    func refresh() throws -> [WindowSnapshot] {
         windows.map { window in
             WindowSnapshot(
                 id: window.id,
@@ -55,6 +56,9 @@ final class SwitcherTestWindowSystem: WindowSystem {
     }
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
+        guard contains(id) else {
+            throw SwitcherTestWindowSystemError.windowNotFound(id)
+        }
         if frameWriteFailures.contains(id) {
             throw SwitcherTestWindowSystemError.frameWrite(id)
         }
@@ -66,6 +70,9 @@ final class SwitcherTestWindowSystem: WindowSystem {
     }
 
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
+        guard contains(id) else {
+            throw SwitcherTestWindowSystemError.windowNotFound(id)
+        }
         if frameWriteFailures.contains(id) {
             throw SwitcherTestWindowSystemError.frameWrite(id)
         }
@@ -73,17 +80,16 @@ final class SwitcherTestWindowSystem: WindowSystem {
     }
 
     func focus(_ id: WindowID) {
+        guard contains(id) else {
+            return
+        }
         focusedWindowIDValue = id
         focusedWindowIDs.append(id)
     }
 }
 
 struct SwitcherTestDisplayProvider: DisplayProviding {
-    func hidePoint(for _: WindowFrame) -> CGPoint {
-        CGPoint(x: 999, y: 999)
-    }
-
-    func displays() -> [DisplaySnapshot] {
+    func displays() throws -> [DisplaySnapshot] {
         [DisplaySnapshot(
             id: 1,
             frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
@@ -116,22 +122,46 @@ func makeSwitcherTestController(
     let windowSystem = SwitcherTestWindowSystem(windows: windows)
     let controller = WorkspaceController(
         windowSystem: windowSystem,
-        displayProvider: SwitcherTestDisplayProvider(),
-        isConfigPersistenceEnabled: false
+        displayProvider: SwitcherTestDisplayProvider()
     )
-    try controller.bootstrapWindowState(defaultWorkspace: "1")
+    try controller.bootstrapWindowState()
     return (controller, windowSystem)
+}
+
+@discardableResult
+func moveSwitcherTestWindow(
+    _ id: WindowID,
+    to workspace: String,
+    controller: WorkspaceController,
+    windowSystem: SwitcherTestWindowSystem
+) throws -> WindowMoveResult? {
+    let originalWorkspace = controller.currentWorkspace
+    if controller.membership(for: id) == workspace {
+        return nil
+    }
+    if let sourceWorkspace = controller.membership(for: id),
+       sourceWorkspace != controller.currentWorkspace {
+        _ = try controller.switchWorkspace(to: sourceWorkspace)
+    }
+    windowSystem.focusedWindowIDValue = id
+    _ = try controller.handleFocusedWindowChanged()
+    let result = try controller.moveFocusedWindow(to: workspace)
+    if controller.currentWorkspace != originalWorkspace {
+        _ = try controller.switchWorkspace(to: originalWorkspace)
+    }
+    return result
 }
 
 func makeSwitcherTestPreviewService(
     controller: WorkspaceController,
     captureImage: @escaping (WindowID) -> CGImage? = { _ in nil },
+    renderWorkspace: @escaping (WorkspaceThumbnailRenderGroup) -> CGImage? = WorkspaceThumbnailRenderer.render,
     loadIcon: @escaping (pid_t) -> NSImage? = { _ in nil }
 ) -> SwitcherPreviewService {
     SwitcherPreviewService(
         controller: controller,
         windowThumbnailCache: WindowThumbnailCache(captureImage: captureImage),
-        workspaceThumbnailCache: WorkspaceThumbnailCache(),
+        workspaceThumbnailCache: WorkspaceThumbnailCache(render: renderWorkspace),
         applicationIconCache: ApplicationIconCache(loadIcon: loadIcon)
     )
 }
@@ -158,16 +188,23 @@ final class SwitcherOverlaySpy: SwitcherOverlayPresenting {
     var reboundWindowIDs: [[WindowID]] = []
     var reboundWindowSelections: [WindowID] = []
     var updatedWindowIDs: [[WindowID]] = []
-    var shownWorkspaceNames: [[String]] = []
-    var reboundWorkspaceNames: [[String]] = []
+    var shownWorkspaceIDs: [[String]] = []
+    var reboundWorkspaceIDs: [[String]] = []
     var onWindowShown: (() -> Void)?
     var onWindowPreviewsUpdated: (() -> Void)?
+    var onArrowKey: ((SwitcherArrowDirection) -> Void)?
+    var onOutsideClick: (() -> Void)?
+    var onWorkspaceKey: ((String) -> Bool)?
 
     func setInteractionHandlers(
-        onArrowKey _: @escaping (SwitcherArrowDirection) -> Void,
-        onOutsideClick _: @escaping () -> Void,
-        onWorkspaceKey _: @escaping (String) -> Bool
-    ) {}
+        onArrowKey: @escaping (SwitcherArrowDirection) -> Void,
+        onOutsideClick: @escaping () -> Void,
+        onWorkspaceKey: @escaping (String) -> Bool
+    ) {
+        self.onArrowKey = onArrowKey
+        self.onOutsideClick = onOutsideClick
+        self.onWorkspaceKey = onWorkspaceKey
+    }
 
     func showWindowSwitcher(
         items: [WindowSwitcherItem],
@@ -200,7 +237,7 @@ final class SwitcherOverlaySpy: SwitcherOverlayPresenting {
         onHover _: @escaping (String) -> Void,
         onClick _: @escaping (String) -> Void
     ) {
-        shownWorkspaceNames.append(groups.map(\.id))
+        shownWorkspaceIDs.append(groups.map(\.id))
         isOverlayVisible = true
     }
 
@@ -211,7 +248,7 @@ final class SwitcherOverlaySpy: SwitcherOverlayPresenting {
         onHover _: @escaping (String) -> Void,
         onClick _: @escaping (String) -> Void
     ) {
-        reboundWorkspaceNames.append(groups.map(\.id))
+        reboundWorkspaceIDs.append(groups.map(\.id))
     }
 
     func updateWindowSwitcher(items: [WindowSwitcherItem]) {

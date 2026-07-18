@@ -3,13 +3,7 @@ import KkaciCore
 
 final class WorkspaceSettingsViewController: NSViewController {
     private let log = Log(category: "settings")
-    private let snapshotProvider: () -> WorkspaceSettingsSnapshot
-    private let updateMonitorHandler: (String, DisplayID) throws -> Void
-    private let addWorkspaceHandler: ([WorkspaceID], DisplayID) throws -> Void
-    private let removeWorkspaceHandler: (WorkspaceID) throws -> Void
-    private let beginShortcutRecordingHandler: () throws -> Void
-    private let cancelShortcutRecordingHandler: () throws -> Void
-    private let updateShortcutHandler: (ShortcutTarget, String?) throws -> Void
+    private let service: any WorkspaceSettingsServing
     private let displayArrangementView = WorkspaceDisplayArrangementView()
     private let displayStatusStack = NSStackView()
     private let keyboardContentStack = NSStackView()
@@ -17,22 +11,8 @@ final class WorkspaceSettingsViewController: NSViewController {
     private lazy var configErrorNotice = WorkspaceSettingsControlFactory.configErrorNotice(label: configErrorLabel)
     private weak var activeShortcutRecorder: ShortcutRecorderButton?
 
-    init(
-        snapshotProvider: @escaping () -> WorkspaceSettingsSnapshot,
-        updateMonitorHandler: @escaping (String, DisplayID) throws -> Void,
-        addWorkspaceHandler: @escaping ([WorkspaceID], DisplayID) throws -> Void,
-        removeWorkspaceHandler: @escaping (WorkspaceID) throws -> Void,
-        beginShortcutRecordingHandler: @escaping () throws -> Void,
-        cancelShortcutRecordingHandler: @escaping () throws -> Void,
-        updateShortcutHandler: @escaping (ShortcutTarget, String?) throws -> Void
-    ) {
-        self.snapshotProvider = snapshotProvider
-        self.updateMonitorHandler = updateMonitorHandler
-        self.addWorkspaceHandler = addWorkspaceHandler
-        self.removeWorkspaceHandler = removeWorkspaceHandler
-        self.beginShortcutRecordingHandler = beginShortcutRecordingHandler
-        self.cancelShortcutRecordingHandler = cancelShortcutRecordingHandler
-        self.updateShortcutHandler = updateShortcutHandler
+    init(service: any WorkspaceSettingsServing) {
+        self.service = service
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -54,18 +34,18 @@ final class WorkspaceSettingsViewController: NSViewController {
 
         let displayContent = NSStackView(views: [displayArrangementView, displayStatusStack])
         configureVerticalStack(displayContent, spacing: 8)
-        let displaySection = WorkspaceSettingsControlFactory.titledSection(
+        let displaySection = SettingsControlFactory.titledSection(
             title: "Displays",
             content: SettingsControlFactory.groupBox(
                 content: SettingsControlFactory.padded(displayContent, vertical: 10, horizontal: 10)
             )
         )
-        let keyboardSection = WorkspaceSettingsControlFactory.titledSection(
+        let keyboardSection = SettingsControlFactory.titledSection(
             title: "Keyboard",
             content: SettingsControlFactory.groupBox(content: keyboardContentStack)
         )
         let root = NSStackView(views: [
-            WorkspaceSettingsControlFactory.header(),
+            SettingsControlFactory.header(title: "Workspaces", symbolName: "rectangle.3.group.fill"),
             displaySection,
             configErrorNotice,
             keyboardSection
@@ -96,16 +76,19 @@ final class WorkspaceSettingsViewController: NSViewController {
         guard isViewLoaded else {
             return
         }
-        cancelShortcutRecording()
-        let snapshot = snapshotProvider()
+        guard cancelShortcutRecording() else {
+            return
+        }
+        let snapshot = service.snapshot()
         displayArrangementView.apply(snapshot.displays)
         rebuildDisplayStatus(snapshot)
         rebuildKeyboard(snapshot)
         updateEditingState(snapshot)
     }
 
-    func cancelShortcutRecording() {
-        activeShortcutRecorder?.cancelRecording()
+    @discardableResult
+    func cancelShortcutRecording() -> Bool {
+        activeShortcutRecorder?.cancelRecording() ?? true
     }
 
     override func viewWillDisappear() {
@@ -293,7 +276,7 @@ private extension WorkspaceSettingsViewController {
         }
 
         do {
-            try updateMonitorHandler(sender.workspaceID.rawValue, displayID)
+            try service.updateMonitor(sender.workspaceID, displayID: displayID)
         } catch {
             log.error(
                 "Workspace monitor update failed workspace=\(sender.workspaceID.rawValue) "
@@ -304,9 +287,11 @@ private extension WorkspaceSettingsViewController {
     }
 
     @objc private func beginShortcutRecording(_ sender: ShortcutRecorderButton) {
-        activeShortcutRecorder?.cancelRecording()
+        guard activeShortcutRecorder?.cancelRecording() != false else {
+            return
+        }
         do {
-            try beginShortcutRecordingHandler()
+            try service.beginShortcutRecording()
         } catch {
             log.error("Shortcut recording failed to start: \(String(describing: error))")
             NSSound.beep()
@@ -317,20 +302,27 @@ private extension WorkspaceSettingsViewController {
         let shortcutTarget = sender.shortcutTarget
         sender.startRecording(
             onCommit: { [unowned self] shortcut in
-                try updateShortcutHandler(shortcutTarget, shortcut)
+                do {
+                    return try service.updateShortcut(shortcut, for: shortcutTarget)
+                } catch {
+                    log.error("Shortcut update failed: \(String(describing: error))")
+                    throw error
+                }
             },
             onCancel: { [unowned self] in
                 do {
-                    try cancelShortcutRecordingHandler()
+                    try service.cancelShortcutRecording()
                 } catch {
                     log.error("Shortcut recording cancel failed: \(String(describing: error))")
+                    throw error
                 }
             },
-            onFinish: { [weak self, weak sender] in
+            onFinish: { [weak self, weak sender] didPersistChange in
                 guard self?.activeShortcutRecorder === sender else {
                     return
                 }
                 self?.activeShortcutRecorder = nil
+                self?.service.shortcutRecordingDidFinish(didPersistChange: didPersistChange)
             }
         )
     }
@@ -338,8 +330,8 @@ private extension WorkspaceSettingsViewController {
     @objc private func showAddWorkspacePicker(_ sender: WorkspaceAddButton) {
         let picker = WorkspaceIDPickerViewController(
             unavailableWorkspaceIDs: Set(WorkspaceID.allCases).subtracting(sender.availableWorkspaceIDs),
-            displayOptions: snapshotProvider().workspaceDisplayOptions,
-            addHandler: addWorkspaceHandler
+            displayOptions: service.snapshot().workspaceDisplayOptions,
+            addHandler: service.addWorkspaces
         )
         presentAsSheet(picker)
     }
@@ -358,7 +350,7 @@ private extension WorkspaceSettingsViewController {
         }
 
         do {
-            try removeWorkspaceHandler(sender.workspaceID)
+            try service.removeWorkspace(sender.workspaceID)
         } catch {
             log.error("Workspace removal failed id=\(sender.workspaceID.rawValue): \(String(describing: error))")
             refresh()

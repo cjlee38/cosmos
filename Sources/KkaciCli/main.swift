@@ -32,17 +32,23 @@ private func runREPL() {
     ).run()
 }
 
-let arguments = Array(CommandLine.arguments.dropFirst())
-if arguments == ["displays"] {
-    let topology = MonitorSlotResolver(displayProvider: DisplayProvider()).topology()
-    let lines = DisplayListFormatter.lines(for: topology)
-    if lines.isEmpty {
-        print("No displays found.")
-    } else {
-        lines.forEach { print($0) }
+switch CLIInvocation(arguments: Array(CommandLine.arguments.dropFirst())) {
+case .displays:
+    do {
+        let topology = try MonitorSlotResolver(displayProvider: DisplayProvider()).topology()
+        let lines = DisplayListFormatter.lines(for: topology)
+        if lines.isEmpty {
+            print("No displays found.")
+        } else {
+            lines.forEach { print($0) }
+        }
+    } catch {
+        print("error: \(error)")
+        exit(EXIT_FAILURE)
     }
-} else if arguments.isEmpty {
+case .repl:
     runREPL()
-} else {
+case .invalid:
     print("usage: kkaci [displays]")
+    exit(EXIT_FAILURE)
 }

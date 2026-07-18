@@ -101,17 +101,14 @@ final class WorkspaceIDPickerViewController: NSViewController {
         for option in displayOptions {
             displaySelector.addItem(withTitle: option.title)
             displaySelector.lastItem?.representedObject = option.displayID
-            displaySelector.lastItem?.isEnabled = option.isEnabled
         }
-        if let firstEnabledItem = displaySelector.itemArray.first(where: \.isEnabled) {
-            displaySelector.select(firstEnabledItem)
-        }
+        displaySelector.selectItem(at: 0)
     }
 }
 
 final class WorkspaceIDPickerView: NSView {
     private static let rows: [[WorkspaceID]] = [
-        ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+        ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
         ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
         ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
         ["Z", "X", "C", "V", "B", "N", "M"]
@@ -120,7 +117,6 @@ final class WorkspaceIDPickerView: NSView {
 
     private let unavailableWorkspaceIDs: Set<WorkspaceID>
     private var selectedIDs: Set<WorkspaceID> = []
-    private var buttonsByID: [WorkspaceID: WorkspaceIDKeyButton] = [:]
     var onSelectionChanged: (([WorkspaceID]) -> Void)?
 
     init(unavailableWorkspaceIDs: Set<WorkspaceID>) {
@@ -163,7 +159,6 @@ final class WorkspaceIDPickerView: NSView {
             button.target = self
             button.action = #selector(toggleWorkspace(_:))
             button.apply(isSelected: false, isUnavailable: unavailableWorkspaceIDs.contains(workspaceID))
-            buttonsByID[workspaceID] = button
             return button
         }
         let row = NSStackView(views: buttons)

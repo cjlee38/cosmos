@@ -3,6 +3,18 @@ import Foundation
 import XCTest
 
 final class KkaciConfigTests: XCTestCase {
+    func testShortcutParsesAliasesIntoCanonicalPlatformIndependentParts() throws {
+        let shortcut = try Shortcut(parsing: "ctrl+alt+shift+cmd+a")
+
+        XCTAssertEqual(shortcut.modifiers, [.control, .option, .shift, .command])
+        XCTAssertEqual(shortcut.key, "a")
+    }
+
+    func testShortcutRejectsMissingAndMultipleKeys() {
+        XCTAssertThrowsError(try Shortcut(parsing: "option+shift"))
+        XCTAssertThrowsError(try Shortcut(parsing: "option+a+b"))
+    }
+
     func testDefaultConfigPathUsesYamlInDotConfigDirectory() {
         XCTAssertEqual(
             FileKkaciConfigStore.default.url,
@@ -13,33 +25,20 @@ final class KkaciConfigTests: XCTestCase {
         )
     }
 
-    func testDefaultConfigProjectsTypedShortcutsToRuntimeBindings() {
-        XCTAssertEqual(KkaciConfig.default.workspaceIDs, ["1", "2", "3"])
-        XCTAssertEqual(KkaciConfig.default.bindings, [
-            HotKeyBinding(key: "ctrl+tab", command: "next-workspace"),
-            HotKeyBinding(key: "ctrl+shift+tab", command: "previous-workspace"),
-            HotKeyBinding(key: "option+tab", command: "next-window"),
-            HotKeyBinding(key: "option+shift+tab", command: "previous-window"),
-            HotKeyBinding(key: "option+1", command: "workspace", workspace: "1"),
-            HotKeyBinding(key: "option+shift+1", command: "move-window-to-workspace", workspace: "1"),
-            HotKeyBinding(key: "option+2", command: "workspace", workspace: "2"),
-            HotKeyBinding(key: "option+shift+2", command: "move-window-to-workspace", workspace: "2"),
-            HotKeyBinding(key: "option+3", command: "workspace", workspace: "3"),
-            HotKeyBinding(key: "option+shift+3", command: "move-window-to-workspace", workspace: "3")
+    func testDefaultConfigProjectsConfiguredShortcutsWithTypedTargets() {
+        XCTAssertEqual(KkaciConfig.default.workspaces.map(\.id), ["1", "2", "3"])
+        XCTAssertEqual(KkaciConfig.default.configuredShortcuts, [
+            ConfiguredShortcut(key: "ctrl+tab", target: .workspaceSwitcherNext),
+            ConfiguredShortcut(key: "ctrl+shift+tab", target: .workspaceSwitcherPrevious),
+            ConfiguredShortcut(key: "option+tab", target: .windowSwitcherNext),
+            ConfiguredShortcut(key: "option+shift+tab", target: .windowSwitcherPrevious),
+            ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
+            ConfiguredShortcut(key: "option+shift+1", target: .moveWindow("1")),
+            ConfiguredShortcut(key: "option+2", target: .switchWorkspace("2")),
+            ConfiguredShortcut(key: "option+shift+2", target: .moveWindow("2")),
+            ConfiguredShortcut(key: "option+3", target: .switchWorkspace("3")),
+            ConfiguredShortcut(key: "option+shift+3", target: .moveWindow("3"))
         ])
-    }
-
-    func testWorkspaceShortcutBindingsUseTheNonModifierKey() {
-        let shortcuts = WorkspaceShortcutBindings([
-            HotKeyBinding(key: "option+1", command: "workspace", workspace: "1"),
-            HotKeyBinding(key: "option+b", command: "workspace", workspace: "build"),
-            HotKeyBinding(key: "option+shift+c", command: "move-window-to-workspace", workspace: "build")
-        ])
-
-        XCTAssertEqual(shortcuts.key(for: "1"), "1")
-        XCTAssertEqual(shortcuts.key(for: "build"), "b")
-        XCTAssertEqual(shortcuts.workspace(for: "B"), "build")
-        XCTAssertNil(shortcuts.workspace(for: "c"))
     }
 
     func testConfigOrdersWorkspaceIDsAndNormalizesDisplaySlots() {
@@ -50,17 +49,15 @@ final class KkaciConfigTests: XCTestCase {
             WorkspaceConfig(id: "A", display: 2)
         ])
 
-        XCTAssertEqual(config.workspaceIDs, ["0", "1", "A", "B"])
-        XCTAssertEqual(config.monitorSlot(for: "a"), 2)
-        XCTAssertEqual(config.monitorSlot(for: "B"), 1)
-        XCTAssertEqual(config.monitorSlot(for: "missing"), 1)
+        XCTAssertEqual(config.workspaces.map(\.id), ["0", "1", "A", "B"])
+        XCTAssertEqual(config.workspaces.map(\.display), [1, 1, 2, 1])
     }
 
     func testAddingAndRemovingWorkspaceUsesCanonicalOrderAndDefaultShortcuts() throws {
         let added = try XCTUnwrap(KkaciConfig.default.addingWorkspace("A", display: 2))
 
-        XCTAssertEqual(added.workspaceIDs, ["1", "2", "3", "A"])
-        XCTAssertEqual(added.monitorSlot(for: "A"), 2)
+        XCTAssertEqual(added.workspaces.map(\.id), ["1", "2", "3", "A"])
+        XCTAssertEqual(added.workspaces.last?.display, 2)
         XCTAssertEqual(added.workspaces.last?.shortcuts, WorkspaceShortcutConfig(
             switchWorkspace: "option+a",
             moveWindow: "option+shift+a"
@@ -68,13 +65,13 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertNil(added.addingWorkspace("A"))
 
         let removed = try XCTUnwrap(added.removingWorkspace("2"))
-        XCTAssertEqual(removed.workspaceIDs, ["1", "3", "A"])
+        XCTAssertEqual(removed.workspaces.map(\.id), ["1", "3", "A"])
     }
 
     func testAddingMultipleWorkspacesUsesOneCanonicalConfig() throws {
         let config = try XCTUnwrap(KkaciConfig.default.addingWorkspaces(["B", "0", "A", "B"]))
 
-        XCTAssertEqual(config.workspaceIDs, ["0", "1", "2", "3", "A", "B"])
+        XCTAssertEqual(config.workspaces.map(\.id), ["0", "1", "2", "3", "A", "B"])
     }
 
     func testRemovingTheLastWorkspaceIsRejected() {
@@ -83,7 +80,7 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertNil(config.removingWorkspace("1"))
     }
 
-    func testAssigningWorkspaceMonitorPreservesWorkspaceShortcuts() {
+    func testAssigningWorkspaceMonitorPreservesWorkspaceShortcuts() throws {
         let workspaceShortcuts = WorkspaceShortcutConfig(
             switchWorkspace: "option+2",
             moveWindow: "option+shift+2"
@@ -93,9 +90,9 @@ final class KkaciConfigTests: XCTestCase {
             WorkspaceConfig(id: "2", shortcuts: workspaceShortcuts)
         ])
 
-        let updated = config.assigningWorkspace("2", toMonitorSlot: 3)
+        let updated = try config.assigningWorkspace(XCTUnwrap(WorkspaceID(rawValue: "2")), toMonitorSlot: 3)
 
-        XCTAssertEqual(updated.monitorSlot(for: "2"), 3)
+        XCTAssertEqual(updated.workspaces[1].display, 3)
         XCTAssertEqual(updated.workspaces[1].shortcuts, workspaceShortcuts)
     }
 
@@ -123,13 +120,13 @@ final class KkaciConfigTests: XCTestCase {
         let config = KkaciConfig.default
 
         let switched = try XCTUnwrap(config.updatingShortcut("control+a", for: .switchWorkspace("2")))
-        XCTAssertEqual(switched.workspace(for: "2")?.shortcuts.switchWorkspace, "control+a")
-        XCTAssertEqual(switched.workspace(for: "2")?.shortcuts.moveWindow, "option+shift+2")
+        XCTAssertEqual(switched.workspaces[1].shortcuts.switchWorkspace, "control+a")
+        XCTAssertEqual(switched.workspaces[1].shortcuts.moveWindow, "option+shift+2")
 
         let moved = try XCTUnwrap(config.updatingShortcut("command+a", for: .moveWindow("2")))
-        XCTAssertEqual(moved.workspace(for: "2")?.shortcuts.switchWorkspace, "option+2")
-        XCTAssertEqual(moved.workspace(for: "2")?.shortcuts.moveWindow, "command+a")
-        XCTAssertEqual(moved.workspace(for: "2")?.display, config.workspace(for: "2")?.display)
+        XCTAssertEqual(moved.workspaces[1].shortcuts.switchWorkspace, "option+2")
+        XCTAssertEqual(moved.workspaces[1].shortcuts.moveWindow, "command+a")
+        XCTAssertEqual(moved.workspaces[1].display, config.workspaces[1].display)
     }
 
     func testUpdatingShortcutClearsBlankValuesAndRejectsUnknownWorkspace() throws {
@@ -194,8 +191,8 @@ final class KkaciConfigTests: XCTestCase {
 
         let config = try FileKkaciConfigStore(url: url).load()
 
-        XCTAssertEqual(config.workspaceIDs, ["1", "D"])
-        XCTAssertEqual(config.monitorSlot(for: "D"), 2)
+        XCTAssertEqual(config.workspaces.map(\.id), ["1", "D"])
+        XCTAssertEqual(config.workspaces[1].display, 2)
         XCTAssertEqual(config.shortcuts.workspaceSwitcher.next, "ctrl+tab")
         XCTAssertEqual(config.workspaces[1].shortcuts.moveWindow, "option+shift+d")
     }

@@ -4,7 +4,7 @@ import Foundation
 public typealias DisplayID = CGDirectDisplayID
 
 public protocol HidePointProviding {
-    func hidePoint(for frame: WindowFrame) -> CGPoint
+    func hidePoint(for frame: WindowFrame) throws -> CGPoint
 }
 
 public enum DisplayRole: Equatable {
@@ -46,16 +46,15 @@ public struct DisplaySnapshot: Equatable {
     public var isMain: Bool {
         role == .main
     }
-
 }
 
-public protocol DisplayProviding: HidePointProviding {
-    func displays() -> [DisplaySnapshot]
+public protocol DisplayProviding {
+    func displays() throws -> [DisplaySnapshot]
 }
 
 public protocol WindowSystem {
     @discardableResult
-    func refresh() -> [WindowSnapshot]
+    func refresh() throws -> [WindowSnapshot]
     func contains(_ id: WindowID) -> Bool
     func focusedWindowID() -> WindowID?
     func frame(for id: WindowID) -> WindowFrame?

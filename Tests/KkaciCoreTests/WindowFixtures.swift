@@ -29,20 +29,27 @@ extension WindowSnapshot {
 }
 
 func workspaceConfigs(
-    _ names: [String],
+    _ ids: [String],
     displays: [String: MonitorSlot] = [:]
 ) -> [WorkspaceConfig] {
-    names.map { name in
-        guard let id = WorkspaceID(rawValue: name) else {
-            preconditionFailure("Invalid workspace ID in test: \(name)")
+    ids.map { value in
+        guard let id = WorkspaceID(rawValue: value) else {
+            preconditionFailure("Invalid workspace ID in test: \(value)")
         }
-        return WorkspaceConfig(id: id, display: displays[name] ?? 1)
+        return WorkspaceConfig(id: id, display: displays[value] ?? 1)
     }
+}
+
+func configuredMonitorSlot(
+    for workspace: String,
+    in controller: WorkspaceController
+) -> MonitorSlot? {
+    controller.currentConfig.workspaces.first { $0.id.rawValue == workspace }?.display
 }
 
 func assertReassigned(
     _ actual: [HiddenWindowRecordAssignment],
-    _ expected: [(WindowID, String)],
+    _ expected: [(WindowID, WorkspaceID)],
     file: StaticString = #filePath,
     line: UInt = #line
 ) {

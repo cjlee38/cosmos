@@ -2,35 +2,35 @@ import Foundation
 
 final class HiddenWindowOperator {
     private let windowSystem: any WindowSystem
-    private let displayProvider: any HidePointProviding
+    private let hidePointProvider: any HidePointProviding
     private let restorableFrameResolver: RestorableFrameResolver
-    private let windowStore: WindowRuntimeStore
+    private let windowCache: WindowStateCache
     private let recordRepository: HiddenWindowRecordRepository
 
     init(
         windowSystem: any WindowSystem,
-        displayProvider: any HidePointProviding,
+        hidePointProvider: any HidePointProviding,
         restorableFrameResolver: RestorableFrameResolver,
-        windowStore: WindowRuntimeStore,
+        windowCache: WindowStateCache,
         recordRepository: HiddenWindowRecordRepository
     ) {
         self.windowSystem = windowSystem
-        self.displayProvider = displayProvider
+        self.hidePointProvider = hidePointProvider
         self.restorableFrameResolver = restorableFrameResolver
-        self.windowStore = windowStore
+        self.windowCache = windowCache
         self.recordRepository = recordRepository
     }
 
     func hide(
         _ id: WindowID,
+        workspace: WorkspaceID,
         state: inout WorkspaceState,
-        currentWorkspace: String,
         preferredFrame: WindowFrame? = nil
     ) throws {
         guard windowSystem.contains(id) else {
             throw WorkspaceError.windowNotFound(id)
         }
-        guard let window = windowStore.snapshot(for: id) else {
+        guard let window = windowCache.snapshot(for: id) else {
             throw WorkspaceError.windowNotFound(id)
         }
 
@@ -42,11 +42,11 @@ final class HiddenWindowOperator {
             state.replaceHiddenFrame(frame, for: id)
         }
 
-        let point = displayProvider.hidePoint(for: frame)
+        let point = try hidePointProvider.hidePoint(for: frame)
         recordRepository.upsertRecord(
             HiddenWindowRecordPolicy.makeRecord(
                 window: window,
-                workspace: state.membership(for: id) ?? currentWorkspace,
+                workspace: workspace,
                 originalFrame: frame,
                 hiddenPosition: point
             )
@@ -54,7 +54,7 @@ final class HiddenWindowOperator {
 
         do {
             try windowSystem.setPosition(point, for: id)
-            windowStore.updateFrame(
+            windowCache.updateFrame(
                 WindowFrame(origin: point, size: frame.size),
                 for: id
             )
@@ -83,20 +83,20 @@ final class HiddenWindowOperator {
 
         guard let frame = state.hiddenFrame(for: id) else {
             if let preferredFrame {
-                let targetFrame = restorableFrameResolver.frameForRestore(preferredFrame)
+                let targetFrame = try restorableFrameResolver.frameForRestore(preferredFrame)
                 let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
-                windowStore.updateFrame(appliedFrame, for: id)
+                windowCache.updateFrame(appliedFrame, for: id)
             }
             return .alreadyVisible
         }
 
-        let targetFrame = restorableFrameResolver.frameForRestore(preferredFrame ?? frame)
+        let targetFrame = try restorableFrameResolver.frameForRestore(preferredFrame ?? frame)
         let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
-        windowStore.updateFrame(appliedFrame, for: id)
+        windowCache.updateFrame(appliedFrame, for: id)
         state.clearHiddenFrame(for: id)
         recordRepository.removeRecord(
             windowID: id,
-            pid: windowStore.snapshot(for: id)?.app.pid
+            pid: windowCache.snapshot(for: id)?.app.pid
         )
         return .restored
     }
@@ -107,10 +107,10 @@ final class HiddenWindowOperator {
             guard let frame = state.hiddenFrame(for: id), windowSystem.contains(id) else {
                 continue
             }
-            let targetFrame = restorableFrameResolver.frameForRestore(frame)
             do {
+                let targetFrame = try restorableFrameResolver.frameForRestore(frame)
                 let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
-                windowStore.updateFrame(appliedFrame, for: id)
+                windowCache.updateFrame(appliedFrame, for: id)
             } catch {
                 failedWindowIDs.append(id)
             }

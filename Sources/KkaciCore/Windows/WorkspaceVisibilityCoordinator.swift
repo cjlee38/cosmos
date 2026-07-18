@@ -3,28 +3,27 @@ import Foundation
 final class WorkspaceVisibilityCoordinator {
     private let windowSystem: any WindowSystem
     private let hiddenWindowOperator: HiddenWindowOperator
-    private let windowStore: WindowRuntimeStore
+    private let windowCache: WindowStateCache
 
     init(
         windowSystem: any WindowSystem,
         hiddenWindowOperator: HiddenWindowOperator,
-        windowStore: WindowRuntimeStore
+        windowCache: WindowStateCache
     ) {
         self.windowSystem = windowSystem
         self.hiddenWindowOperator = hiddenWindowOperator
-        self.windowStore = windowStore
+        self.windowCache = windowCache
     }
 
     func applyVisibleWorkspaces(
         state: inout WorkspaceState,
         focusWindowID: WindowID? = nil,
         hideLastWindowID: WindowID? = nil,
-        requiredWindowIDs: Set<WindowID> = [],
+        mustSucceedWindowIDs: Set<WindowID> = [],
         targetFrames: [WindowID: WindowFrame] = [:]
     ) throws {
-        let currentWorkspace = state.currentWorkspace
         let visibleWorkspaces = state.visibleWorkspaces(
-            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+            availableMonitorSlots: windowCache.displayTopology.availableMonitorSlots
         )
 
         for workspace in visibleWorkspaces.sorted() {
@@ -36,7 +35,7 @@ final class WorkspaceVisibilityCoordinator {
                         preferredFrame: targetFrames[id]
                     )
                 } catch {
-                    if requiredWindowIDs.contains(id) {
+                    if mustSucceedWindowIDs.contains(id) {
                         throw error
                     }
                 }
@@ -45,10 +44,10 @@ final class WorkspaceVisibilityCoordinator {
 
         if let focusWindowID {
             windowSystem.focus(focusWindowID)
-            windowStore.updateFocusedWindowID(focusWindowID)
+            windowCache.updateFocusedWindowID(windowSystem.focusedWindowID())
         }
 
-        for id in hideOrder(
+        for (id, workspace) in hideOrder(
             state: state,
             visibleWorkspaces: visibleWorkspaces,
             hideLastWindowID: hideLastWindowID
@@ -56,12 +55,12 @@ final class WorkspaceVisibilityCoordinator {
             do {
                 try hiddenWindowOperator.hide(
                     id,
+                    workspace: workspace,
                     state: &state,
-                    currentWorkspace: currentWorkspace,
                     preferredFrame: targetFrames[id]
                 )
             } catch {
-                if requiredWindowIDs.contains(id) {
+                if mustSucceedWindowIDs.contains(id) {
                     throw error
                 }
             }
@@ -70,44 +69,54 @@ final class WorkspaceVisibilityCoordinator {
         if focusWindowID == nil,
            let hideLastWindowID,
            state.isHidden(hideLastWindowID) {
-            windowStore.updateFocusedWindowID(nil)
+            windowCache.updateFocusedWindowID(nil)
         }
     }
 
     func rollback(
+        after applyError: Error,
         to previousState: WorkspaceState,
         focusedWindowID: WindowID?,
         state: inout WorkspaceState
     ) throws {
-        state.restoreLogicalState(from: previousState)
-        try applyVisibleWorkspaces(
-            state: &state,
-            focusWindowID: focusedWindowID,
-            requiredWindowIDs: Set(previousState.assignedWindowIDs)
-        )
-        state = previousState
-        windowStore.updateFocusedWindowID(focusedWindowID)
+        do {
+            state.prepareForRollback(to: previousState)
+            try applyVisibleWorkspaces(
+                state: &state,
+                focusWindowID: focusedWindowID,
+                mustSucceedWindowIDs: Set(previousState.assignedWindowIDs)
+            )
+            state = previousState
+            windowCache.updateFocusedWindowID(focusedWindowID)
+        } catch let rollbackError {
+            throw WorkspaceTransactionError(
+                applyError: applyError,
+                rollbackError: rollbackError
+            )
+        }
     }
 
     private func hideOrder(
         state: WorkspaceState,
-        visibleWorkspaces: Set<String>,
+        visibleWorkspaces: Set<WorkspaceID>,
         hideLastWindowID: WindowID?
-    ) -> [WindowID] {
-        var ids = state.assignedWindowIDs
-            .filter { id in
-                guard let workspace = state.membership(for: id) else {
-                    return false
+    ) -> [(WindowID, WorkspaceID)] {
+        var windows = state.assignedWindowIDs
+            .compactMap { id -> (WindowID, WorkspaceID)? in
+                guard let workspace = state.membership(for: id),
+                      !visibleWorkspaces.contains(workspace)
+                else {
+                    return nil
                 }
-                return !visibleWorkspaces.contains(workspace)
+                return (id, workspace)
             }
-            .sorted()
+            .sorted { $0.0 < $1.0 }
 
-        if let hideLastWindowID, let index = ids.firstIndex(of: hideLastWindowID) {
-            ids.remove(at: index)
-            ids.append(hideLastWindowID)
+        if let hideLastWindowID, let index = windows.firstIndex(where: { $0.0 == hideLastWindowID }) {
+            let window = windows.remove(at: index)
+            windows.append(window)
         }
 
-        return ids
+        return windows
     }
 }

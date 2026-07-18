@@ -8,6 +8,7 @@ struct WorkspaceSwitcherInteractions {
 final class WorkspaceSwitcherListView: NSView {
     private var cardViewsByID: [String: WorkspacePreviewCardView] = [:]
     private var recycledCardViews: [WorkspacePreviewCardView] = []
+    private let hoverGate = SwitcherHoverGate()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -23,6 +24,10 @@ final class WorkspaceSwitcherListView: NSView {
         for _ in 0 ..< missingCount {
             recycledCardViews.append(WorkspacePreviewCardView(frame: .zero))
         }
+    }
+
+    func beginPresentation() {
+        hoverGate.reset()
     }
 
     func configure(
@@ -41,7 +46,6 @@ final class WorkspaceSwitcherListView: NSView {
         recycleMissingCards(keeping: Set(groups.map(\.id)))
         ensureCapacity(groups.count)
 
-        let hoverGate = SwitcherHoverGate()
         for (index, group) in groups.enumerated() {
             let row = index / layout.columns
             let column = index % layout.columns
@@ -184,8 +188,8 @@ private final class WorkspacePreviewCardView: NSView {
         onClick = configuration.onClick
         frame.size = configuration.cardSize
         titleLabel.stringValue = group.id
-        layoutContent()
         update(group: group)
+        layoutContent()
         updateSelection(configuration.isSelected)
     }
 
@@ -266,17 +270,9 @@ private final class WorkspacePreviewCardView: NSView {
         shortcutLabel.alignment = .center
         shortcutLabel.textColor = NSColor.white.withAlphaComponent(0.5)
         shortcutLabel.maximumNumberOfLines = 1
-        shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
-        fallbackLabel.translatesAutoresizingMaskIntoConstraints = false
         previewSurface.addSubview(previewImageView)
         previewSurface.addSubview(fallbackLabel)
         previewSurface.addSubview(shortcutLabel)
-        NSLayoutConstraint.activate([
-            shortcutLabel.centerXAnchor.constraint(equalTo: previewSurface.centerXAnchor),
-            shortcutLabel.centerYAnchor.constraint(equalTo: previewSurface.centerYAnchor),
-            fallbackLabel.centerXAnchor.constraint(equalTo: previewSurface.centerXAnchor),
-            fallbackLabel.topAnchor.constraint(equalTo: shortcutLabel.bottomAnchor, constant: 8)
-        ])
 
         addSubview(previewSurface)
         addSubview(subtitleLabel)
@@ -284,29 +280,53 @@ private final class WorkspacePreviewCardView: NSView {
     }
 
     private func layoutContent() {
-        let padding: CGFloat = 12
-        let titleHeight: CGFloat = 22
-        let subtitleHeight: CGFloat = 18
+        let scale = min(1, max(0.45, bounds.height / 180))
+        let padding = max(4, floor(12 * scale))
+        let titleHeight = max(10, floor(22 * scale))
+        let subtitleHeight = max(8, floor(18 * scale))
+        titleLabel.font = .systemFont(ofSize: max(9, floor(15 * scale)), weight: .semibold)
+        subtitleLabel.font = .systemFont(ofSize: max(7, floor(12 * scale)))
+        subtitleLabel.isHidden = bounds.height < 80
         titleLabel.frame = NSRect(
             x: padding,
             y: bounds.height - padding - titleHeight,
             width: bounds.width - padding * 2,
             height: titleHeight
         )
+        let subtitleBottom = subtitleLabel.isHidden
+            ? titleLabel.frame.minY
+            : titleLabel.frame.minY - subtitleHeight
         subtitleLabel.frame = NSRect(
             x: padding,
-            y: titleLabel.frame.minY - subtitleHeight,
-            width: bounds.width - padding * 2,
-            height: subtitleHeight
+            y: subtitleBottom,
+            width: max(1, bounds.width - padding * 2),
+            height: subtitleLabel.isHidden ? 0 : subtitleHeight
         )
         previewSurface.frame = NSRect(
             x: padding,
             y: padding,
-            width: bounds.width - padding * 2,
-            height: subtitleLabel.frame.minY - padding * 1.35
+            width: max(1, bounds.width - padding * 2),
+            height: max(1, subtitleBottom - padding * 1.35)
         )
         previewImageView.frame = previewSurface.bounds
         shortcutLabel.font = .systemFont(ofSize: previewSurface.bounds.height * 0.5, weight: .semibold)
+        shortcutLabel.sizeToFit()
+        shortcutLabel.frame = NSRect(
+            x: 0,
+            y: floor(previewSurface.bounds.midY - shortcutLabel.frame.height / 2),
+            width: previewSurface.bounds.width,
+            height: shortcutLabel.frame.height
+        )
+        fallbackLabel.font = .systemFont(ofSize: max(8, floor(19.5 * scale)), weight: .medium)
+        fallbackLabel.sizeToFit()
+        let fallbackY = shortcutLabel.isHidden
+            ? previewSurface.bounds.midY - fallbackLabel.frame.height / 2
+            : previewSurface.bounds.midY - shortcutLabel.intrinsicContentSize.height / 2
+            - 8 - fallbackLabel.frame.height
+        fallbackLabel.frame.origin = NSPoint(
+            x: previewSurface.bounds.midX - fallbackLabel.frame.width / 2,
+            y: max(0, fallbackY)
+        )
     }
 
     private func metadataText(for windows: [WindowSwitcherItem]) -> String {

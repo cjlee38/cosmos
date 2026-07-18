@@ -65,7 +65,7 @@ final class AppearanceSettingsTests: XCTestCase {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = AppSettingsStore(defaults: defaults)
-        let factory = SwitcherOverlayViewFactory(appSettingsStore: store)
+        let factory = SwitcherOverlayContentController(appSettingsStore: store)
         let availableFrame = NSRect(x: 0, y: 0, width: 1200, height: 800)
 
         store.setWindowSwitcherSize(1.0)
@@ -101,7 +101,7 @@ final class AppearanceSettingsTests: XCTestCase {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = AppSettingsStore(defaults: defaults)
-        let factory = SwitcherOverlayViewFactory(appSettingsStore: store)
+        let factory = SwitcherOverlayContentController(appSettingsStore: store)
         let availableFrame = NSRect(x: 0, y: 0, width: 1200, height: 800)
         let items = (1 ... 1).map { index in
             WindowSwitcherItem(
@@ -150,10 +150,10 @@ final class AppearanceSettingsTests: XCTestCase {
     }
 
     private func windowListSize(
-        factory: SwitcherOverlayViewFactory,
+        factory: SwitcherOverlayContentController,
         availableFrame: NSRect
     ) -> NSSize {
-        factory.makeWindowList(
+        factory.configureWindowList(
             items: [],
             selectedID: 0,
             availableFrame: availableFrame
@@ -161,10 +161,10 @@ final class AppearanceSettingsTests: XCTestCase {
     }
 
     private func workspaceListSize(
-        factory: SwitcherOverlayViewFactory,
+        factory: SwitcherOverlayContentController,
         availableFrame: NSRect
     ) -> NSSize {
-        factory.makeWorkspaceList(
+        factory.configureWorkspaceList(
             groups: [],
             selectedID: "",
             availableFrame: availableFrame,
@@ -176,12 +176,12 @@ final class AppearanceSettingsTests: XCTestCase {
     private func windowTileAndPreviewSizes(
         size: Double,
         store: AppSettingsStore,
-        factory: SwitcherOverlayViewFactory,
+        factory: SwitcherOverlayContentController,
         items: [WindowSwitcherItem],
         availableFrame: NSRect
     ) throws -> (tile: NSSize, preview: NSSize) {
         store.setWindowSwitcherSize(size)
-        let list = factory.makeWindowList(
+        let list = factory.configureWindowList(
             items: items,
             selectedID: items[0].windowID,
             availableFrame: availableFrame

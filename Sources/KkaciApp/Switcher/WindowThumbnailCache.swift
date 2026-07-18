@@ -10,22 +10,13 @@ final class WindowThumbnailCache {
     private var capturingWindowIDs: Set<WindowID> = []
     private var liveWindowIDs: Set<WindowID> = []
     private var onThumbnailUpdated: ((WindowID) -> Void)?
-    private var onCaptureCycleCompleted: (() -> Void)?
-
-    var isRefreshing: Bool {
-        !queuedWindowIDs.isEmpty || !capturingWindowIDs.isEmpty
-    }
 
     init(captureImage: @escaping (WindowID) -> CGImage? = WindowThumbnailCapture.capture) {
         self.captureImage = captureImage
     }
 
-    func setUpdateHandlers(
-        onThumbnailUpdated: @escaping (WindowID) -> Void,
-        onCaptureCycleCompleted: @escaping () -> Void
-    ) {
-        self.onThumbnailUpdated = onThumbnailUpdated
-        self.onCaptureCycleCompleted = onCaptureCycleCompleted
+    func setUpdateHandler(_ handler: @escaping (WindowID) -> Void) {
+        onThumbnailUpdated = handler
     }
 
     func thumbnail(for id: WindowID) -> NSImage? {
@@ -82,9 +73,7 @@ final class WindowThumbnailCache {
         guard capturingWindowIDs.isEmpty else {
             return
         }
-        if queuedWindowIDs.isEmpty {
-            onCaptureCycleCompleted?()
-        } else {
+        if !queuedWindowIDs.isEmpty {
             startNextCaptureBatch()
         }
     }

@@ -14,26 +14,23 @@ public struct MonitorSlotSnapshot: Equatable {
 }
 
 public struct DisplayTopologySnapshot: Equatable {
-    public let displays: [DisplaySnapshot]
     public let monitorSlots: [MonitorSlotSnapshot]
 
-    public init(displays: [DisplaySnapshot], monitorSlots: [MonitorSlotSnapshot]) {
-        self.displays = displays
+    public init(monitorSlots: [MonitorSlotSnapshot]) {
         self.monitorSlots = monitorSlots
     }
 
-    public static let empty = DisplayTopologySnapshot(displays: [], monitorSlots: [])
+    public static let empty = DisplayTopologySnapshot(monitorSlots: [])
+
+    public var displays: [DisplaySnapshot] {
+        monitorSlots.map(\.display)
+    }
 
     public var availableMonitorSlots: Set<MonitorSlot> {
         Set(monitorSlots.map(\.slot))
     }
-}
 
-public enum WorkspaceDisplayAssignment {
-    public static func monitorSlot(
-        for displayID: DisplayID,
-        monitorSlots: [MonitorSlotSnapshot]
-    ) throws -> MonitorSlot {
+    public func monitorSlot(for displayID: DisplayID) throws -> MonitorSlot {
         guard let monitorSlot = monitorSlots.first(where: { $0.display.id == displayID })?.slot else {
             throw WorkspaceError.displayNotFound(displayID)
         }
@@ -48,26 +45,15 @@ public struct MonitorSlotResolver {
         self.displayProvider = displayProvider
     }
 
-    public func topology() -> DisplayTopologySnapshot {
-        let displays = displayProvider.displays()
-        return DisplayTopologySnapshot(
-            displays: displays,
-            monitorSlots: slots(for: displays)
-        )
-    }
-
-    public func slots() -> [MonitorSlotSnapshot] {
-        topology().monitorSlots
+    public func topology() throws -> DisplayTopologySnapshot {
+        let displays = try displayProvider.displays()
+        return DisplayTopologySnapshot(monitorSlots: slots(for: displays))
     }
 
     func slots(for displays: [DisplaySnapshot]) -> [MonitorSlotSnapshot] {
         orderedDisplays(in: displays).enumerated().map { index, display in
             MonitorSlotSnapshot(slot: index + 1, display: display)
         }
-    }
-
-    func slot(containing frame: WindowFrame?) -> MonitorSlot {
-        slot(containing: frame, among: slots())
     }
 
     func slot(containing frame: WindowFrame?, among slots: [MonitorSlotSnapshot]) -> MonitorSlot {
@@ -80,10 +66,6 @@ public struct MonitorSlotResolver {
 
     func display(for slot: MonitorSlot, among slots: [MonitorSlotSnapshot]) -> DisplaySnapshot? {
         slots.first { $0.slot == slot }?.display
-    }
-
-    func translatedFrame(_ frame: WindowFrame, to slot: MonitorSlot) -> WindowFrame? {
-        translatedFrame(frame, to: slot, among: slots())
     }
 
     func translatedFrame(
@@ -106,7 +88,7 @@ public struct MonitorSlotResolver {
         to target: DisplaySnapshot
     ) -> WindowFrame? {
         if source.id == target.id, source.visibleFrame == target.visibleFrame {
-            return nil
+            return frame
         }
 
         let sourceFrame = source.visibleFrame

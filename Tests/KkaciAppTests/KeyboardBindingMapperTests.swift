@@ -7,7 +7,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         let actions = KeyboardShortcutActionSpy()
         let registration = try XCTUnwrap(
             KeyboardBindingMapper().registrations(
-                for: [HotKeyBinding(key: "option+tab", command: "next-window")],
+                for: [ConfiguredShortcut(key: "option+tab", target: .windowSwitcherNext)],
                 actions: actions
             ).first
         )
@@ -16,6 +16,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         registration.onRepeat?()
         registration.onRelease?()
 
+        XCTAssertEqual(registration.target, .windowSwitcherNext)
         XCTAssertEqual(actions.windowSteps.count, 2)
         XCTAssertEqual(actions.windowSteps[0].direction, .forward)
         XCTAssertTrue(actions.windowSteps[0].wraps)
@@ -28,7 +29,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         let actions = KeyboardShortcutActionSpy()
         let registration = try XCTUnwrap(
             KeyboardBindingMapper().registrations(
-                for: [HotKeyBinding(key: "ctrl+shift+tab", command: "previous-workspace")],
+                for: [ConfiguredShortcut(key: "ctrl+shift+tab", target: .workspaceSwitcherPrevious)],
                 actions: actions
             ).first
         )
@@ -36,24 +37,129 @@ final class KeyboardBindingMapperTests: XCTestCase {
         registration.onPress()
         registration.onRelease?()
 
+        XCTAssertEqual(registration.target, .workspaceSwitcherPrevious)
         XCTAssertEqual(actions.workspaceSteps, [.backward])
         XCTAssertEqual(actions.workspaceCommitCount, 1)
     }
 
-    func testWorkspaceCommandsPassConfiguredWorkspaceToActions() throws {
+    func testWorkspaceCommandsPassConfiguredWorkspaceToActions() {
         let actions = KeyboardShortcutActionSpy()
-        let registrations = try KeyboardBindingMapper().registrations(
+        let registrations = KeyboardBindingMapper().registrations(
             for: [
-                HotKeyBinding(key: "option+d", command: "workspace", workspace: "D"),
-                HotKeyBinding(key: "option+shift+o", command: "move-window-to-workspace", workspace: "O")
+                ConfiguredShortcut(key: "option+d", target: .switchWorkspace("D")),
+                ConfiguredShortcut(key: "option+shift+o", target: .moveWindow("O"))
             ],
             actions: actions
         )
 
         registrations.forEach { $0.onPress() }
 
+        XCTAssertEqual(registrations.map(\.target), [.switchWorkspace("D"), .moveWindow("O")])
         XCTAssertEqual(actions.switchedWorkspaces, ["D"])
         XCTAssertEqual(actions.movedWorkspaces, ["O"])
+    }
+
+    func testWorkspaceSwitchShortcutsCannotShareTheSameTerminalKey() {
+        let actions = KeyboardShortcutActionSpy()
+        let registrations = KeyboardBindingMapper().registrations(
+            for: [
+                ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
+                ConfiguredShortcut(key: "control+1", target: .switchWorkspace("2"))
+            ],
+            actions: actions
+        )
+
+        XCTAssertThrowsError(try KeyboardShortcutResolver().resolve(registrations)) { error in
+            guard let validationError = error as? KeyboardShortcutValidationError else {
+                return XCTFail("Expected KeyboardShortcutValidationError, got \(error)")
+            }
+
+            XCTAssertEqual(validationError.issues.count, 2)
+            XCTAssertEqual(
+                Set(validationError.issues.compactMap(\.target)),
+                Set([ShortcutTarget.switchWorkspace("1"), .switchWorkspace("2")])
+            )
+            XCTAssertTrue(validationError.issues.allSatisfy {
+                $0.message.contains("Workspace selection key is also assigned")
+            })
+        }
+    }
+
+    func testWorkspaceSwitchShortcutsWithDifferentTerminalKeysAreValid() throws {
+        let actions = KeyboardShortcutActionSpy()
+        let registrations = KeyboardBindingMapper().registrations(
+            for: [
+                ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
+                ConfiguredShortcut(key: "control+2", target: .switchWorkspace("2"))
+            ],
+            actions: actions
+        )
+
+        XCTAssertEqual(try KeyboardShortcutResolver().resolve(registrations).count, 2)
+    }
+
+    func testWorkspaceActionsWithAdditionalModifiersDoNotConflictWithSelectionKey() throws {
+        let actions = KeyboardShortcutActionSpy()
+        let registrations = KeyboardBindingMapper().registrations(
+            for: [
+                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
+                ConfiguredShortcut(key: "option+b", target: .switchWorkspace("B")),
+                ConfiguredShortcut(key: "control+b", target: .moveWindow("C"))
+            ],
+            actions: actions
+        )
+
+        XCTAssertEqual(try KeyboardShortcutResolver().resolve(registrations).count, 3)
+    }
+
+    func testWorkspaceTerminalKeyDoesNotConflictWithoutSwitcherHoldModifier() throws {
+        let actions = KeyboardShortcutActionSpy()
+        let registrations = KeyboardBindingMapper().registrations(
+            for: [
+                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
+                ConfiguredShortcut(key: "option+b", target: .switchWorkspace("B")),
+                ConfiguredShortcut(key: "option+shift+b", target: .moveWindow("C"))
+            ],
+            actions: actions
+        )
+
+        XCTAssertEqual(try KeyboardShortcutResolver().resolve(registrations).count, 3)
+    }
+
+    func testSwitcherDirectionsMayUseDifferentHoldModifiers() throws {
+        let registrations = KeyboardBindingMapper().registrations(
+            for: [
+                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
+                ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcherPrevious)
+            ],
+            actions: KeyboardShortcutActionSpy()
+        )
+
+        XCTAssertEqual(try KeyboardShortcutResolver().resolve(registrations).count, 2)
+    }
+
+    func testCycleShortcutConflictMarksOnlyTheExactDuplicateActions() {
+        let registrations = KeyboardBindingMapper().registrations(
+            for: [
+                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
+                ConfiguredShortcut(key: "option+1", target: .workspaceSwitcherPrevious),
+                ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
+                ConfiguredShortcut(key: "option+shift+1", target: .moveWindow("1")),
+                ConfiguredShortcut(key: "option+2", target: .switchWorkspace("2")),
+                ConfiguredShortcut(key: "option+shift+2", target: .moveWindow("2"))
+            ],
+            actions: KeyboardShortcutActionSpy()
+        )
+
+        XCTAssertThrowsError(try KeyboardShortcutResolver().resolve(registrations)) { error in
+            guard let validationError = error as? KeyboardShortcutValidationError else {
+                return XCTFail("Expected KeyboardShortcutValidationError, got \(error)")
+            }
+            XCTAssertEqual(
+                Set(validationError.issues.compactMap(\.target)),
+                Set([ShortcutTarget.workspaceSwitcherPrevious, .switchWorkspace("1")])
+            )
+        }
     }
 }
 
@@ -67,8 +173,8 @@ private final class KeyboardShortcutActionSpy: KeyboardShortcutActionHandling {
     var workspaceCommitCount = 0
     var windowSteps: [WindowStep] = []
     var windowCommitCount = 0
-    var switchedWorkspaces: [String] = []
-    var movedWorkspaces: [String] = []
+    var switchedWorkspaces: [WorkspaceID] = []
+    var movedWorkspaces: [WorkspaceID] = []
 
     func stepWorkspaceSwitcher(direction: SwitcherDirection) {
         workspaceSteps.append(direction)
@@ -86,11 +192,13 @@ private final class KeyboardShortcutActionSpy: KeyboardShortcutActionHandling {
         windowCommitCount += 1
     }
 
-    func switchWorkspace(named workspace: String) {
+    func cancelSwitcher() {}
+
+    func switchWorkspace(to workspace: WorkspaceID) {
         switchedWorkspaces.append(workspace)
     }
 
-    func moveFocusedWindow(to workspace: String) {
+    func moveFocusedWindow(to workspace: WorkspaceID) {
         movedWorkspaces.append(workspace)
     }
 }

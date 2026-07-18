@@ -3,6 +3,11 @@ import AppKit
 enum KkaciApplication {
     static func run() {
         let app = NSApplication.shared
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            app.run()
+            return
+        }
+
         let appDelegate = AppDelegate(runtime: AppCompositionRoot().build())
         app.delegate = appDelegate
         app.mainMenu = makeMainMenu(for: app)

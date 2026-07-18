@@ -106,21 +106,15 @@ struct WorkspaceSettingsSnapshot: Equatable {
     var workspaceDisplayOptions: [WorkspaceDisplayOption] {
         displays
             .map(WorkspaceDisplayOption.init)
-            .sorted { lhs, rhs in
-                (lhs.monitorSlot ?? .max) < (rhs.monitorSlot ?? .max)
-            }
+            .sorted { $0.monitorSlot < $1.monitorSlot }
     }
 
     init(
         config: KkaciConfig,
         monitorSlots: [MonitorSlotSnapshot],
-        displays: [DisplaySnapshot],
         isEditable: Bool = true,
         shortcutValidationMessages: [ShortcutTarget: String] = [:]
     ) {
-        let slotByDisplayID = Dictionary(uniqueKeysWithValues: monitorSlots.map {
-            ($0.display.id, $0.slot)
-        })
         let workspaceItems = config.workspaces.map { workspace in
             WorkspaceSettingsItem(
                 id: workspace.id,
@@ -131,15 +125,14 @@ struct WorkspaceSettingsSnapshot: Equatable {
         }
         let idsByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
             .mapValues { $0.map(\.id) }
-        self.displays = displays.map { display in
-            let monitorSlot = slotByDisplayID[display.id]
-            return WorkspaceSettingsDisplay(
-                id: display.id,
-                name: display.name,
-                frame: display.frame,
-                role: display.role,
-                monitorSlot: monitorSlot,
-                workspaceIDs: monitorSlot.flatMap { idsByMonitorSlot[$0] } ?? []
+        displays = monitorSlots.map { monitorSlot in
+            WorkspaceSettingsDisplay(
+                id: monitorSlot.display.id,
+                name: monitorSlot.display.name,
+                frame: monitorSlot.display.frame,
+                role: monitorSlot.display.role,
+                monitorSlot: monitorSlot.slot,
+                workspaceIDs: idsByMonitorSlot[monitorSlot.slot] ?? []
             )
         }
 
@@ -170,16 +163,16 @@ struct WorkspaceSettingsDisplay: Equatable {
     let name: String
     let frame: CGRect
     let role: DisplayRole
-    let monitorSlot: MonitorSlot?
+    let monitorSlot: MonitorSlot
     let workspaceIDs: [WorkspaceID]
 }
 
 struct WorkspaceDisplayOption: Equatable {
     let displayID: DisplayID
-    let monitorSlot: MonitorSlot?
+    let monitorSlot: MonitorSlot
     let name: String
 
-    init(displayID: DisplayID, monitorSlot: MonitorSlot?, name: String) {
+    init(displayID: DisplayID, monitorSlot: MonitorSlot, name: String) {
         self.displayID = displayID
         self.monitorSlot = monitorSlot
         self.name = name
@@ -191,15 +184,8 @@ struct WorkspaceDisplayOption: Equatable {
         name = display.name
     }
 
-    var isEnabled: Bool {
-        monitorSlot != nil
-    }
-
     var title: String {
-        if let monitorSlot {
-            return "\(monitorSlot) · \(name)"
-        }
-        return name
+        "\(monitorSlot) · \(name)"
     }
 }
 
@@ -220,27 +206,32 @@ enum ShortcutDisplayFormatter {
         guard let shortcut else {
             return "Not set"
         }
-
-        return shortcut
-            .split(separator: "+")
-            .map(formatToken)
+        guard let parsed = try? Shortcut(parsing: shortcut) else {
+            return shortcut
+        }
+        return (parsed.modifiers.map(formatModifier) + [formatKey(parsed.key)])
             .joined(separator: " ")
     }
 
-    private static func formatToken(_ token: Substring) -> String {
-        switch token.lowercased() {
-        case "command", "cmd":
+    private static func formatModifier(_ modifier: ShortcutModifier) -> String {
+        switch modifier {
+        case .command:
             "⌘"
-        case "control", "ctrl":
+        case .control:
             "⌃"
-        case "option", "alt":
+        case .option:
             "⌥"
-        case "shift":
+        case .shift:
             "⇧"
+        }
+    }
+
+    private static func formatKey(_ key: String) -> String {
+        switch key {
         case "tab":
             "Tab"
         default:
-            token.uppercased()
+            key.uppercased()
         }
     }
 }

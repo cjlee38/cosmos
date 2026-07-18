@@ -159,7 +159,6 @@ private extension SwitcherCoordinator {
         log.trace("commit workspace=\(id)")
         do {
             guard try controller.switchWorkspace(to: id) != nil else { return }
-            handleContentChanged()
             log.info("Switched to workspace \(id)")
             refreshStatus()
         } catch {
@@ -225,7 +224,7 @@ private extension SwitcherCoordinator {
             )
             previewService.refresh(
                 windowIDs: Set(selection.items),
-                workspaceNames: [controller.currentWorkspace],
+                workspaceIDs: [controller.currentWorkspace],
                 priorityIDs: [selection.selectedItem]
             )
         case let .workspaces(selection, anchorFrame):
@@ -241,7 +240,7 @@ private extension SwitcherCoordinator {
                 }
             )
             previewService.refreshAll(
-                priorityIDs: controller.windows(in: controller.currentWorkspace).first.map { [$0.id] } ?? []
+                priorityIDs: controller.windows(in: selection.selectedItem).first.map { [$0.id] } ?? []
             )
         case nil:
             return
@@ -275,12 +274,12 @@ private extension SwitcherCoordinator {
             return false
         }
 
-        let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.bindings)
-        guard let workspace = shortcuts.workspace(for: key), selection.items.contains(workspace) else {
+        let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.configuredShortcuts)
+        guard let workspaceID = shortcuts.workspaceID(for: key), selection.items.contains(workspaceID) else {
             return false
         }
 
-        commitWorkspace(id: workspace)
+        commitWorkspace(id: workspaceID)
         return true
     }
 }
@@ -377,11 +376,11 @@ private extension SwitcherCoordinator {
             }
             overlay.updateWindowSwitcher(items: previewService.windowItems(ids: changedIDs))
         case let .workspaces(selection, _):
-            let changedNames = selection.items.filter(update.workspaceNames.contains)
-            guard !changedNames.isEmpty else {
+            let changedIDs = selection.items.filter(update.workspaceIDs.contains)
+            guard !changedIDs.isEmpty else {
                 return
             }
-            overlay.updateWorkspaceSwitcher(groups: previewService.workspaceGroups(ids: changedNames))
+            overlay.updateWorkspaceSwitcher(groups: previewService.workspaceGroups(ids: changedIDs))
         case nil:
             return
         }

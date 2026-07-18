@@ -5,15 +5,10 @@ import Foundation
 public struct DisplayProvider: DisplayProviding {
     public init() {}
 
-    public func hidePoint(for frame: WindowFrame) -> CGPoint {
-        return hidePoint(for: frame, displays: displays())
-            ?? bottomRight(of: CGDisplayBounds(CGMainDisplayID()))
-    }
-
-    public func displays() -> [DisplaySnapshot] {
+    public func displays() throws -> [DisplaySnapshot] {
         let screensByDisplayID = screensByDisplayID()
         let mainDisplayID = CGMainDisplayID()
-        return onlineDisplayIDs().compactMap { id in
+        return try onlineDisplayIDs().compactMap { id in
             guard let role = role(for: id, mainDisplayID: mainDisplayID) else {
                 return nil
             }
@@ -27,6 +22,21 @@ public struct DisplayProvider: DisplayProviding {
                 role: role
             )
         }
+    }
+}
+
+public struct WindowParkingPointProvider: HidePointProviding {
+    private let displayProvider: any DisplayProviding
+
+    public init(displayProvider: any DisplayProviding) {
+        self.displayProvider = displayProvider
+    }
+
+    public func hidePoint(for frame: WindowFrame) throws -> CGPoint {
+        guard let point = try hidePoint(for: frame, displays: displayProvider.displays()) else {
+            throw DisplayProviderError.noActiveDisplays
+        }
+        return point
     }
 
     func hidePoint(for frame: WindowFrame, displays: [DisplaySnapshot]) -> CGPoint? {
@@ -80,7 +90,9 @@ public struct DisplayProvider: DisplayProviding {
     private func bottomRight(of display: CGRect) -> CGPoint {
         CGPoint(x: display.maxX - 1, y: display.maxY - 1)
     }
+}
 
+private extension DisplayProvider {
     private func screensByDisplayID() -> [CGDirectDisplayID: NSScreen] {
         Dictionary(uniqueKeysWithValues: NSScreen.screens.compactMap { screen in
             guard let id = displayID(for: screen) else {
@@ -123,18 +135,37 @@ public struct DisplayProvider: DisplayProviding {
         return id == mainDisplayID ? .main : .extended
     }
 
-    private func onlineDisplayIDs() -> [CGDirectDisplayID] {
+    private func onlineDisplayIDs() throws -> [CGDirectDisplayID] {
         var count: UInt32 = 0
-        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else {
-            return [CGMainDisplayID()]
+        let countStatus = CGGetOnlineDisplayList(0, nil, &count)
+        guard countStatus == .success else {
+            throw DisplayProviderError.onlineDisplayListFailed(countStatus)
+        }
+        guard count > 0 else {
+            throw DisplayProviderError.noActiveDisplays
         }
 
         var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
-        guard CGGetOnlineDisplayList(count, &displays, &count) == .success else {
-            return [CGMainDisplayID()]
+        let listStatus = CGGetOnlineDisplayList(count, &displays, &count)
+        guard listStatus == .success else {
+            throw DisplayProviderError.onlineDisplayListFailed(listStatus)
         }
 
         return Array(displays.prefix(Int(count)))
+    }
+}
+
+private enum DisplayProviderError: Error, CustomStringConvertible {
+    case onlineDisplayListFailed(CGError)
+    case noActiveDisplays
+
+    var description: String {
+        switch self {
+        case let .onlineDisplayListFailed(error):
+            "CGGetOnlineDisplayList failed: \(error.rawValue)"
+        case .noActiveDisplays:
+            "No active displays were found."
+        }
     }
 }
 

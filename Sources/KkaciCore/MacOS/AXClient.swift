@@ -21,6 +21,7 @@ final class WindowHandle {
 enum AXClientError: Error, CustomStringConvertible {
     case accessibilityPermissionMissing
     case attributeUnavailable(String)
+    case readAttributeFailed(String, AXError)
     case setAttributeFailed(String, AXError)
 
     var description: String {
@@ -29,6 +30,8 @@ enum AXClientError: Error, CustomStringConvertible {
             "Accessibility permission is not granted."
         case let .attributeUnavailable(name):
             "AX attribute is unavailable: \(name)"
+        case let .readAttributeFailed(name, error):
+            "Failed to read AX attribute \(name): \(error)"
         case let .setAttributeFailed(name, error):
             "Failed to set AX attribute \(name): \(error)"
         }
@@ -52,16 +55,17 @@ public final class AXClient {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    func enumerateWindows() -> [WindowHandle] {
-        NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .flatMap { app in
-                let handles = enumerateWindows(for: app)
-                guard app.processIdentifier == getpid() else {
-                    return handles
-                }
-                return handles.filter(isIncludedOwnWindow)
+    func enumerateWindows() throws -> [WindowHandle] {
+        var result: [WindowHandle] = []
+        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
+            let handles = try enumerateWindows(for: app)
+            if app.processIdentifier == getpid() {
+                result.append(contentsOf: handles.filter(isIncludedOwnWindow))
+            } else {
+                result.append(contentsOf: handles)
             }
+        }
+        return result
     }
 
     func focusedWindowID() -> WindowID? {
@@ -138,11 +142,9 @@ public final class AXClient {
         handle.runningApp.activate(options: [.activateIgnoringOtherApps])
     }
 
-    private func enumerateWindows(for app: NSRunningApplication) -> [WindowHandle] {
+    private func enumerateWindows(for app: NSRunningApplication) throws -> [WindowHandle] {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
-        guard let rawWindows = copyAttribute(kAXWindowsAttribute, from: axApp) as? NSArray else {
-            return []
-        }
+        let rawWindows = try windowsAttribute(from: axApp)
 
         let appInfo = RunningAppInfo(
             pid: app.processIdentifier,
@@ -158,6 +160,20 @@ public final class AXClient {
                 return nil
             }
             return WindowHandle(id: id, app: appInfo, runningApp: app, axWindow: axWindow)
+        }
+    }
+
+    private func windowsAttribute(from app: AXUIElement) throws -> NSArray {
+        var value: AnyObject?
+        let error = AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value)
+        switch error {
+        case .success:
+            guard let windows = value as? NSArray else {
+                throw AXClientError.attributeUnavailable(kAXWindowsAttribute)
+            }
+            return windows
+        default:
+            throw AXClientError.readAttributeFailed(kAXWindowsAttribute, error)
         }
     }
 

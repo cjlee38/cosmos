@@ -14,7 +14,7 @@ final class SwitcherPreviewServiceTests: XCTestCase {
             loadIcon: { _ in icon }
         )
 
-        service.refresh(windowIDs: [10], workspaceNames: ["1"])
+        service.refresh(windowIDs: [10], workspaceIDs: ["1"])
         waitUntil {
             let item = service.windowItems(ids: [10]).first
             return item?.preview != nil && item?.icon != nil
@@ -63,21 +63,21 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         )
         let updateReceived = expectation(description: "preview update")
         var receivedWindowIDs: Set<WindowID> = []
-        var receivedWorkspaceNames: Set<String> = []
+        var receivedWorkspaceIDs: Set<String> = []
         service.setUpdateHandler { update in
             guard update.windowIDs.contains(10) else {
                 return
             }
             receivedWindowIDs = update.windowIDs
-            receivedWorkspaceNames = update.workspaceNames
+            receivedWorkspaceIDs = update.workspaceIDs
             updateReceived.fulfill()
         }
 
-        service.refresh(windowIDs: [10], workspaceNames: [])
+        service.refresh(windowIDs: [10], workspaceIDs: [])
 
         wait(for: [updateReceived], timeout: 1)
         XCTAssertEqual(receivedWindowIDs, [10])
-        XCTAssertTrue(receivedWorkspaceNames.isEmpty)
+        XCTAssertTrue(receivedWorkspaceIDs.isEmpty)
     }
 
     func testFailedThumbnailRecaptureRemovesThePreviousPreview() throws {
@@ -95,13 +95,13 @@ final class SwitcherPreviewServiceTests: XCTestCase {
             }
         )
 
-        service.refresh(windowIDs: [10], workspaceNames: [])
+        service.refresh(windowIDs: [10], workspaceIDs: [])
         waitUntil { service.windowItems(ids: [10]).first?.preview != nil }
 
         lock.lock()
         capturedImage = nil
         lock.unlock()
-        service.refresh(windowIDs: [10], workspaceNames: [])
+        service.refresh(windowIDs: [10], workspaceIDs: [])
         waitUntil { service.windowItems(ids: [10]).first?.preview == nil }
 
         XCTAssertNil(service.windowItems(ids: [10]).first?.preview)
@@ -128,7 +128,7 @@ final class SwitcherPreviewServiceTests: XCTestCase {
             }
         }
 
-        service.refresh(windowIDs: [], workspaceNames: [])
+        service.refresh(windowIDs: [], workspaceIDs: [])
         wait(for: [loadStarted], timeout: 1)
 
         windowSystem.replaceWindows([
@@ -136,11 +136,221 @@ final class SwitcherPreviewServiceTests: XCTestCase {
             makeSwitcherTestWindow(id: 20, title: "New", pid: 7)
         ])
         _ = try controller.handleWindowSetChanged()
-        service.refresh(windowIDs: [], workspaceNames: [])
+        service.refresh(windowIDs: [], workspaceIDs: [])
         allowLoadToFinish.signal()
 
         wait(for: [currentWindowsUpdated], timeout: 1)
         XCTAssertNotNil(service.windowItems(ids: [20]).first?.icon)
+    }
+}
+
+extension SwitcherPreviewServiceTests {
+    func testWorkspaceThumbnailGeometryMapsTheDesktopTopLeftIntoTheImageInset() {
+        let frame = WorkspaceThumbnailRenderer.previewFrame(
+            for: CGRect(x: 0, y: 0, width: 50, height: 50),
+            desktopBounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+            imageSize: CGSize(width: 120, height: 120)
+        )
+
+        XCTAssertEqual(frame, CGRect(x: 10, y: 60, width: 50, height: 50))
+    }
+
+    func testWorkspaceThumbnailBoundsUseOnlyDisplaysContainingWorkspaceWindows() {
+        let first = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let second = CGRect(x: 100, y: 0, width: 100, height: 100)
+
+        XCTAssertEqual(
+            WorkspaceThumbnailRenderer.desktopBounds(
+                windowFrames: [CGRect(x: 120, y: 10, width: 20, height: 20)],
+                displays: [first, second]
+            ),
+            second
+        )
+    }
+
+    func testWorkspaceThumbnailCacheDoesNotPublishSupersededRender() {
+        let firstRenderStarted = expectation(description: "first render started")
+        let allowFirstRenderToFinish = DispatchSemaphore(value: 0)
+        let updatePublished = expectation(description: "latest render published")
+        var renderCount = 0
+        let cache = WorkspaceThumbnailCache { _ in
+            renderCount += 1
+            if renderCount == 1 {
+                firstRenderStarted.fulfill()
+                allowFirstRenderToFinish.wait()
+            }
+            return makeSwitcherTestImage()
+        }
+        var updates: [Set<String>] = []
+        cache.setUpdateHandler {
+            updates.append($0)
+            updatePublished.fulfill()
+        }
+        cache.removeStaleThumbnails(keeping: ["1"])
+
+        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        wait(for: [firstRenderStarted], timeout: 1)
+        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        allowFirstRenderToFinish.signal()
+
+        wait(for: [updatePublished], timeout: 1)
+        XCTAssertEqual(updates, [["1"]])
+        XCTAssertEqual(renderCount, 2)
+    }
+
+    func testWorkspaceThumbnailCachePublishesEachWorkspaceWithoutWaitingForTheBatch() {
+        let secondRenderStarted = expectation(description: "second render started")
+        let allowSecondRenderToFinish = DispatchSemaphore(value: 0)
+        let firstUpdatePublished = expectation(description: "first workspace published")
+        let secondUpdatePublished = expectation(description: "second workspace published")
+        let cache = WorkspaceThumbnailCache { group in
+            if group.id == "2" {
+                secondRenderStarted.fulfill()
+                allowSecondRenderToFinish.wait()
+            }
+            return makeSwitcherTestImage()
+        }
+        cache.setUpdateHandler { workspaceIDs in
+            if workspaceIDs == ["1"] {
+                firstUpdatePublished.fulfill()
+            }
+            if workspaceIDs == ["2"] {
+                secondUpdatePublished.fulfill()
+            }
+        }
+        cache.removeStaleThumbnails(keeping: ["1", "2"])
+
+        cache.refresh(
+            groups: [thumbnailGroup(id: "1"), thumbnailGroup(id: "2")],
+            displayBounds: [.zero]
+        )
+
+        wait(for: [firstUpdatePublished, secondRenderStarted], timeout: 1)
+        XCTAssertNotNil(cache.thumbnail(for: "1"))
+        XCTAssertNil(cache.thumbnail(for: "2"))
+        allowSecondRenderToFinish.signal()
+        wait(for: [secondUpdatePublished], timeout: 1)
+    }
+
+    func testWorkspaceRenderingDoesNotWaitForWindowCaptureCycle() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One")
+        ])
+        let captureStarted = expectation(description: "window capture started")
+        let allowCaptureToFinish = DispatchSemaphore(value: 0)
+        let workspaceRenderStarted = expectation(description: "workspace render started")
+        let service = makeSwitcherTestPreviewService(
+            controller: controller,
+            captureImage: { _ in
+                captureStarted.fulfill()
+                allowCaptureToFinish.wait()
+                return makeSwitcherTestImage()
+            },
+            renderWorkspace: { _ in
+                workspaceRenderStarted.fulfill()
+                return makeSwitcherTestImage()
+            }
+        )
+
+        service.refresh(windowIDs: [10], workspaceIDs: ["1"])
+
+        wait(for: [captureStarted, workspaceRenderStarted], timeout: 1)
+        allowCaptureToFinish.signal()
+    }
+
+    func testWorkspaceThumbnailCachePromotesPriorityRenderAlreadyInQueue() {
+        let firstRenderStarted = expectation(description: "first render started")
+        let allowFirstRenderToFinish = DispatchSemaphore(value: 0)
+        let priorityRenderStarted = expectation(description: "priority render started")
+        var renderOrder: [String] = []
+        let cache = WorkspaceThumbnailCache { group in
+            renderOrder.append(group.id)
+            if group.id == "1" {
+                firstRenderStarted.fulfill()
+                allowFirstRenderToFinish.wait()
+            } else if group.id == "3" {
+                priorityRenderStarted.fulfill()
+            }
+            return makeSwitcherTestImage()
+        }
+        cache.removeStaleThumbnails(keeping: ["1", "2", "3"])
+        cache.refresh(
+            groups: [thumbnailGroup(id: "1"), thumbnailGroup(id: "2"), thumbnailGroup(id: "3")],
+            displayBounds: [.zero]
+        )
+        wait(for: [firstRenderStarted], timeout: 1)
+
+        cache.refresh(
+            groups: [thumbnailGroup(id: "3")],
+            displayBounds: [.zero],
+            priorityWorkspaceIDs: ["3"]
+        )
+        allowFirstRenderToFinish.signal()
+
+        wait(for: [priorityRenderStarted], timeout: 1)
+        XCTAssertEqual(Array(renderOrder.prefix(2)), ["1", "3"])
+    }
+
+    func testWorkspaceThumbnailCacheRejectsRenderFromRemovedWorkspaceGeneration() {
+        let firstRenderStarted = expectation(description: "first render started")
+        let allowFirstRenderToFinish = DispatchSemaphore(value: 0)
+        let currentRenderPublished = expectation(description: "current render published")
+        var renderCount = 0
+        var updateCount = 0
+        let cache = WorkspaceThumbnailCache { _ in
+            renderCount += 1
+            if renderCount == 1 {
+                firstRenderStarted.fulfill()
+                allowFirstRenderToFinish.wait()
+            }
+            return makeSwitcherTestImage()
+        }
+        cache.setUpdateHandler { _ in
+            updateCount += 1
+            currentRenderPublished.fulfill()
+        }
+        cache.removeStaleThumbnails(keeping: ["1"])
+        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        wait(for: [firstRenderStarted], timeout: 1)
+
+        cache.removeStaleThumbnails(keeping: [])
+        cache.removeStaleThumbnails(keeping: ["1"])
+        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        allowFirstRenderToFinish.signal()
+
+        wait(for: [currentRenderPublished], timeout: 1)
+        XCTAssertEqual(renderCount, 2)
+        XCTAssertEqual(updateCount, 1)
+    }
+
+    func testWorkspaceOverviewCardsNeverExceedTheirGridCells() {
+        let layout = WorkspaceOverviewLayout(
+            groupCount: 36,
+            availableFrame: NSRect(x: 0, y: 0, width: 1440, height: 900),
+            size: 0
+        )
+
+        XCTAssertGreaterThan(layout.cardSize.width, 0)
+        XCTAssertGreaterThan(layout.cardSize.height, 0)
+        for row in 0 ..< 6 {
+            for column in 0 ..< 6 {
+                let cell = layout.cellFrame(row: row, column: column)
+                XCTAssertLessThanOrEqual(layout.cardSize.width, cell.width)
+                XCTAssertLessThanOrEqual(layout.cardSize.height, cell.height)
+            }
+        }
+    }
+
+    func testWorkspaceOverviewContentFitsThreeCardsWithoutVerticalCellPadding() {
+        let layout = WorkspaceOverviewLayout(
+            groupCount: 3,
+            availableFrame: NSRect(x: 0, y: 0, width: 1440, height: 900),
+            size: 0.5
+        )
+
+        let cell = layout.cellFrame(row: 0, column: 0)
+        XCTAssertEqual(layout.cardSize.height, cell.height, accuracy: 1)
+        XCTAssertEqual(layout.contentSize.height, layout.cardSize.height, accuracy: 1)
     }
 
     private func waitUntil(
@@ -152,5 +362,9 @@ final class SwitcherPreviewServiceTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.005))
         }
         XCTAssertTrue(condition())
+    }
+
+    private func thumbnailGroup(id: String) -> WorkspaceSwitcherGroup {
+        WorkspaceSwitcherGroup(id: id, windows: [], preview: nil)
     }
 }

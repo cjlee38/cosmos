@@ -3,24 +3,24 @@ import CoreGraphics
 import XCTest
 
 final class RestorableFrameResolverTests: XCTestCase {
-    func testKeepsFrameWhenCenterIsOnCurrentDisplay() {
+    func testKeepsFrameWhenCenterIsOnCurrentDisplay() throws {
         let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider())
         let frame = WindowFrame.frame(x: 100, y: 120, width: 300, height: 240)
 
-        XCTAssertEqual(resolver.frameForRestore(frame), frame)
+        XCTAssertEqual(try resolver.frameForRestore(frame), frame)
     }
 
-    func testClampsFrameWhenCenterIsOutsideCurrentDisplays() {
+    func testClampsFrameWhenCenterIsOutsideCurrentDisplays() throws {
         let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider())
         let frame = WindowFrame.frame(x: 1400, y: 120, width: 300, height: 240)
 
         XCTAssertEqual(
-            resolver.frameForRestore(frame),
+            try resolver.frameForRestore(frame),
             WindowFrame.frame(x: 700, y: 120, width: 300, height: 240)
         )
     }
 
-    func testClampsCornerHiddenFrameIntoVisibleArea() {
+    func testClampsCornerHiddenFrameIntoVisibleArea() throws {
         let resolver = RestorableFrameResolver(displayProvider: FakeDisplayProvider(
             snapshots: [
                 DisplaySnapshot(
@@ -34,7 +34,7 @@ final class RestorableFrameResolverTests: XCTestCase {
         let frame = WindowFrame.frame(x: 999, y: 999, width: 1000, height: 1000)
 
         XCTAssertEqual(
-            resolver.frameForRestore(frame),
+            try resolver.frameForRestore(frame),
             WindowFrame.frame(x: 0, y: 40, width: 1000, height: 1000)
         )
     }

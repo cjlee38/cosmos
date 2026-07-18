@@ -11,7 +11,7 @@ final class DebugStatusRenderer {
 
     func render() -> String {
         let windows = controller.currentWindows()
-        let focused = controller.currentFocusedWindowID()
+        let focused = controller.cachedFocusedWindowID()
 
         var lines: [String] = [
             "kkaci debug status",
@@ -22,7 +22,7 @@ final class DebugStatusRenderer {
         ]
 
         lines.append("monitors:")
-        for monitor in controller.monitorSlots {
+        for monitor in controller.displayTopology.monitorSlots {
             let frame = format(monitor.display.frame)
             let main = monitor.display.isMain ? " main" : ""
             let visible = controller.visibleWorkspace(on: monitor.slot)

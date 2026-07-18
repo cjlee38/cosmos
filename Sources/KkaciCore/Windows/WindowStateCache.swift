@@ -1,22 +1,33 @@
 import Foundation
 
-final class WindowRuntimeStore {
+struct WindowSetDiff: Equatable {
+    let removed: [WindowID]
+
+    static let empty = WindowSetDiff(removed: [])
+}
+
+final class WindowStateCache {
     private(set) var windows: [WindowSnapshot] = []
     private(set) var focusedWindowID: WindowID?
     private(set) var displayTopology = DisplayTopologySnapshot.empty
-
-    var monitorSlots: [MonitorSlotSnapshot] {
-        displayTopology.monitorSlots
-    }
+    private var hasLoadedWindowSet = false
 
     func replace(
         windows: [WindowSnapshot],
         focusedWindowID: WindowID?,
         displayTopology: DisplayTopologySnapshot
-    ) {
+    ) -> WindowSetDiff {
+        let previousWindowIDs = Set(self.windows.map(\.id))
+        let windowIDs = Set(windows.map(\.id))
+        let diff = hasLoadedWindowSet
+            ? WindowSetDiff(removed: previousWindowIDs.subtracting(windowIDs).sorted())
+            : .empty
+
         self.windows = windows
         self.focusedWindowID = focusedWindowID
         self.displayTopology = displayTopology
+        hasLoadedWindowSet = true
+        return diff
     }
 
     func snapshot(for id: WindowID) -> WindowSnapshot? {

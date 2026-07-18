@@ -1,46 +1,39 @@
 import Foundation
 
 final class WorkspaceDisplayCoordinator {
-    private let windowStore: WindowRuntimeStore
-    private let windowSetSynchronizer: WindowSetSynchronizer
-    private let visibilityCoordinator: WorkspaceVisibilityCoordinator
+    private let windowCache: WindowStateCache
+    private let runtimeSynchronizer: WorkspaceRuntimeSynchronizer
     private let monitorSlotResolver: MonitorSlotResolver
 
     init(
-        windowStore: WindowRuntimeStore,
-        windowSetSynchronizer: WindowSetSynchronizer,
-        visibilityCoordinator: WorkspaceVisibilityCoordinator,
+        windowCache: WindowStateCache,
+        runtimeSynchronizer: WorkspaceRuntimeSynchronizer,
         monitorSlotResolver: MonitorSlotResolver
     ) {
-        self.windowStore = windowStore
-        self.windowSetSynchronizer = windowSetSynchronizer
-        self.visibilityCoordinator = visibilityCoordinator
+        self.windowCache = windowCache
+        self.runtimeSynchronizer = runtimeSynchronizer
         self.monitorSlotResolver = monitorSlotResolver
     }
 
-    func handleDisplayConfigurationChanged(
+    func synchronizeDisplayConfiguration(
         state: inout WorkspaceState
-    ) throws -> ExternalWindowEventResult {
-        let previousTopology = windowStore.displayTopology
+    ) throws -> DisplayConfigurationSyncResult {
+        let previousTopology = windowCache.displayTopology
         let previousFrames = frames(for: state)
-        let sync = windowSetSynchronizer.refresh(
+        let sync = try runtimeSynchronizer.synchronize(
             state: &state,
             reconcileVisibleWindowMonitorMembership: false
-        ).sync
+        )
         let targetFrames = targetFramesForDisplayChange(
             from: previousTopology,
             previousFrames: previousFrames,
             state: state
         )
-        try visibilityCoordinator.applyVisibleWorkspaces(
-            state: &state,
-            targetFrames: targetFrames
-        )
-        return ExternalWindowEventResult(sync: sync, focusedWindowSync: nil)
+        return DisplayConfigurationSyncResult(sync: sync, targetFrames: targetFrames)
     }
 
     func targetFramesForConfiguredMonitors(state: WorkspaceState) -> [WindowID: WindowFrame] {
-        let topology = windowStore.displayTopology
+        let topology = windowCache.displayTopology
         return state.assignedWindowIDs.reduce(into: [:]) { frames, id in
             guard let workspace = state.membership(for: id),
                   let frame = frame(for: id, state: state)
@@ -69,7 +62,7 @@ final class WorkspaceDisplayCoordinator {
         previousFrames: [WindowID: WindowFrame],
         state: WorkspaceState
     ) -> [WindowID: WindowFrame] {
-        let currentTopology = windowStore.displayTopology
+        let currentTopology = windowCache.displayTopology
         guard !previousTopology.monitorSlots.isEmpty,
               !currentTopology.monitorSlots.isEmpty
         else {
@@ -98,13 +91,15 @@ final class WorkspaceDisplayCoordinator {
                 let targetDisplay = monitorSlotResolver.display(
                     for: targetSlot,
                     among: currentTopology.monitorSlots
-                ),
-                let translatedFrame = monitorSlotResolver.translatedFrame(
-                    frame,
-                    from: sourceDisplay,
-                    to: targetDisplay
                 )
             else {
+                return
+            }
+            guard let translatedFrame = monitorSlotResolver.translatedFrame(
+                frame,
+                from: sourceDisplay,
+                to: targetDisplay
+            ) else {
                 return
             }
             frames[id] = translatedFrame
@@ -118,17 +113,11 @@ final class WorkspaceDisplayCoordinator {
     }
 
     private func frame(for id: WindowID, state: WorkspaceState) -> WindowFrame? {
-        state.hiddenFrame(for: id) ?? windowStore.snapshot(for: id)?.frame
+        state.hiddenFrame(for: id) ?? windowCache.snapshot(for: id)?.frame
     }
 }
 
-public extension WorkspaceController {
-    @discardableResult
-    func updateWorkspaceMonitor(_ workspace: String, displayID: DisplayID) throws -> WorkspaceSyncSummary {
-        let monitorSlot = try WorkspaceDisplayAssignment.monitorSlot(
-            for: displayID,
-            monitorSlots: monitorSlots
-        )
-        return try updateConfig(currentConfig.assigningWorkspace(workspace, toMonitorSlot: monitorSlot))
-    }
+struct DisplayConfigurationSyncResult {
+    let sync: WorkspaceSyncSummary
+    let targetFrames: [WindowID: WindowFrame]
 }

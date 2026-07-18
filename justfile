@@ -8,10 +8,11 @@ fmt:
 
 lint:
     swiftlint lint
-    periphery scan
+    periphery scan --retain-public --index-exclude 'Sources/KkaciApp/**' --index-exclude 'Tests/KkaciAppTests/**' --index-exclude 'Apps/**'
+    periphery scan --project Apps/Kkaci/Kkaci.xcodeproj --schemes Kkaci --retain-public
 
 repl:
-    swift run kkaci-cli
+    swift run kkaci
 
 dev:
     xcodebuild -quiet -project Apps/Kkaci/Kkaci.xcodeproj -scheme Kkaci -configuration Debug -derivedDataPath .build/xcode build

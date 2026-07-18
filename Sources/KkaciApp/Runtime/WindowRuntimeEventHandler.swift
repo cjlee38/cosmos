@@ -7,50 +7,46 @@ final class WindowRuntimeEventHandler {
     private let controller: WorkspaceController
     private let previewService: SwitcherPreviewService
     private let refreshSwitcherContent: () -> Void
-    private let refreshSurfaces: () -> Void
-    private var focusSyncSuppression = FocusSyncSuppression()
+    private let refreshStatusSurfaces: () -> Void
 
     init(
         controller: WorkspaceController,
         previewService: SwitcherPreviewService,
         refreshSwitcherContent: @escaping () -> Void,
-        refreshSurfaces: @escaping () -> Void
+        refreshStatusSurfaces: @escaping () -> Void
     ) {
         self.controller = controller
         self.previewService = previewService
         self.refreshSwitcherContent = refreshSwitcherContent
-        self.refreshSurfaces = refreshSurfaces
+        self.refreshStatusSurfaces = refreshStatusSurfaces
     }
 
-    func suppressNextFocusSync(for windowID: WindowID) {
-        focusSyncSuppression.suppress(windowID)
+    func handleOwnWindowVisibilityChanged() {
+        do {
+            _ = try controller.handleOwnWindowVisibilityChanged()
+            refreshSwitcherContent()
+            refreshStatusSurfaces()
+        } catch {
+            log.error("Own-window visibility update failed: \(String(describing: error))")
+        }
     }
 
     func handle(_ events: WindowRuntimeEventBatch) {
-        let previousMemberships = currentMemberships()
-        let focusedWindowID = controller.focusedWindowID()
-        let isFocusSyncAllowed = focusSyncSuppression.shouldFollow(
-            requested: shouldFollowFocusedWindow(for: events, focusedWindowID: focusedWindowID),
-            focusedWindowID: focusedWindowID
-        )
-        let shouldFollowFocusedWindow = !events.containsDisplayChange && isFocusSyncAllowed
-
         do {
-            let result: ExternalWindowEventResult
-            if events.containsDisplayChange {
-                result = try controller.handleDisplayConfigurationChanged()
-            } else if shouldFollowFocusedWindow {
-                result = try controller.handleFocusedWindowChanged()
+            let focusPolicy: ExternalWindowFocusPolicy = if events.shouldFollowFocusedWindow {
+                .always
+            } else if events.containsLayoutChange {
+                .visibleFocusedWindow
             } else {
-                result = try controller.handleWindowSetChanged()
+                .never
             }
-            refreshPreviews(
-                for: events,
-                result: result,
-                previousMemberships: previousMemberships
-            )
+            let result = try controller.handleExternalWindowChange(ExternalWindowChange(
+                displayConfigurationChanged: events.containsDisplayChange,
+                focusPolicy: focusPolicy
+            ))
+            refreshPreviews(for: events, result: result)
             refreshSwitcherContent()
-            refreshSurfaces()
+            refreshStatusSurfaces()
             if case let .switched(windowID, workspace) = result.focusedWindowSync {
                 log.info("Switched to workspace \(workspace) for \(windowID)")
             }
@@ -61,76 +57,35 @@ final class WindowRuntimeEventHandler {
 
     private func refreshPreviews(
         for events: WindowRuntimeEventBatch,
-        result: ExternalWindowEventResult,
-        previousMemberships: [WindowID: String]
+        result: ExternalWindowEventResult
     ) {
         let windows = controller.currentWindows()
         let liveWindowIDs = Set(windows.map(\.id))
         let autoAssignedWindowIDs = Set(result.sync.autoAssigned.map(\.0))
         var affectedWindowIDs = events.windowIDs
-            .union(autoAssignedWindowIDs)
-            .union(result.sync.removed)
-        if events.shouldFollowFocusedWindow, let focusedWindowID = controller.focusedWindowID() {
+            .union(result.sync.affectedWindowIDs)
+        let focusedWindowID = controller.cachedFocusedWindowID()
+        if events.shouldFollowFocusedWindow, let focusedWindowID {
             affectedWindowIDs.insert(focusedWindowID)
         }
 
         let windowIDs: Set<WindowID>
-        let workspaceNames: Set<String>
+        let workspaceIDs: Set<String>
         if events.needsFullThumbnailRefresh {
             windowIDs = liveWindowIDs
-            workspaceNames = Set(controller.workspaces)
+            workspaceIDs = Set(controller.workspaces)
         } else {
             windowIDs = events.windowIDsNeedingCapture
                 .union(autoAssignedWindowIDs)
                 .intersection(liveWindowIDs)
-            workspaceNames = Set(affectedWindowIDs.compactMap { windowID in
-                previousMemberships[windowID]
-            }).union(affectedWindowIDs.compactMap(controller.membership(for:)))
+            workspaceIDs = result.sync.affectedWorkspaces
+                .union(affectedWindowIDs.compactMap(controller.membership(for:)))
         }
 
         previewService.refresh(
             windowIDs: windowIDs,
-            workspaceNames: workspaceNames,
-            priorityIDs: controller.focusedWindowID().map { [$0] } ?? []
+            workspaceIDs: workspaceIDs,
+            priorityIDs: focusedWindowID.map { [$0] } ?? []
         )
-    }
-
-    private func currentMemberships() -> [WindowID: String] {
-        Dictionary(uniqueKeysWithValues: controller.currentWindows().compactMap { window in
-            controller.membership(for: window.id).map { (window.id, $0) }
-        })
-    }
-
-    private func shouldFollowFocusedWindow(
-        for events: WindowRuntimeEventBatch,
-        focusedWindowID: WindowID?
-    ) -> Bool {
-        if events.shouldFollowFocusedWindow {
-            return true
-        }
-        guard events.containsLayoutChange, let focusedWindowID else {
-            return false
-        }
-        return !controller.isHiddenByWorkspace(focusedWindowID)
-    }
-}
-
-struct FocusSyncSuppression {
-    private var windowID: WindowID?
-
-    mutating func suppress(_ windowID: WindowID) {
-        self.windowID = windowID
-    }
-
-    mutating func shouldFollow(requested: Bool, focusedWindowID: WindowID?) -> Bool {
-        guard requested else {
-            return false
-        }
-        guard let windowID else {
-            return true
-        }
-
-        self.windowID = nil
-        return focusedWindowID != windowID
     }
 }

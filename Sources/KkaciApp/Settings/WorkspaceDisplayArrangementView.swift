@@ -28,10 +28,7 @@ final class WorkspaceDisplayArrangementView: NSView {
             displayCard.view.removeFromSuperview()
         }
 
-        displayCards = displays.compactMap { item in
-            guard item.monitorSlot != nil else {
-                return nil
-            }
+        displayCards = displays.map { item in
             let card = WorkspaceDisplayCardView(item: item)
             addSubview(card)
             return (item, card)
@@ -88,10 +85,9 @@ private final class WorkspaceDisplayCardView: NSView {
     init(item: WorkspaceSettingsDisplay) {
         super.init(frame: .zero)
         wantsLayer = true
-        setAccessibilityIdentifier("kkaci.settings.display.\(item.monitorSlot ?? 0)")
+        setAccessibilityIdentifier("kkaci.settings.display.\(item.monitorSlot)")
 
-        let monitorSlot = item.monitorSlot ?? 1
-        let title = NSTextField(labelWithString: "\(monitorSlot) (\(item.name))")
+        let title = NSTextField(labelWithString: "\(item.monitorSlot) (\(item.name))")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         title.lineBreakMode = .byTruncatingTail
 

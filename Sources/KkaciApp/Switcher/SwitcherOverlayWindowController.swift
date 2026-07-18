@@ -45,17 +45,15 @@ protocol SwitcherOverlayPresenting: AnyObject {
 }
 
 final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlayPresenting {
-    private let viewFactory: SwitcherOverlayViewFactory
+    private let contentController: SwitcherOverlayContentController
     private let screenLocator = SwitcherOverlayScreenLocator()
-    private var windowListView: WindowSwitcherListView?
-    private var workspaceListView: WorkspaceSwitcherListView?
     private var onArrowKey: ((SwitcherArrowDirection) -> Void)?
     private var onOutsideClick: (() -> Void)?
     private var onWorkspaceKey: ((String) -> Bool)?
     private let outsideClickMonitor = SwitcherOutsideClickMonitor()
 
     init(appSettingsStore: AppSettingsStore) {
-        viewFactory = SwitcherOverlayViewFactory(appSettingsStore: appSettingsStore)
+        contentController = SwitcherOverlayContentController(appSettingsStore: appSettingsStore)
         let window = SwitcherOverlayPanel(
             contentRect: NSRect(x: 0, y: 0, width: 1, height: 1),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -79,7 +77,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         window.onWorkspaceKey = { [weak self] key in
             self?.onWorkspaceKey?(key) == true
         }
-        window.contentView = viewFactory.rootContentView
+        window.contentView = contentController.rootContentView
     }
 
     @available(*, unavailable)
@@ -108,6 +106,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         onHover: @escaping (WindowID) -> Void,
         onClick: @escaping (WindowID) -> Void
     ) {
+        contentController.beginWindowPresentation()
         let screenFrame = configureWindowSwitcher(
             items: items,
             selectedID: selectedID,
@@ -145,6 +144,7 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         onHover: @escaping (String) -> Void,
         onClick: @escaping (String) -> Void
     ) {
+        contentController.beginWorkspacePresentation()
         let screenFrame = configureWorkspaceSwitcher(
             groups: groups,
             selectedID: selectedID,
@@ -176,31 +176,29 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
     }
 
     func updateWindowSwitcher(items: [WindowSwitcherItem]) {
-        windowListView?.updatePreviews(items: items)
+        contentController.updateWindowPreviews(items)
     }
 
     func updateWindowSelection(selectedID: WindowID) {
-        windowListView?.updateSelection(selectedID: selectedID)
+        contentController.updateWindowSelection(selectedID)
     }
 
     func updateWorkspaceSwitcher(groups: [WorkspaceSwitcherGroup]) {
-        workspaceListView?.updatePreviews(groups: groups)
+        contentController.updateWorkspacePreviews(groups)
     }
 
     func updateWorkspaceSelection(selectedID: String) {
-        workspaceListView?.updateSelection(selectedID: selectedID)
+        contentController.updateWorkspaceSelection(selectedID)
     }
 
     func hideOverlay() {
         outsideClickMonitor.stop()
-        windowListView = nil
-        workspaceListView = nil
         window?.alphaValue = 0
         window?.orderOut(nil)
     }
 
     private func setContent(_ content: NSView) {
-        let root = viewFactory.makeRootContent(content: content)
+        let root = contentController.configureRootContent(content)
         let contentSize = root.frame.size
         window?.setContentSize(contentSize)
         root.frame = NSRect(origin: .zero, size: contentSize)
@@ -214,15 +212,13 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         onClick: @escaping (WindowID) -> Void
     ) -> NSRect {
         let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
-        let listView = viewFactory.makeWindowList(
+        let listView = contentController.configureWindowList(
             items: items,
             selectedID: selectedID,
             availableFrame: screenFrame,
             onHover: onHover,
             onClick: onClick
         )
-        windowListView = listView
-        workspaceListView = nil
         (window as? SwitcherOverlayPanel)?.acceptsWorkspaceKeys = false
         setContent(listView)
         return screenFrame
@@ -236,15 +232,13 @@ final class SwitcherOverlayWindowController: NSWindowController, SwitcherOverlay
         onClick: @escaping (String) -> Void
     ) -> NSRect {
         let screenFrame = screenLocator.visibleFrame(for: anchorFrame)
-        let listView = viewFactory.makeWorkspaceList(
+        let listView = contentController.configureWorkspaceList(
             groups: groups,
             selectedID: selectedID,
             availableFrame: screenFrame,
             onHover: onHover,
             onClick: onClick
         )
-        windowListView = nil
-        workspaceListView = listView
         (window as? SwitcherOverlayPanel)?.acceptsWorkspaceKeys = true
         setContent(listView)
         return screenFrame
@@ -298,7 +292,7 @@ private final class SwitcherOverlayPanel: NSPanel {
         }
 
         if acceptsWorkspaceKeys,
-           let key = event.charactersIgnoringModifiers?.lowercased(),
+           let key = KeyboardShortcutKeyCodec.keyName(for: event.keyCode),
            onWorkspaceKey?(key) == true {
             return
         }

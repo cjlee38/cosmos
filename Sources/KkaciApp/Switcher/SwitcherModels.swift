@@ -1,6 +1,35 @@
 import AppKit
 import KkaciCore
 
+struct WorkspaceShortcutBindings {
+    private struct Entry {
+        let workspaceID: String
+        let key: String
+    }
+
+    private let entries: [Entry]
+
+    init(_ shortcuts: [ConfiguredShortcut]) {
+        entries = shortcuts.compactMap { shortcut in
+            guard case let .switchWorkspace(workspace) = shortcut.target,
+                  let parsed = try? shortcut.parsed()
+            else {
+                return nil
+            }
+            return Entry(workspaceID: workspace.rawValue, key: parsed.key)
+        }
+    }
+
+    func key(for workspaceID: String) -> String? {
+        entries.first { $0.workspaceID == workspaceID }?.key
+    }
+
+    func workspaceID(for key: String) -> String? {
+        let key = key.lowercased()
+        return entries.first { $0.key == key }?.workspaceID
+    }
+}
+
 struct WindowSwitcherItem {
     let windowID: WindowID
     let appName: String
@@ -102,12 +131,12 @@ enum ActiveSwitcherSession {
         return true
     }
 
-    mutating func selectWorkspace(_ workspace: String) -> Bool {
+    mutating func selectWorkspace(_ workspaceID: String) -> Bool {
         guard case let .workspaces(currentSelection, anchorFrame) = self else {
             return false
         }
         var selection = currentSelection
-        guard selection.select(workspace) else {
+        guard selection.select(workspaceID) else {
             return false
         }
         self = .workspaces(selection: selection, anchorFrame: anchorFrame)
@@ -126,12 +155,12 @@ enum ActiveSwitcherSession {
         return true
     }
 
-    mutating func reconcileWorkspaces(_ workspaces: [String], anchorFrame: WindowFrame?) -> Bool {
+    mutating func reconcileWorkspaces(_ workspaceIDs: [String], anchorFrame: WindowFrame?) -> Bool {
         guard case let .workspaces(currentSelection, _) = self else {
             return false
         }
         var selection = currentSelection
-        guard selection.reconcile(with: workspaces) else {
+        guard selection.reconcile(with: workspaceIDs) else {
             return false
         }
         self = .workspaces(selection: selection, anchorFrame: anchorFrame)

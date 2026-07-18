@@ -23,6 +23,7 @@ private struct WindowTileConfiguration {
 final class WindowSwitcherListView: NSView {
     private var tileViewsByID: [WindowID: WindowSwitcherTileView] = [:]
     private var recycledTileViews: [WindowSwitcherTileView] = []
+    private let hoverGate = SwitcherHoverGate()
     private let emptyLabel = NSTextField(labelWithString: "No windows")
 
     override init(frame frameRect: NSRect) {
@@ -46,6 +47,10 @@ final class WindowSwitcherListView: NSView {
         }
     }
 
+    func beginPresentation() {
+        hoverGate.reset()
+    }
+
     func configure(
         items: [WindowSwitcherItem],
         selectedID: WindowID,
@@ -59,7 +64,6 @@ final class WindowSwitcherListView: NSView {
         recycleMissingTiles(keeping: Set(items.map(\.windowID)))
         ensureCapacity(items.count)
 
-        let hoverGate = SwitcherHoverGate()
         for (index, item) in items.enumerated() {
             let tile = tileView(for: item.windowID)
             tile.configure(WindowTileConfiguration(

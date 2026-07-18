@@ -3,12 +3,8 @@ import ApplicationServices
 import Foundation
 
 final class AXApplicationObserverRegistry {
-    private struct ObservedApp {
-        let observer: AXObserver
-    }
-
     private let onNotification: (AXUIElement, CFString) -> Void
-    private var observedApps: [pid_t: ObservedApp] = [:]
+    private var observersByPID: [pid_t: AXObserver] = [:]
 
     init(onNotification: @escaping (AXUIElement, CFString) -> Void) {
         self.onNotification = onNotification
@@ -21,7 +17,7 @@ final class AXApplicationObserverRegistry {
     func observe(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
         guard canObserve(app),
-              observedApps[pid] == nil
+              observersByPID[pid] == nil
         else {
             return
         }
@@ -64,7 +60,7 @@ final class AXApplicationObserverRegistry {
         }
 
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .defaultMode)
-        observedApps[pid] = ObservedApp(observer: observer)
+        observersByPID[pid] = observer
     }
 
     func canObserve(_ app: NSRunningApplication) -> Bool {
@@ -72,26 +68,26 @@ final class AXApplicationObserverRegistry {
     }
 
     func removeObserver(for pid: pid_t) {
-        guard let observedApp = observedApps.removeValue(forKey: pid) else {
+        guard let observer = observersByPID.removeValue(forKey: pid) else {
             return
         }
 
         CFRunLoopRemoveSource(
             CFRunLoopGetMain(),
-            AXObserverGetRunLoopSource(observedApp.observer),
+            AXObserverGetRunLoopSource(observer),
             .defaultMode
         )
     }
 
     func stop() {
-        for observedApp in observedApps.values {
+        for observer in observersByPID.values {
             CFRunLoopRemoveSource(
                 CFRunLoopGetMain(),
-                AXObserverGetRunLoopSource(observedApp.observer),
+                AXObserverGetRunLoopSource(observer),
                 .defaultMode
             )
         }
-        observedApps.removeAll()
+        observersByPID.removeAll()
     }
 
     private static let observedNotifications = [

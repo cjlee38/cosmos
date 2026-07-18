@@ -1,115 +1,41 @@
 import Foundation
 
 final class WindowAssignmentCoordinator {
-    private let windowSystem: any WindowSystem
-    private let windowStore: WindowRuntimeStore
+    private let windowCache: WindowStateCache
     private let visibilityCoordinator: WorkspaceVisibilityCoordinator
     private let monitorSlotResolver: MonitorSlotResolver
 
     init(
-        windowSystem: any WindowSystem,
-        windowStore: WindowRuntimeStore,
+        windowCache: WindowStateCache,
         visibilityCoordinator: WorkspaceVisibilityCoordinator,
         monitorSlotResolver: MonitorSlotResolver
     ) {
-        self.windowSystem = windowSystem
-        self.windowStore = windowStore
+        self.windowCache = windowCache
         self.visibilityCoordinator = visibilityCoordinator
         self.monitorSlotResolver = monitorSlotResolver
     }
 
-    func assignFocused(to workspace: String, state: inout WorkspaceState) throws -> WindowID {
-        guard let id = windowSystem.focusedWindowID() else {
-            throw WorkspaceError.noFocusedWindow
-        }
-
-        try assignWindow(id, to: workspace, state: &state)
-        return id
-    }
-
-    func assignWindow(_ id: WindowID, to workspace: String, state: inout WorkspaceState) throws {
-        guard windowSystem.contains(id) else {
-            throw WorkspaceError.windowNotFound(id)
-        }
-
-        let previousState = state
-        let previousFocusedWindowID = windowSystem.focusedWindowID()
-        let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
-        state.assign(id, to: workspace)
-
-        do {
-            try visibilityCoordinator.applyVisibleWorkspaces(
-                state: &state,
-                requiredWindowIDs: [id],
-                targetFrames: dictionary(for: id, frame: preferredFrame)
-            )
-        } catch {
-            try rollback(
-                error,
-                previousState: previousState,
-                focusedWindowID: previousFocusedWindowID,
-                state: &state
-            )
-            throw error
-        }
-    }
-
-    func captureVisibleWindows(
-        _ windows: [WindowSnapshot],
-        into workspace: String,
-        state: inout WorkspaceState
-    ) throws {
-        let visibleIDs = windows
-            .filter { !$0.isMinimized && !state.isHidden($0.id) }
-            .map(\.id)
-        state.capture(visibleIDs, into: workspace)
-    }
-
-    func captureUnassignedVisibleWindowsByMonitor(
-        _ windows: [WindowSnapshot],
-        defaultWorkspace: String,
-        state: inout WorkspaceState,
-        monitorSlotForFrame: (WindowFrame?) -> MonitorSlot
-    ) {
-        guard state.findWorkspace(defaultWorkspace) != nil else {
-            return
-        }
-        for window in windows where !window.isMinimized && state.membership(for: window.id) == nil {
-            let workspace = state.visibleWorkspace(
-                on: monitorSlotForFrame(window.frame),
-                availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
-            )
-            state.capture([window.id], into: workspace)
-        }
-    }
-
     func moveFocusedWindow(
-        to workspace: String,
+        to workspace: WorkspaceID,
         frontToBackWindowIDs: [WindowID],
         state: inout WorkspaceState
     ) throws -> WindowMoveResult {
-        guard let id = windowSystem.focusedWindowID() else {
-            throw WorkspaceError.noFocusedWindow
-        }
-        guard windowSystem.contains(id) else {
-            throw WorkspaceError.windowNotFound(id)
-        }
-        guard let currentWorkspace = state.membership(for: id),
-              currentWorkspace == state.currentWorkspace,
-              !state.isHidden(id)
-        else {
-            throw WorkspaceError.windowNotInCurrentWorkspace(
-                id,
-                state.membership(for: id) ?? state.currentWorkspace
+        let (id, currentWorkspace) = try focusedWindowForMove(state: state)
+        guard currentWorkspace != workspace else {
+            return WindowMoveResult(
+                windowID: id,
+                previousWorkspace: currentWorkspace.rawValue,
+                workspace: workspace.rawValue,
+                outcome: .alreadyInWorkspace
             )
         }
 
         let previousState = state
-        let previousFocusedWindowID = windowSystem.focusedWindowID()
+        let previousFocusedWindowID = windowCache.focusedWindowID
         let destinationIsVisible = state.visibleWorkspaces(
-            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+            availableMonitorSlots: windowCache.displayTopology.availableMonitorSlots
         ).contains(workspace)
-        let replacementFocus = workspace == currentWorkspace || destinationIsVisible
+        let replacementFocus = destinationIsVisible
             ? nil
             : frontToBackWindowIDs.first { $0 != id }
         let preferredFrame = preferredFrameIfMovingAcrossMonitors(id, to: workspace, state: state)
@@ -122,14 +48,19 @@ final class WindowAssignmentCoordinator {
             try visibilityCoordinator.applyVisibleWorkspaces(
                 state: &state,
                 focusWindowID: replacementFocus,
-                requiredWindowIDs: [id],
-                targetFrames: dictionary(for: id, frame: preferredFrame)
+                mustSucceedWindowIDs: [id],
+                targetFrames: preferredFrame.map { [id: $0] } ?? [:]
             )
-            return WindowMoveResult(windowID: id, workspace: workspace)
+            return WindowMoveResult(
+                windowID: id,
+                previousWorkspace: currentWorkspace.rawValue,
+                workspace: workspace.rawValue,
+                outcome: .moved
+            )
         } catch {
-            try rollback(
-                error,
-                previousState: previousState,
+            try visibilityCoordinator.rollback(
+                after: error,
+                to: previousState,
                 focusedWindowID: previousFocusedWindowID,
                 state: &state
             )
@@ -137,50 +68,42 @@ final class WindowAssignmentCoordinator {
         }
     }
 
+    private func focusedWindowForMove(state: WorkspaceState) throws -> (WindowID, WorkspaceID) {
+        guard let id = windowCache.focusedWindowID else {
+            throw WorkspaceError.noFocusedWindow
+        }
+        guard windowCache.snapshot(for: id) != nil else {
+            throw WorkspaceError.windowNotFound(id)
+        }
+        guard let workspace = state.membership(for: id),
+              workspace == state.currentWorkspace,
+              !state.isHidden(id)
+        else {
+            throw WorkspaceError.windowNotInCurrentWorkspace(
+                id,
+                (state.membership(for: id) ?? state.currentWorkspace).rawValue
+            )
+        }
+        return (id, workspace)
+    }
+
     private func preferredFrameIfMovingAcrossMonitors(
         _ id: WindowID,
-        to workspace: String,
+        to workspace: WorkspaceID,
         state: WorkspaceState
     ) -> WindowFrame? {
-        let monitorSlots = windowStore.monitorSlots
+        let monitorSlots = windowCache.displayTopology.monitorSlots
         let targetSlot = state.monitorSlot(
             for: workspace,
-            availableMonitorSlots: windowStore.displayTopology.availableMonitorSlots
+            availableMonitorSlots: windowCache.displayTopology.availableMonitorSlots
         )
-        guard let frame = state.hiddenFrame(for: id) ?? windowSystem.frame(for: id) else {
+        guard let frame = state.hiddenFrame(for: id) ?? windowCache.snapshot(for: id)?.frame else {
+            return nil
+        }
+        let sourceSlot = monitorSlotResolver.slot(containing: frame, among: monitorSlots)
+        guard sourceSlot != targetSlot else {
             return nil
         }
         return monitorSlotResolver.translatedFrame(frame, to: targetSlot, among: monitorSlots)
-    }
-
-    private func dictionary(for id: WindowID, frame: WindowFrame?) -> [WindowID: WindowFrame] {
-        guard let frame else {
-            return [:]
-        }
-        return [id: frame]
-    }
-
-    private func rollback(
-        _ applyError: Error,
-        previousState: WorkspaceState,
-        focusedWindowID: WindowID?,
-        state: inout WorkspaceState
-    ) throws {
-        var rollbackError: Error?
-        do {
-            try visibilityCoordinator.rollback(
-                to: previousState,
-                focusedWindowID: focusedWindowID,
-                state: &state
-            )
-        } catch {
-            rollbackError = rollbackError ?? error
-        }
-        if let rollbackError {
-            throw WorkspaceTransactionError(
-                applyError: applyError,
-                rollbackError: rollbackError
-            )
-        }
     }
 }

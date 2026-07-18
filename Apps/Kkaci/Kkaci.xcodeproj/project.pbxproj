@@ -14,7 +14,7 @@
 		0DD6BEA2B2DDC73C12A4722B /* DebugStatusRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE078C07E8072EB07D79443C /* DebugStatusRenderer.swift */; };
 		11A0AF43C6E2E49C0E2F6B79 /* AccessibilityPermissionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24246563E59CD46975B43C7 /* AccessibilityPermissionController.swift */; };
 		12AF4B2AB3DD3FE742A6D75F /* SwitcherOverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52301E71E0E42F07906619AB /* SwitcherOverlayWindowController.swift */; };
-		139433CB2444ABF47F67F81D /* SwitcherOverlayViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C4E2176032B0FBFB059983 /* SwitcherOverlayViewFactory.swift */; };
+		139433CB2444ABF47F67F81D /* SwitcherOverlayContentController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C4E2176032B0FBFB059983 /* SwitcherOverlayContentController.swift */; };
 		174246513F2773F683560065 /* AppProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE868569917C24AF9517952 /* AppProfileTests.swift */; };
 		18F41F9C9D60790491DE6F6D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9FB7A938AAFD7A05CC4F513 /* AppDelegate.swift */; };
 		1A9D527F619FAA4D9792FDAE /* GeneralSettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A768E125FDF463F09E5E8C03 /* GeneralSettingsService.swift */; };
@@ -28,12 +28,14 @@
 		2F75CA4F3F97B883E9EF9EA3 /* SwitcherPreviewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C4BF202BF4D09ADA3BDB86 /* SwitcherPreviewService.swift */; };
 		30EE3B3E8B71E27139685497 /* SwitcherTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */; };
 		334D4C006BCF03901297125C /* ConfigRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C983C270D0A6097DF02120C7 /* ConfigRuntimeTests.swift */; };
+		33A74C0D6B1E4F2A8C5097D3 /* ConfigRuntimeTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D154A0E7B2436F8A0C5D12 /* ConfigRuntimeTestSupport.swift */; };
 		3493FA7A3E90533D8A3D86C2 /* SwitcherModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA153E480398570D63C3B9A7 /* SwitcherModels.swift */; };
 		3E818739319D8EA745B7E9EE /* AppRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EA481F06B2FE09F3944553 /* AppRuntime.swift */; };
 		3FBB8C9396F8E56C9F176DEC /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85DEB94005203CA045AFDC68 /* Log.swift */; };
 		4D23DABCA127F1A7B951376D /* ModifierFlagsMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8561E548E557C8E30D6F79D /* ModifierFlagsMonitorTests.swift */; };
 		4E609D9E3E801C76BA320A69 /* ShortcutRecorderButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BEFE5DD28D09E37156901C /* ShortcutRecorderButton.swift */; };
 		50C8D0A9EA5020F337960072 /* WorkspaceThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D33AA0FC3DEBDA4897EB11C /* WorkspaceThumbnailCache.swift */; };
+		52F6A81C74D04B71A6B908E2 /* WorkspaceThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9715E6FAD84D639C012B47 /* WorkspaceThumbnailRenderer.swift */; };
 		57D2C290F63B6DC064484F36 /* KeyboardBindingMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D00F18C90C9A49A0944B0E44 /* KeyboardBindingMapper.swift */; };
 		5E095B003AD180055EE94BDD /* GeneralSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7ADAC95348EF0FBF0BEF484 /* GeneralSettingsViewController.swift */; };
 		61E8BB1A23DA8DD5914DE18B /* StatusMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A3825B797E23797D8988D63 /* StatusMenuController.swift */; };
@@ -41,6 +43,7 @@
 		64C1040CFE51AE6FD9861933 /* KeyboardShortcutManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDACEBD8721870102202C889 /* KeyboardShortcutManagerTests.swift */; };
 		6641E4BE05BF77EAECA37995 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 1E75E271F69A9BA5BE2F4522 /* AppIcon.icon */; };
 		78E3D54448546695C1157733 /* ModifierFlagsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390C28C5D1B0C7757A62FFED /* ModifierFlagsMonitor.swift */; };
+		8B3E9A2F6D5C4B3A291807F6 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2D8F1E5C4B3A29081706F5 /* SettingsCoordinator.swift */; };
 		7B0243E63D099212BB53838F /* KeyboardBindingMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D380443AEF1B4BCA55AD49 /* KeyboardBindingMapperTests.swift */; };
 		7B499687C67A954ADA0B8D84 /* CarbonKeyboardBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD26F3B9A7C423345FB165C /* CarbonKeyboardBackend.swift */; };
 		7FBE0ACE319981890CF8C4E4 /* AXApplicationObserverRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D136051710ECBADAA14E0522 /* AXApplicationObserverRegistry.swift */; };
@@ -52,6 +55,8 @@
 		AC7401A6054135050A1E735B /* WorkspaceDisplayArrangementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B089E94FB0F81FFD08BF8D /* WorkspaceDisplayArrangementView.swift */; };
 		AD3C9F770A3E7BB6FD128250 /* WindowThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D836316F9AF909F35996C40 /* WindowThumbnailCache.swift */; };
 		AFFC41ECBD3D513B734548D5 /* AppCompositionRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F7C62CD7201633BF12BFB1 /* AppCompositionRoot.swift */; };
+		A10000000000000000000002 /* KeyboardShortcutKeyCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* KeyboardShortcutKeyCodec.swift */; };
+		A20000000000000000000002 /* SettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* SettingsControls.swift */; };
 		B6B8DCB9229512FE3511DC5D /* WorkspaceSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69A22CC6D1A445A26A5BDBF /* WorkspaceSettingsTests.swift */; };
 		B6EC5A0D09D5A2F3AFE4FDDC /* WindowSwitcherViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D116B22259C91A8E99E96EF /* WindowSwitcherViews.swift */; };
 		BBFDF71D4E1F760F49FEDA7D /* KeyboardShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F9C6E1BAFBCE1ADE3CEAB5 /* KeyboardShortcutManager.swift */; };
@@ -63,6 +68,7 @@
 		D0E2701C32425F66ADDFFA23 /* SettingsSidebarViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD98A4B57009D3E5C86143DF /* SettingsSidebarViewController.swift */; };
 		D39F65D1BC374C99127A8D68 /* WindowEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3E7D9BDF57C766FD89FDCAA /* WindowEventMonitor.swift */; };
 		D754CAD09C22C249C9404B93 /* WorkspaceSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B48F56E9A562434FF7C0BE7 /* WorkspaceSettingsControls.swift */; };
+		D8E1F46A2B7C4A9180D5E3F2 /* WorkspaceSettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A2E9B4D1F6483A95B0C6E7 /* WorkspaceSettingsService.swift */; };
 		DCD3AFCB4077734C0FFFE6B7 /* WorkspaceActionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B34FA1681B2CABA63E153F /* WorkspaceActionController.swift */; };
 		E270DA89AF461A93A7D221BB /* SettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37038C6E71932BA8C8D029BD /* SettingsModels.swift */; };
 		E92D2447C5BAF8D1808B1E69 /* SwitcherOverlayScreenLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 893C57A28CC88D95E43CD308 /* SwitcherOverlayScreenLocator.swift */; };
@@ -93,6 +99,7 @@
 		16D380443AEF1B4BCA55AD49 /* KeyboardBindingMapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBindingMapperTests.swift; sourceTree = "<group>"; };
 		18F7C62CD7201633BF12BFB1 /* AppCompositionRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCompositionRoot.swift; sourceTree = "<group>"; };
 		1D33AA0FC3DEBDA4897EB11C /* WorkspaceThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceThumbnailCache.swift; sourceTree = "<group>"; };
+		3A9715E6FAD84D639C012B47 /* WorkspaceThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceThumbnailRenderer.swift; sourceTree = "<group>"; };
 		1E75E271F69A9BA5BE2F4522 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherTestSupport.swift; sourceTree = "<group>"; };
 		2C236432C8D68A8DA2CE898A /* KkaciAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KkaciAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -109,12 +116,13 @@
 		52301E71E0E42F07906619AB /* SwitcherOverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayWindowController.swift; sourceTree = "<group>"; };
 		583CADAAD9AFB41F03805EFE /* DebugStatusWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugStatusWindowController.swift; sourceTree = "<group>"; };
 		611448DEB72AFF4B0F79536B /* SwitcherOutsideClickMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOutsideClickMonitor.swift; sourceTree = "<group>"; };
-		68C4E2176032B0FBFB059983 /* SwitcherOverlayViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayViewFactory.swift; sourceTree = "<group>"; };
+		68C4E2176032B0FBFB059983 /* SwitcherOverlayContentController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayContentController.swift; sourceTree = "<group>"; };
 		6A3825B797E23797D8988D63 /* StatusMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMenuController.swift; sourceTree = "<group>"; };
 		6B48F56E9A562434FF7C0BE7 /* WorkspaceSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsControls.swift; sourceTree = "<group>"; };
 		71DF96855CCD916784F8E41B /* ApplicationIconCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationIconCache.swift; sourceTree = "<group>"; };
 		73EC2EF8753A9300715E05E7 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		78954AB3A0D6128B74568AAC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		7A2D8F1E5C4B3A29081706F5 /* SettingsCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCoordinator.swift; sourceTree = "<group>"; };
 		7D93A2F8CD2DCF2867B59EDD /* WorkspaceIDPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceIDPickerView.swift; sourceTree = "<group>"; };
 		85DEB94005203CA045AFDC68 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		893C57A28CC88D95E43CD308 /* SwitcherOverlayScreenLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayScreenLocator.swift; sourceTree = "<group>"; };
@@ -131,7 +139,9 @@
 		BD98A4B57009D3E5C86143DF /* SettingsSidebarViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSidebarViewController.swift; sourceTree = "<group>"; };
 		C78A5A1E9273B38D6A3B86FB /* ApplicationIconCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationIconCacheTests.swift; sourceTree = "<group>"; };
 		C8561E548E557C8E30D6F79D /* ModifierFlagsMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifierFlagsMonitorTests.swift; sourceTree = "<group>"; };
+		C7A2E9B4D1F6483A95B0C6E7 /* WorkspaceSettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsService.swift; sourceTree = "<group>"; };
 		C983C270D0A6097DF02120C7 /* ConfigRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigRuntimeTests.swift; sourceTree = "<group>"; };
+		C9D154A0E7B2436F8A0C5D12 /* ConfigRuntimeTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigRuntimeTestSupport.swift; sourceTree = "<group>"; };
 		D00F18C90C9A49A0944B0E44 /* KeyboardBindingMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBindingMapper.swift; sourceTree = "<group>"; };
 		D136051710ECBADAA14E0522 /* AXApplicationObserverRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXApplicationObserverRegistry.swift; sourceTree = "<group>"; };
 		D7ADAC95348EF0FBF0BEF484 /* GeneralSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsViewController.swift; sourceTree = "<group>"; };
@@ -143,6 +153,8 @@
 		E743C48B4AD98EC70F9D91DB /* AppProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppProfile.swift; sourceTree = "<group>"; };
 		F173A36FA5FEF966E4045361 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		F45070B9F813E6A9A1BA0D0E /* KeyboardShortcutResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutResolver.swift; sourceTree = "<group>"; };
+		A10000000000000000000001 /* KeyboardShortcutKeyCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutKeyCodec.swift; sourceTree = "<group>"; };
+		A20000000000000000000001 /* SettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsControls.swift; sourceTree = "<group>"; };
 		F69A22CC6D1A445A26A5BDBF /* WorkspaceSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsTests.swift; sourceTree = "<group>"; };
 		F8C4BF202BF4D09ADA3BDB86 /* SwitcherPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPreviewService.swift; sourceTree = "<group>"; };
 		FAEF94D847B787BE09CB8DCC /* SwitcherCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherCoordinator.swift; sourceTree = "<group>"; };
@@ -197,13 +209,14 @@
 				BA153E480398570D63C3B9A7 /* SwitcherModels.swift */,
 				611448DEB72AFF4B0F79536B /* SwitcherOutsideClickMonitor.swift */,
 				893C57A28CC88D95E43CD308 /* SwitcherOverlayScreenLocator.swift */,
-				68C4E2176032B0FBFB059983 /* SwitcherOverlayViewFactory.swift */,
+				68C4E2176032B0FBFB059983 /* SwitcherOverlayContentController.swift */,
 				52301E71E0E42F07906619AB /* SwitcherOverlayWindowController.swift */,
 				F8C4BF202BF4D09ADA3BDB86 /* SwitcherPreviewService.swift */,
 				3D116B22259C91A8E99E96EF /* WindowSwitcherViews.swift */,
 				9D836316F9AF909F35996C40 /* WindowThumbnailCache.swift */,
 				AF986B83D1099D20B599B0AB /* WorkspaceSwitcherOverviewView.swift */,
 				1D33AA0FC3DEBDA4897EB11C /* WorkspaceThumbnailCache.swift */,
+				3A9715E6FAD84D639C012B47 /* WorkspaceThumbnailRenderer.swift */,
 			);
 			path = Switcher;
 			sourceTree = "<group>";
@@ -236,6 +249,7 @@
 				C78A5A1E9273B38D6A3B86FB /* ApplicationIconCacheTests.swift */,
 				FBE868569917C24AF9517952 /* AppProfileTests.swift */,
 				427330055DBD8916856243BF /* ConfigErrorMessageTests.swift */,
+				C9D154A0E7B2436F8A0C5D12 /* ConfigRuntimeTestSupport.swift */,
 				C983C270D0A6097DF02120C7 /* ConfigRuntimeTests.swift */,
 				486304735CA9CF52837D3D0A /* GeneralSettingsServiceTests.swift */,
 				16D380443AEF1B4BCA55AD49 /* KeyboardBindingMapperTests.swift */,
@@ -290,12 +304,15 @@
 				A768E125FDF463F09E5E8C03 /* GeneralSettingsService.swift */,
 				D7ADAC95348EF0FBF0BEF484 /* GeneralSettingsViewController.swift */,
 				37038C6E71932BA8C8D029BD /* SettingsModels.swift */,
+				7A2D8F1E5C4B3A29081706F5 /* SettingsCoordinator.swift */,
 				BD98A4B57009D3E5C86143DF /* SettingsSidebarViewController.swift */,
+				A20000000000000000000001 /* SettingsControls.swift */,
 				73EC2EF8753A9300715E05E7 /* SettingsWindowController.swift */,
 				07BEFE5DD28D09E37156901C /* ShortcutRecorderButton.swift */,
 				E2B089E94FB0F81FFD08BF8D /* WorkspaceDisplayArrangementView.swift */,
 				7D93A2F8CD2DCF2867B59EDD /* WorkspaceIDPickerView.swift */,
 				6B48F56E9A562434FF7C0BE7 /* WorkspaceSettingsControls.swift */,
+				C7A2E9B4D1F6483A95B0C6E7 /* WorkspaceSettingsService.swift */,
 				47815B96EB3BDF5149CE3905 /* WorkspaceSettingsViewController.swift */,
 			);
 			path = Settings;
@@ -307,6 +324,7 @@
 				8FD26F3B9A7C423345FB165C /* CarbonKeyboardBackend.swift */,
 				D00F18C90C9A49A0944B0E44 /* KeyboardBindingMapper.swift */,
 				14F9C6E1BAFBCE1ADE3CEAB5 /* KeyboardShortcutManager.swift */,
+				A10000000000000000000001 /* KeyboardShortcutKeyCodec.swift */,
 				F45070B9F813E6A9A1BA0D0E /* KeyboardShortcutResolver.swift */,
 				390C28C5D1B0C7757A62FFED /* ModifierFlagsMonitor.swift */,
 			);
@@ -426,11 +444,14 @@
 				5E095B003AD180055EE94BDD /* GeneralSettingsViewController.swift in Sources */,
 				57D2C290F63B6DC064484F36 /* KeyboardBindingMapper.swift in Sources */,
 				BBFDF71D4E1F760F49FEDA7D /* KeyboardShortcutManager.swift in Sources */,
+				A10000000000000000000002 /* KeyboardShortcutKeyCodec.swift in Sources */,
 				F05CFA47B9510E0F555FACA1 /* KeyboardShortcutResolver.swift in Sources */,
 				0C1C6E3D55E91C177A67B9BF /* KkaciApplication.swift in Sources */,
 				3FBB8C9396F8E56C9F176DEC /* Log.swift in Sources */,
 				78E3D54448546695C1157733 /* ModifierFlagsMonitor.swift in Sources */,
 				E270DA89AF461A93A7D221BB /* SettingsModels.swift in Sources */,
+				A20000000000000000000002 /* SettingsControls.swift in Sources */,
+				8B3E9A2F6D5C4B3A291807F6 /* SettingsCoordinator.swift in Sources */,
 				D0E2701C32425F66ADDFFA23 /* SettingsSidebarViewController.swift in Sources */,
 				BCF09CE4E530BE98F7898BDC /* SettingsWindowController.swift in Sources */,
 				4E609D9E3E801C76BA320A69 /* ShortcutRecorderButton.swift in Sources */,
@@ -439,7 +460,7 @@
 				3493FA7A3E90533D8A3D86C2 /* SwitcherModels.swift in Sources */,
 				C6207F73F6468BA74A93962F /* SwitcherOutsideClickMonitor.swift in Sources */,
 				E92D2447C5BAF8D1808B1E69 /* SwitcherOverlayScreenLocator.swift in Sources */,
-				139433CB2444ABF47F67F81D /* SwitcherOverlayViewFactory.swift in Sources */,
+				139433CB2444ABF47F67F81D /* SwitcherOverlayContentController.swift in Sources */,
 				12AF4B2AB3DD3FE742A6D75F /* SwitcherOverlayWindowController.swift in Sources */,
 				2F75CA4F3F97B883E9EF9EA3 /* SwitcherPreviewService.swift in Sources */,
 				D39F65D1BC374C99127A8D68 /* WindowEventMonitor.swift in Sources */,
@@ -450,9 +471,11 @@
 				AC7401A6054135050A1E735B /* WorkspaceDisplayArrangementView.swift in Sources */,
 				1E49B10AC10800C97E5BF6D1 /* WorkspaceIDPickerView.swift in Sources */,
 				D754CAD09C22C249C9404B93 /* WorkspaceSettingsControls.swift in Sources */,
+				D8E1F46A2B7C4A9180D5E3F2 /* WorkspaceSettingsService.swift in Sources */,
 				2D7B5E58F23E5A423FA04C00 /* WorkspaceSettingsViewController.swift in Sources */,
 				C6AB3B48A43C09930696E69B /* WorkspaceSwitcherOverviewView.swift in Sources */,
 				50C8D0A9EA5020F337960072 /* WorkspaceThumbnailCache.swift in Sources */,
+				52F6A81C74D04B71A6B908E2 /* WorkspaceThumbnailRenderer.swift in Sources */,
 				A8B9D45A5C29B03AAE17A866 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -465,6 +488,7 @@
 				01E6F2718D58B5B5E3810A9D /* AppearanceSettingsTests.swift in Sources */,
 				20CD571493F6F5689F219170 /* ApplicationIconCacheTests.swift in Sources */,
 				EAC517820C888BB589E35CAE /* ConfigErrorMessageTests.swift in Sources */,
+				33A74C0D6B1E4F2A8C5097D3 /* ConfigRuntimeTestSupport.swift in Sources */,
 				334D4C006BCF03901297125C /* ConfigRuntimeTests.swift in Sources */,
 				CDF7FC65C62326A5D21823B9 /* GeneralSettingsServiceTests.swift in Sources */,
 				7B0243E63D099212BB53838F /* KeyboardBindingMapperTests.swift in Sources */,

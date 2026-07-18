@@ -17,7 +17,7 @@ final class ModifierFlagsMonitor {
     init(
         onModifiersChanged: @escaping (UInt32) -> Void,
         currentModifierFlags: @escaping () -> CGEventFlags = {
-            CGEvent(source: nil)?.flags ?? []
+            CGEventSource.flagsState(.combinedSessionState)
         },
         ensureListenEventAccess: @escaping () -> Bool = {
             CGPreflightListenEventAccess() || CGRequestListenEventAccess()

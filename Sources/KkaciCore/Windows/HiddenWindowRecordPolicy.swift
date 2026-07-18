@@ -2,11 +2,11 @@ import CoreGraphics
 import Foundation
 
 enum HiddenWindowRecordStartupAction: Equatable {
-    case restoreAndAssign(workspace: String)
-    case assignOnly(workspace: String)
+    case restoreAndAssign(workspace: WorkspaceID)
+    case assignOnly(workspace: WorkspaceID)
     case ignore
 
-    var workspace: String? {
+    var workspace: WorkspaceID? {
         switch self {
         case let .restoreAndAssign(workspace), let .assignOnly(workspace):
             workspace
@@ -28,7 +28,7 @@ enum HiddenWindowRecordStartupAction: Equatable {
 enum HiddenWindowRecordPolicy {
     static func makeRecord(
         window: WindowSnapshot,
-        workspace: String,
+        workspace: WorkspaceID,
         originalFrame: WindowFrame,
         hiddenPosition: CGPoint
     ) -> HiddenWindowRecord {

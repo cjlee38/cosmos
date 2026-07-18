@@ -166,17 +166,16 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
     }
 
     func testWorkspaceWindowsKeepCurrentMacOSZOrderAndExcludeMinimizedWindows() throws {
-        let windowSystem = FakeWindowSystem(windows: [
+        let windowSystem = FakeWindowSystem(windows: [])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.handleWindowSetChanged()
+        windowSystem.windows = [
             .window(id: 100, title: "One"),
             .window(id: 200, title: "Two"),
             .window(id: 300, title: "Three", isMinimized: true)
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.discoverWindows()
-        try controller.assignWindow(200, to: "1")
-        try controller.assignWindow(100, to: "1")
-        try controller.assignWindow(300, to: "1")
+        ]
+        _ = try controller.handleWindowSetChanged()
 
         XCTAssertEqual(controller.windows(in: "1").map(\.id), [100, 200])
 
@@ -185,23 +184,22 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
             .window(id: 100, title: "One"),
             .window(id: 300, title: "Three", isMinimized: true)
         ]
-        _ = controller.discoverWindows()
+        _ = try controller.handleWindowSetChanged()
 
         XCTAssertEqual(controller.windows(in: "1").map(\.id), [200, 100])
     }
 
     func testRapidWindowSwitcherSessionsFollowCurrentMacOSZOrder() throws {
-        let windowSystem = FakeWindowSystem(windows: [
+        let windowSystem = FakeWindowSystem(windows: [])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.handleWindowSetChanged()
+        windowSystem.windows = [
             .window(id: 1, title: "One"),
             .window(id: 2, title: "Two"),
             .window(id: 3, title: "Three")
-        ])
-        let controller = makeController(windowSystem)
-
-        _ = controller.discoverWindows()
-        try controller.assignWindow(3, to: "1")
-        try controller.assignWindow(2, to: "1")
-        try controller.assignWindow(1, to: "1")
+        ]
+        _ = try controller.handleWindowSetChanged()
 
         let firstOrder = controller.windows(in: "1").map(\.id)
         let firstSession = try XCTUnwrap(SwitcherSession(
@@ -217,7 +215,7 @@ final class SwitcherSessionTests: WorkspaceControllerTestCase {
             .window(id: 1, title: "One"),
             .window(id: 3, title: "Three")
         ]
-        _ = controller.discoverWindows()
+        _ = try controller.handleWindowSetChanged()
 
         let secondOrder = controller.windows(in: "1").map(\.id)
         let secondSession = try XCTUnwrap(SwitcherSession(

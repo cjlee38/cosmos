@@ -1,9 +1,10 @@
 import CoreGraphics
 @testable import KkaciCore
 
-final class FakeDisplayProvider: DisplayProviding {
+final class FakeDisplayProvider: DisplayProviding, HidePointProviding {
     let point: CGPoint
     var snapshots: [DisplaySnapshot]
+    var displayError: Error?
     private(set) var displayQueryCount = 0
 
     init(
@@ -16,12 +17,15 @@ final class FakeDisplayProvider: DisplayProviding {
         self.snapshots = snapshots
     }
 
-    func hidePoint(for _: WindowFrame) -> CGPoint {
+    func hidePoint(for _: WindowFrame) throws -> CGPoint {
         point
     }
 
-    func displays() -> [DisplaySnapshot] {
+    func displays() throws -> [DisplaySnapshot] {
         displayQueryCount += 1
+        if let displayError {
+            throw displayError
+        }
         return snapshots
     }
 }
