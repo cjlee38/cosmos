@@ -10,11 +10,16 @@ lint:
     swiftlint lint
     periphery scan
 
-run:
+repl:
     swift run kkaci-cli
 
-app:
-    swift run Kkaci
+dev:
+    ./Scripts/build-app debug
+    exec ".build/apps/debug/Kkaci Dev.app/Contents/MacOS/Kkaci"
+
+release:
+    ./Scripts/build-app release
+    exec ".build/apps/release/Kkaci.app/Contents/MacOS/Kkaci"
 
 fixture:
     swift run kkaci-fixture-app

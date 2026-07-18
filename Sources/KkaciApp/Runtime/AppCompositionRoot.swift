@@ -2,12 +2,13 @@ import KkaciCore
 
 struct AppCompositionRoot {
     func build() -> AppRuntime {
+        let profile = AppProfile.current
         let axClient = AXClient(
             includedOwnWindowIdentifiers: [SettingsWindowController.accessibilityIdentifier]
         )
         let registry = WindowRegistry(axClient: axClient)
-        let configStore = FileKkaciConfigStore.default
-        let recordStore = FileHiddenWindowRecordStore.default
+        let configStore = FileKkaciConfigStore(url: profile.configURL)
+        let recordStore = FileHiddenWindowRecordStore(url: profile.hiddenWindowRecordsURL)
         let controller = WorkspaceController(
             windowSystem: registry,
             displayProvider: DisplayProvider(),

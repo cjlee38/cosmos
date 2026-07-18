@@ -18,7 +18,7 @@ The current runtime supports:
 ## Run
 
 ```sh
-just run
+just repl
 ```
 
 Grant Accessibility permission when prompted. If it is granted after startup, relaunch the app or use `Request Accessibility Permission` from the menu bar. The menu bar runtime also requests Input Monitoring permission for modifier-release detection; after granting it, relaunch the app or use `Reload Config`.
@@ -26,7 +26,7 @@ Grant Accessibility permission when prompted. If it is granted after startup, re
 Run the menu bar runtime app with:
 
 ```sh
-just app
+just dev
 ```
 
 The menu bar app captures currently visible windows into the active workspace for each window's monitor on launch.
@@ -37,6 +37,8 @@ Workspace config is stored at:
 ```text
 ~/.config/kkaci/config.yaml
 ```
+
+The development app uses `~/.config/kkaci-dev/config.yaml` so it can run alongside the release app without sharing runtime state.
 
 If the config does not exist, kkaci creates the default workspaces `1`, `2`, and `3`. Workspace IDs are limited to `0...9` and `A...Z`; letter IDs are normalized to uppercase. A workspace may have an optional display-only `name`, while commands and shortcuts continue to use its ID. Runtime commands only use configured workspaces; a missing workspace is a no-op and is never added to the config automatically.
 
