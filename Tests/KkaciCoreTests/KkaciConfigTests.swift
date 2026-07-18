@@ -99,6 +99,49 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertEqual(updated.workspaces[1].shortcuts, workspaceShortcuts)
     }
 
+    func testUpdatingSwitcherShortcutsChangesOnlyTheSelectedTarget() throws {
+        let config = KkaciConfig.default
+
+        let workspaceNext = try XCTUnwrap(config.updatingShortcut(
+            "command+tab",
+            for: .workspaceSwitcherNext
+        ))
+        XCTAssertEqual(workspaceNext.shortcuts.workspaceSwitcher.next, "command+tab")
+        XCTAssertEqual(workspaceNext.shortcuts.workspaceSwitcher.previous, "ctrl+shift+tab")
+        XCTAssertEqual(workspaceNext.shortcuts.windowSwitcher, config.shortcuts.windowSwitcher)
+
+        let windowPrevious = try XCTUnwrap(config.updatingShortcut(
+            "command+shift+tab",
+            for: .windowSwitcherPrevious
+        ))
+        XCTAssertEqual(windowPrevious.shortcuts.windowSwitcher.previous, "command+shift+tab")
+        XCTAssertEqual(windowPrevious.shortcuts.windowSwitcher.next, "option+tab")
+        XCTAssertEqual(windowPrevious.shortcuts.workspaceSwitcher, config.shortcuts.workspaceSwitcher)
+    }
+
+    func testUpdatingWorkspaceShortcutsPreservesTheOtherWorkspaceFields() throws {
+        let config = KkaciConfig.default
+
+        let switched = try XCTUnwrap(config.updatingShortcut("control+a", for: .switchWorkspace("2")))
+        XCTAssertEqual(switched.workspace(for: "2")?.shortcuts.switchWorkspace, "control+a")
+        XCTAssertEqual(switched.workspace(for: "2")?.shortcuts.moveWindow, "option+shift+2")
+
+        let moved = try XCTUnwrap(config.updatingShortcut("command+a", for: .moveWindow("2")))
+        XCTAssertEqual(moved.workspace(for: "2")?.shortcuts.switchWorkspace, "option+2")
+        XCTAssertEqual(moved.workspace(for: "2")?.shortcuts.moveWindow, "command+a")
+        XCTAssertEqual(moved.workspace(for: "2")?.display, config.workspace(for: "2")?.display)
+    }
+
+    func testUpdatingShortcutClearsBlankValuesAndRejectsUnknownWorkspace() throws {
+        let cleared = try XCTUnwrap(KkaciConfig.default.updatingShortcut(
+            "  \n ",
+            for: .workspaceSwitcherNext
+        ))
+
+        XCTAssertNil(cleared.shortcuts.workspaceSwitcher.next)
+        XCTAssertNil(KkaciConfig.default.updatingShortcut("option+a", for: .switchWorkspace("A")))
+    }
+
     func testFileConfigStoreRoundTripsYamlConfig() throws {
         let (directory, url) = temporaryConfigLocation()
         defer { try? FileManager.default.removeItem(at: directory) }

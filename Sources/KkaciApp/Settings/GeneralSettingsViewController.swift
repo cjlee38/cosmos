@@ -331,26 +331,26 @@ private extension GeneralSettingsViewController {
 
         switch configStatusProvider() {
         case .valid:
-            configStatusIcon.image = NSImage(
-                systemSymbolName: "checkmark.circle.fill",
-                accessibilityDescription: "Valid"
-            )
-            configStatusIcon.contentTintColor = .systemGreen
-            configStatusLabel.stringValue = "Valid"
-            configStatusLabel.textColor = .systemGreen
-            configErrorLabel.stringValue = ""
-            configErrorLabel.isHidden = true
+            updateConfigStatus(symbol: "checkmark.circle.fill", title: "Valid", color: .systemGreen)
         case let .invalid(error):
-            configStatusIcon.image = NSImage(
-                systemSymbolName: "xmark.circle.fill",
-                accessibilityDescription: "Invalid"
+            updateConfigStatus(symbol: "xmark.circle.fill", title: "Invalid", color: .systemRed, error: error)
+        case let .runtimeError(error):
+            updateConfigStatus(
+                symbol: "exclamationmark.triangle.fill",
+                title: "Error",
+                color: .systemOrange,
+                error: error
             )
-            configStatusIcon.contentTintColor = .systemRed
-            configStatusLabel.stringValue = "Invalid"
-            configStatusLabel.textColor = .systemRed
-            configErrorLabel.stringValue = error
-            configErrorLabel.isHidden = false
         }
+    }
+
+    private func updateConfigStatus(symbol: String, title: String, color: NSColor, error: String? = nil) {
+        configStatusIcon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+        configStatusIcon.contentTintColor = color
+        configStatusLabel.stringValue = title
+        configStatusLabel.textColor = color
+        configErrorLabel.stringValue = error ?? ""
+        configErrorLabel.isHidden = error == nil
     }
 
     @objc private func launchAtLoginChanged() {

@@ -9,8 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "KkaciCore", targets: ["KkaciCore"]),
-        .executable(name: "kkaci", targets: ["KkaciCli"]),
-        .executable(name: "kkaci-app", targets: ["KkaciApp"]),
+        .executable(name: "kkaci-cli", targets: ["KkaciCli"]),
+        .executable(name: "Kkaci", targets: ["KkaciApp"]),
         .executable(name: "kkaci-fixture-app", targets: ["KkaciFixtureApp"])
     ],
     dependencies: [

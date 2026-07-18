@@ -19,6 +19,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         workspaceAddedHandler: @escaping ([WorkspaceID], DisplayID) throws -> Void,
         workspaceRemovedHandler: @escaping (WorkspaceID) throws -> Void,
         workspaceNameChangedHandler: @escaping (WorkspaceID, String?) throws -> Void,
+        shortcutRecordingBeganHandler: @escaping () throws -> Void,
+        shortcutRecordingCancelledHandler: @escaping () throws -> Void,
+        shortcutChangedHandler: @escaping (ShortcutTarget, String?) throws -> Void,
         configURLProvider: @escaping () -> URL?,
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
         reloadConfigHandler: @escaping () -> Void
@@ -39,7 +42,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             updateMonitorHandler: workspaceMonitorChangedHandler,
             addWorkspaceHandler: workspaceAddedHandler,
             removeWorkspaceHandler: workspaceRemovedHandler,
-            updateNameHandler: workspaceNameChangedHandler
+            updateNameHandler: workspaceNameChangedHandler,
+            beginShortcutRecordingHandler: shortcutRecordingBeganHandler,
+            cancelShortcutRecordingHandler: shortcutRecordingCancelledHandler,
+            updateShortcutHandler: shortcutChangedHandler
         )
 
         let sidebar = SettingsSidebarViewController()
@@ -92,6 +98,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_: Notification) {
+        workspaceViewController.cancelShortcutRecording()
         NSApp.setActivationPolicy(.accessory)
         visibilityChangedHandler()
     }

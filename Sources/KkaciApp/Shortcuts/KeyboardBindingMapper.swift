@@ -28,28 +28,32 @@ final class KeyboardBindingMapper {
         case "next-workspace":
             return workspaceSwitcherRegistration(
                 binding,
-                name: "next-workspace",
+                name: "Cycle Workspace Forward",
+                target: .workspaceSwitcherNext,
                 direction: .forward,
                 actions: actions
             )
         case "previous-workspace", "prev-workspace":
             return workspaceSwitcherRegistration(
                 binding,
-                name: "previous-workspace",
+                name: "Cycle Workspace Backward",
+                target: .workspaceSwitcherPrevious,
                 direction: .backward,
                 actions: actions
             )
         case "next-window":
             return windowSwitcherRegistration(
                 binding,
-                name: "next-window",
+                name: "Cycle Window Forward",
+                target: .windowSwitcherNext,
                 direction: .forward,
                 actions: actions
             )
         case "previous-window", "prev-window":
             return windowSwitcherRegistration(
                 binding,
-                name: "previous-window",
+                name: "Cycle Window Backward",
+                target: .windowSwitcherPrevious,
                 direction: .backward,
                 actions: actions
             )
@@ -67,12 +71,14 @@ final class KeyboardBindingMapper {
     private func workspaceSwitcherRegistration(
         _ binding: HotKeyBinding,
         name: String,
+        target: ShortcutTarget,
         direction: SwitcherDirection,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .hold(
             key: binding.key,
             name: name,
+            target: target,
             releaseGroup: "workspace-switcher",
             onPress: { [weak actions] in
                 actions?.stepWorkspaceSwitcher(direction: direction)
@@ -86,12 +92,14 @@ final class KeyboardBindingMapper {
     private func windowSwitcherRegistration(
         _ binding: HotKeyBinding,
         name: String,
+        target: ShortcutTarget,
         direction: SwitcherDirection,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .hold(
             key: binding.key,
             name: name,
+            target: target,
             releaseGroup: "window-switcher",
             onPress: { [weak actions] in
                 actions?.stepWindowSwitcher(direction: direction, wraps: true)
@@ -107,39 +115,41 @@ final class KeyboardBindingMapper {
 
     private func switchWorkspaceRegistration(
         _ binding: HotKeyBinding,
-        workspace: String,
+        workspace: WorkspaceID,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .press(
             key: binding.key,
-            name: "workspace \(workspace)",
+            name: "Switch to Workspace \(workspace.rawValue)",
+            target: .switchWorkspace(workspace),
             onPress: { [weak actions] in
-                actions?.switchWorkspace(named: workspace)
+                actions?.switchWorkspace(named: workspace.rawValue)
             }
         )
     }
 
     private func moveFocusedWindowRegistration(
         _ binding: HotKeyBinding,
-        workspace: String,
+        workspace: WorkspaceID,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .press(
             key: binding.key,
-            name: "move-window-to-workspace \(workspace)",
+            name: "Move Window to Workspace \(workspace.rawValue)",
+            target: .moveWindow(workspace),
             onPress: { [weak actions] in
-                actions?.moveFocusedWindow(to: workspace)
+                actions?.moveFocusedWindow(to: workspace.rawValue)
             }
         )
     }
 
-    private func workspaceName(from binding: HotKeyBinding) throws -> String {
+    private func workspaceName(from binding: HotKeyBinding) throws -> WorkspaceID {
         guard let workspace = binding.workspace?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !workspace.isEmpty
+              let workspaceID = WorkspaceID(rawValue: workspace)
         else {
             throw KeyboardBindingError.missingWorkspace
         }
-        return workspace
+        return workspaceID
     }
 }
 

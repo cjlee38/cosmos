@@ -92,8 +92,11 @@ struct AppSettingsSnapshot: Equatable {
 struct WorkspaceSettingsSnapshot: Equatable {
     let displays: [WorkspaceSettingsDisplay]
     let disconnectedMonitorSlots: [MonitorSlot]
-    let navigation: WorkspaceNavigationShortcuts
+    let workspaceSwitcher: SwitcherSettingsShortcuts
+    let windowSwitcher: SwitcherSettingsShortcuts
     let workspaces: [WorkspaceSettingsItem]
+    let isEditable: Bool
+    let shortcutValidationMessages: [ShortcutTarget: String]
 
     var availableWorkspaceIDs: [WorkspaceID] {
         let configuredIDs = Set(workspaces.map(\.id))
@@ -111,7 +114,9 @@ struct WorkspaceSettingsSnapshot: Equatable {
     init(
         config: KkaciConfig,
         monitorSlots: [MonitorSlotSnapshot],
-        displays: [DisplaySnapshot]
+        displays: [DisplaySnapshot],
+        isEditable: Bool = true,
+        shortcutValidationMessages: [ShortcutTarget: String] = [:]
     ) {
         let slotByDisplayID = Dictionary(uniqueKeysWithValues: monitorSlots.map {
             ($0.display.id, $0.slot)
@@ -147,11 +152,21 @@ struct WorkspaceSettingsSnapshot: Equatable {
         disconnectedMonitorSlots = Set(workspaceItems.map(\.monitorSlot))
             .subtracting(connectedSlots)
             .sorted()
-        navigation = WorkspaceNavigationShortcuts(
+        workspaceSwitcher = SwitcherSettingsShortcuts(
             next: config.shortcuts.workspaceSwitcher.next,
             previous: config.shortcuts.workspaceSwitcher.previous
         )
+        windowSwitcher = SwitcherSettingsShortcuts(
+            next: config.shortcuts.windowSwitcher.next,
+            previous: config.shortcuts.windowSwitcher.previous
+        )
         workspaces = workspaceItems
+        self.isEditable = isEditable
+        self.shortcutValidationMessages = shortcutValidationMessages
+    }
+
+    func shortcutValidationMessage(for target: ShortcutTarget) -> String? {
+        shortcutValidationMessages[target]
     }
 }
 
@@ -194,7 +209,7 @@ struct WorkspaceDisplayOption: Equatable {
     }
 }
 
-struct WorkspaceNavigationShortcuts: Equatable {
+struct SwitcherSettingsShortcuts: Equatable {
     let next: String?
     let previous: String?
 }

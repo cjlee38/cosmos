@@ -1,9 +1,11 @@
 import AppKit
 import Foundation
+import KkaciCore
 
 struct KeyboardShortcutRegistration {
     let key: String
     let name: String
+    let target: ShortcutTarget?
     let releaseGroup: String?
     let onPress: () -> Void
     let onRepeat: (() -> Void)?
@@ -12,11 +14,13 @@ struct KeyboardShortcutRegistration {
     static func press(
         key: String,
         name: String,
+        target: ShortcutTarget? = nil,
         onPress: @escaping () -> Void
     ) -> KeyboardShortcutRegistration {
         KeyboardShortcutRegistration(
             key: key,
             name: name,
+            target: target,
             releaseGroup: nil,
             onPress: onPress,
             onRepeat: nil,
@@ -27,6 +31,7 @@ struct KeyboardShortcutRegistration {
     static func hold(
         key: String,
         name: String,
+        target: ShortcutTarget? = nil,
         releaseGroup: String,
         onPress: @escaping () -> Void,
         onRepeat: (() -> Void)? = nil,
@@ -35,6 +40,7 @@ struct KeyboardShortcutRegistration {
         KeyboardShortcutRegistration(
             key: key,
             name: name,
+            target: target,
             releaseGroup: releaseGroup,
             onPress: onPress,
             onRepeat: onRepeat,

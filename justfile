@@ -11,10 +11,10 @@ lint:
     periphery scan
 
 run:
-    swift run kkaci
+    swift run kkaci-cli
 
 app:
-    swift run kkaci-app
+    swift run Kkaci
 
 fixture:
     swift run kkaci-fixture-app

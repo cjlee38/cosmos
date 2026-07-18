@@ -44,16 +44,16 @@ final class KeyboardBindingMapperTests: XCTestCase {
         let actions = KeyboardShortcutActionSpy()
         let registrations = try KeyboardBindingMapper().registrations(
             for: [
-                HotKeyBinding(key: "option+d", command: "workspace", workspace: "develop"),
-                HotKeyBinding(key: "option+shift+o", command: "move-window-to-workspace", workspace: "operation")
+                HotKeyBinding(key: "option+d", command: "workspace", workspace: "D"),
+                HotKeyBinding(key: "option+shift+o", command: "move-window-to-workspace", workspace: "O")
             ],
             actions: actions
         )
 
         registrations.forEach { $0.onPress() }
 
-        XCTAssertEqual(actions.switchedWorkspaces, ["develop"])
-        XCTAssertEqual(actions.movedWorkspaces, ["operation"])
+        XCTAssertEqual(actions.switchedWorkspaces, ["D"])
+        XCTAssertEqual(actions.movedWorkspaces, ["O"])
     }
 }
 

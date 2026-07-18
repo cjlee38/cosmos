@@ -1,8 +1,10 @@
+import AppKit
 import Carbon
 import Foundation
+import KkaciCore
 
 final class KeyboardShortcutResolver {
-    private let keyCodesByName: [String: UInt32] = [
+    private static let keyCodesByName: [String: UInt32] = [
         "tab": UInt32(kVK_Tab),
         "1": UInt32(kVK_ANSI_1),
         "2": UInt32(kVK_ANSI_2),
@@ -43,33 +45,78 @@ final class KeyboardShortcutResolver {
     ]
 
     func resolve(_ registrations: [KeyboardShortcutRegistration]) throws -> [ResolvedShortcut] {
-        var seenKeys: Set<String> = []
-        var seenGroups: [String: UInt32] = [:]
+        var resolved: [ResolvedShortcut] = []
+        var issues: [ShortcutValidationIssue] = []
 
-        return try registrations.map { registration in
-            let keystroke = try parseKeystroke(registration.key)
-            guard seenKeys.insert(keystroke.description).inserted else {
-                throw KeyboardShortcutError.duplicateKey(registration.key)
-            }
-
-            let holdModifier: UInt32?
-            if let releaseGroup = registration.releaseGroup {
-                holdModifier = try inferHoldModifier(from: keystroke, key: registration.key)
-                if let existingModifier = seenGroups[releaseGroup],
-                   existingModifier != holdModifier {
-                    throw KeyboardShortcutError.conflictingHoldGroup(releaseGroup)
+        for registration in registrations {
+            do {
+                let keystroke = try parseKeystroke(registration.key)
+                let holdModifier = try registration.releaseGroup.map { _ in
+                    try inferHoldModifier(from: keystroke, key: registration.key)
                 }
-                seenGroups[releaseGroup] = holdModifier
-            } else {
-                holdModifier = nil
+                resolved.append(ResolvedShortcut(
+                    registration: registration,
+                    keystroke: keystroke,
+                    holdModifier: holdModifier
+                ))
+            } catch {
+                issues.append(ShortcutValidationIssue(
+                    target: registration.target,
+                    message: String(describing: error)
+                ))
             }
-
-            return ResolvedShortcut(
-                registration: registration,
-                keystroke: keystroke,
-                holdModifier: holdModifier
-            )
         }
+
+        issues.append(contentsOf: duplicateKeyIssues(in: resolved))
+        issues.append(contentsOf: holdGroupIssues(in: resolved))
+        guard issues.isEmpty else {
+            throw KeyboardShortcutValidationError(issues: issues)
+        }
+        return resolved
+    }
+
+    private func duplicateKeyIssues(in shortcuts: [ResolvedShortcut]) -> [ShortcutValidationIssue] {
+        var issues: [ShortcutValidationIssue] = []
+        let groups = Dictionary(grouping: shortcuts, by: { $0.keystroke.description })
+        for duplicates in groups.values where duplicates.count > 1 {
+            for shortcut in duplicates {
+                let names: [String] = duplicates.compactMap { duplicate in
+                    guard duplicate.registration.name != shortcut.registration.name else {
+                        return nil
+                    }
+                    return "\"\(duplicate.registration.name)\""
+                }
+                issues.append(ShortcutValidationIssue(
+                    target: shortcut.registration.target,
+                    message: "Already assigned to \(names.joined(separator: ", "))."
+                ))
+            }
+        }
+        return issues
+    }
+
+    private func holdGroupIssues(in shortcuts: [ResolvedShortcut]) -> [ShortcutValidationIssue] {
+        var groups: [String: [ResolvedShortcut]] = [:]
+        for shortcut in shortcuts {
+            guard let releaseGroup = shortcut.registration.releaseGroup else {
+                continue
+            }
+            groups[releaseGroup, default: []].append(shortcut)
+        }
+
+        var issues: [ShortcutValidationIssue] = []
+        for (releaseGroup, group) in groups {
+            guard Set(group.compactMap(\.holdModifier)).count > 1 else {
+                continue
+            }
+            for shortcut in group {
+                issues.append(ShortcutValidationIssue(
+                    target: shortcut.registration.target,
+                    message: "Shortcuts in \"\(releaseGroup)\" must use the same hold modifier."
+                ))
+            }
+        }
+        return issues
     }
 
     private func parseKeystroke(_ value: String) throws -> Keystroke {
@@ -111,10 +158,32 @@ final class KeyboardShortcutResolver {
     }
 
     private func parseKeyCode(_ key: String) throws -> UInt32 {
-        guard let keyCode = keyCodesByName[key] else {
+        guard let keyCode = Self.keyCodesByName[key] else {
             throw KeyboardShortcutError.unsupportedKey(key)
         }
         return keyCode
+    }
+
+    static func shortcutString(for event: NSEvent) -> String? {
+        guard let key = keyCodesByName.first(where: { $0.value == UInt32(event.keyCode) })?.key else {
+            return nil
+        }
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        var parts: [String] = []
+        if modifiers.contains(.control) {
+            parts.append("control")
+        }
+        if modifiers.contains(.option) {
+            parts.append("option")
+        }
+        if modifiers.contains(.shift) {
+            parts.append("shift")
+        }
+        if modifiers.contains(.command) {
+            parts.append("command")
+        }
+        parts.append(key)
+        return parts.joined(separator: "+")
     }
 
     private func inferHoldModifier(from keystroke: Keystroke, key: String) throws -> UInt32 {
@@ -154,9 +223,7 @@ enum KeyboardShortcutError: Error, CustomStringConvertible {
     case missingKey(String)
     case multipleKeys(String)
     case unsupportedKey(String)
-    case duplicateKey(String)
     case missingHoldModifier(String)
-    case conflictingHoldGroup(String)
 
     var description: String {
         switch self {
@@ -168,12 +235,21 @@ enum KeyboardShortcutError: Error, CustomStringConvertible {
             "multiple keys in \(value)"
         case let .unsupportedKey(key):
             "unsupported key \(key)"
-        case let .duplicateKey(key):
-            "duplicate key \(key)"
         case let .missingHoldModifier(key):
             "hold shortcut needs a modifier: \(key)"
-        case let .conflictingHoldGroup(group):
-            "hold group uses conflicting modifiers: \(group)"
         }
+    }
+}
+
+struct ShortcutValidationIssue: Equatable {
+    let target: ShortcutTarget?
+    let message: String
+}
+
+struct KeyboardShortcutValidationError: Error, CustomStringConvertible {
+    let issues: [ShortcutValidationIssue]
+
+    var description: String {
+        issues.map(\.message).joined(separator: " ")
     }
 }
