@@ -151,9 +151,6 @@ private extension AppRuntime {
                 try addWorkspaces(workspaceIDs, displayID: displayID)
             },
             workspaceRemovedHandler: { [unowned self] workspaceID in try removeWorkspace(workspaceID) },
-            workspaceNameChangedHandler: { [unowned self] workspaceID, name in
-                try updateWorkspaceName(workspaceID, name: name)
-            },
             shortcutRecordingBeganHandler: configRuntime.beginShortcutRecording,
             shortcutRecordingCancelledHandler: configRuntime.cancelShortcutRecording,
             shortcutChangedHandler: { [unowned self] target, shortcut in
@@ -217,14 +214,6 @@ private extension AppRuntime {
         }
         try updateWorkspaceConfig(config)
         log.info("Removed workspace \(workspaceID.rawValue)")
-    }
-
-    func updateWorkspaceName(_ workspaceID: WorkspaceID, name: String?) throws {
-        guard let config = try editableConfig().namingWorkspace(workspaceID, name: name) else {
-            return
-        }
-        try updateWorkspaceConfig(config)
-        log.info("Updated workspace name id=\(workspaceID.rawValue)")
     }
 
     func updateWorkspaceConfig(_ config: KkaciConfig) throws {

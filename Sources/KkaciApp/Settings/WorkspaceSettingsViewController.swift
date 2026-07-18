@@ -1,13 +1,12 @@
 import AppKit
 import KkaciCore
 
-final class WorkspaceSettingsViewController: NSViewController, NSTextFieldDelegate {
+final class WorkspaceSettingsViewController: NSViewController {
     private let log = Log(category: "settings")
     private let snapshotProvider: () -> WorkspaceSettingsSnapshot
     private let updateMonitorHandler: (String, DisplayID) throws -> Void
     private let addWorkspaceHandler: ([WorkspaceID], DisplayID) throws -> Void
     private let removeWorkspaceHandler: (WorkspaceID) throws -> Void
-    private let updateNameHandler: (WorkspaceID, String?) throws -> Void
     private let beginShortcutRecordingHandler: () throws -> Void
     private let cancelShortcutRecordingHandler: () throws -> Void
     private let updateShortcutHandler: (ShortcutTarget, String?) throws -> Void
@@ -23,7 +22,6 @@ final class WorkspaceSettingsViewController: NSViewController, NSTextFieldDelega
         updateMonitorHandler: @escaping (String, DisplayID) throws -> Void,
         addWorkspaceHandler: @escaping ([WorkspaceID], DisplayID) throws -> Void,
         removeWorkspaceHandler: @escaping (WorkspaceID) throws -> Void,
-        updateNameHandler: @escaping (WorkspaceID, String?) throws -> Void,
         beginShortcutRecordingHandler: @escaping () throws -> Void,
         cancelShortcutRecordingHandler: @escaping () throws -> Void,
         updateShortcutHandler: @escaping (ShortcutTarget, String?) throws -> Void
@@ -32,7 +30,6 @@ final class WorkspaceSettingsViewController: NSViewController, NSTextFieldDelega
         self.updateMonitorHandler = updateMonitorHandler
         self.addWorkspaceHandler = addWorkspaceHandler
         self.removeWorkspaceHandler = removeWorkspaceHandler
-        self.updateNameHandler = updateNameHandler
         self.beginShortcutRecordingHandler = beginShortcutRecordingHandler
         self.cancelShortcutRecordingHandler = cancelShortcutRecordingHandler
         self.updateShortcutHandler = updateShortcutHandler
@@ -124,7 +121,8 @@ private extension WorkspaceSettingsViewController {
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
-        let documentView = NSView()
+        scrollView.automaticallyAdjustsContentInsets = false
+        let documentView = WorkspaceSettingsDocumentView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = documentView
         return (scrollView, documentView)
@@ -200,7 +198,7 @@ private extension WorkspaceSettingsViewController {
         let grid = NSGridView(views: rows)
         grid.rowSpacing = 8
         grid.columnSpacing = 10
-        grid.column(at: 0).width = 134
+        grid.column(at: 0).width = 90
         grid.column(at: 1).width = 126
         grid.column(at: 2).width = 94
         grid.column(at: 3).width = 112
@@ -216,7 +214,7 @@ private extension WorkspaceSettingsViewController {
         snapshot: WorkspaceSettingsSnapshot
     ) -> [NSView] {
         [
-            WorkspaceSettingsControlFactory.identityEditor(workspace: workspace, delegate: self),
+            WorkspaceSettingsControlFactory.identityLabel(workspace: workspace),
             monitorSelector(workspace: workspace, displays: snapshot.displays),
             WorkspaceSettingsControlFactory.shortcutRecorder(
                 shortcutTarget: .switchWorkspace(workspace.id),
@@ -368,24 +366,8 @@ private extension WorkspaceSettingsViewController {
     }
 }
 
-extension WorkspaceSettingsViewController {
-    func controlTextDidEndEditing(_ notification: Notification) {
-        guard let field = notification.object as? WorkspaceNameTextField else {
-            return
-        }
-        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedName = name.isEmpty ? nil : name
-        guard normalizedName != field.persistedName else {
-            return
-        }
-
-        do {
-            try updateNameHandler(field.workspaceID, normalizedName)
-            field.persistedName = normalizedName
-            field.stringValue = normalizedName ?? ""
-        } catch {
-            log.error("Workspace name update failed id=\(field.workspaceID.rawValue): \(String(describing: error))")
-            field.stringValue = field.persistedName ?? ""
-        }
+private final class WorkspaceSettingsDocumentView: NSView {
+    override var isFlipped: Bool {
+        true
     }
 }

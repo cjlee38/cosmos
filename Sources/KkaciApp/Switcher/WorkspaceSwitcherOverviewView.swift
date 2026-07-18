@@ -183,7 +183,7 @@ private final class WorkspacePreviewCardView: NSView {
         onHover = configuration.onHover
         onClick = configuration.onClick
         frame.size = configuration.cardSize
-        titleLabel.stringValue = group.displayName
+        titleLabel.stringValue = group.id
         layoutContent()
         update(group: group)
         updateSelection(configuration.isSelected)

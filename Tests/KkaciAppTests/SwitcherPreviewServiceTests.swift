@@ -40,17 +40,16 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         XCTAssertEqual(service.workspaceGroups(ids: ["missing"]).count, 0)
     }
 
-    func testWorkspaceGroupUsesAliasForDisplayAndIDForIdentity() throws {
+    func testWorkspaceGroupUsesWorkspaceID() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [])
         try controller.applyConfig(KkaciConfig(workspaces: [
-            WorkspaceConfig(id: "1", name: "Develop")
+            WorkspaceConfig(id: "1")
         ]))
         let service = makeSwitcherTestPreviewService(controller: controller)
 
         let group = try XCTUnwrap(service.workspaceGroups(ids: ["1"]).first)
 
         XCTAssertEqual(group.id, "1")
-        XCTAssertEqual(group.displayName, "Develop")
     }
 
     func testThumbnailCompletionReportsOnlyTheAffectedWindow() throws {

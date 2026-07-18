@@ -16,7 +16,8 @@ final class WorkspaceMonitorPopUpButton: NSPopUpButton {
 
         setAccessibilityIdentifier("kkaci.settings.workspace.\(workspaceID.rawValue).monitor")
         menu?.autoenablesItems = false
-        controlSize = .small
+        bezelStyle = .rounded
+        controlSize = .regular
         font = .systemFont(ofSize: 12, weight: .medium)
         for display in displays.sorted(by: displayOrder) {
             let option = WorkspaceDisplayOption(display: display)
@@ -69,28 +70,6 @@ final class WorkspaceRemoveButton: NSButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-}
-
-final class WorkspaceNameTextField: NSTextField {
-    let workspaceID: WorkspaceID
-    var persistedName: String?
-
-    init(workspaceID: WorkspaceID, name: String?) {
-        self.workspaceID = workspaceID
-        persistedName = name
-        super.init(frame: .zero)
-        stringValue = name ?? ""
-        placeholderString = "Name"
-        controlSize = .small
-        font = .systemFont(ofSize: 12)
-        lineBreakMode = .byTruncatingTail
-        setAccessibilityIdentifier("kkaci.settings.workspace.\(workspaceID.rawValue).name")
-    }
-
-    @available(*, unavailable)
-    required init(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 }
@@ -229,26 +208,13 @@ enum WorkspaceSettingsControlFactory {
         )
     }
 
-    static func identityEditor(
-        workspace: WorkspaceSettingsItem,
-        delegate: NSTextFieldDelegate
-    ) -> NSView {
+    static func identityLabel(workspace: WorkspaceSettingsItem) -> NSView {
         let id = NSTextField(labelWithString: workspace.id.rawValue)
         id.font = .systemFont(ofSize: 13, weight: .semibold)
         id.alignment = .center
         id.translatesAutoresizingMaskIntoConstraints = false
         id.widthAnchor.constraint(equalToConstant: 20).isActive = true
-
-        let name = WorkspaceNameTextField(workspaceID: workspace.id, name: workspace.name)
-        name.delegate = delegate
-        name.translatesAutoresizingMaskIntoConstraints = false
-        name.widthAnchor.constraint(equalToConstant: 104).isActive = true
-
-        let row = NSStackView(views: [id, name])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 6
-        return row
+        return id
     }
 
     static func addButton(

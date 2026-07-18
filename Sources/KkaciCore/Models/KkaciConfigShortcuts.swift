@@ -78,7 +78,6 @@ private extension KkaciConfig {
                 )
                 return WorkspaceConfig(
                     id: workspace.id,
-                    name: workspace.name,
                     display: workspace.display,
                     shortcuts: shortcuts
                 )

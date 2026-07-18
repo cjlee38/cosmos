@@ -21,7 +21,6 @@ public final class FileKkaciConfigStore: KkaciConfigStore {
     #   - Valid IDs are the numbers 0 through 9 and the letters A through Z.
     #   - Letter IDs are case-insensitive and are saved as uppercase.
     #   - Workspace IDs must be unique.
-    #   - 'name' is an optional display alias. Workspace identity and shortcuts still use 'id'.
     #
     # - Display slots
     #   - A display slot is an integer assigned to each display by Kkaci.

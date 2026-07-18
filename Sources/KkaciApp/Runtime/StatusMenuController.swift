@@ -71,7 +71,7 @@ final class StatusMenuController: NSObject {
     }
 
     private func buildWorkspaceItems() {
-        workspaceItem.title = "Workspace: \(workspaceDisplayName(controller.currentWorkspace))"
+        workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
         workspaceItem.isEnabled = false
         menu.addItem(workspaceItem)
 
@@ -121,7 +121,7 @@ final class StatusMenuController: NSObject {
         }
 
         statusItem.button?.title = menuBarTitle()
-        workspaceItem.title = "Workspace: \(workspaceDisplayName(controller.currentWorkspace))"
+        workspaceItem.title = "Workspace: \(controller.currentWorkspace)"
         for (workspace, item) in workspaceItems {
             item.state = controller.isWorkspaceVisible(workspace) ? .on : .off
         }
@@ -161,22 +161,12 @@ final class StatusMenuController: NSObject {
         return MenuBarTitleFormatter.title(
             workspaces: workspaces,
             currentWorkspace: controller.currentWorkspace,
-            style: appSettingsStore.snapshot().menuBarIconStyle,
-            displayName: workspaceDisplayName
+            style: appSettingsStore.snapshot().menuBarIconStyle
         )
     }
 
-    private func workspaceDisplayName(_ workspace: String) -> String {
-        controller.currentConfig.workspace(for: workspace)?.displayName ?? workspace
-    }
-
     private func workspaceMenuTitle(_ workspace: String) -> String {
-        guard let configuredWorkspace = controller.currentConfig.workspace(for: workspace),
-              let name = configuredWorkspace.name
-        else {
-            return workspace
-        }
-        return "\(name) (\(workspace))"
+        workspace
     }
 
     @objc private func switchWorkspace(_ sender: NSMenuItem) {
@@ -227,13 +217,11 @@ enum MenuBarTitleFormatter {
     static func title(
         workspaces: [String],
         currentWorkspace: String,
-        style: MenuBarIconStyle,
-        displayName: (String) -> String = { $0 }
+        style: MenuBarIconStyle
     ) -> String {
         let contents = workspaces
             .map { workspace in
-                let title = displayName(workspace)
-                return workspace == currentWorkspace ? "•\(title)" : title
+                workspace == currentWorkspace ? "•\(workspace)" : workspace
             }
             .joined(separator: " | ")
 

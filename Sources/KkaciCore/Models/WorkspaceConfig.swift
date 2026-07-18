@@ -63,24 +63,17 @@ public struct WorkspaceShortcutConfig: Codable, Equatable {
 
 public struct WorkspaceConfig: Codable, Equatable {
     public let id: WorkspaceID
-    public let name: String?
     public let display: MonitorSlot
     public let shortcuts: WorkspaceShortcutConfig
 
     public init(
         id: WorkspaceID,
-        name: String? = nil,
         display: MonitorSlot = 1,
         shortcuts: WorkspaceShortcutConfig = .empty
     ) {
         self.id = id
-        self.name = Self.normalizedName(name)
         self.display = max(display, 1)
         self.shortcuts = shortcuts
-    }
-
-    public var displayName: String {
-        name ?? id.rawValue
     }
 
     public static func defaultShortcuts(for id: WorkspaceID) -> WorkspaceShortcutConfig {
@@ -92,7 +85,6 @@ public struct WorkspaceConfig: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id
-        case name
         case display
         case shortcuts
     }
@@ -101,7 +93,6 @@ public struct WorkspaceConfig: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             id: container.decode(WorkspaceID.self, forKey: .id),
-            name: container.decodeIfPresent(String.self, forKey: .name),
             display: container.decode(MonitorSlot.self, forKey: .display),
             shortcuts: container.decode(WorkspaceShortcutConfig.self, forKey: .shortcuts)
         )
@@ -110,16 +101,8 @@ public struct WorkspaceConfig: Codable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
-        try container.encodeIfPresent(name, forKey: .name)
         try container.encode(display, forKey: .display)
         try container.encode(shortcuts, forKey: .shortcuts)
-    }
-
-    private static func normalizedName(_ name: String?) -> String? {
-        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else {
-            return nil
-        }
-        return name
     }
 }
 
@@ -227,30 +210,8 @@ public struct KkaciConfig: Codable, Equatable {
                 }
                 return WorkspaceConfig(
                     id: configuredWorkspace.id,
-                    name: configuredWorkspace.name,
                     display: monitorSlot,
                     shortcuts: configuredWorkspace.shortcuts
-                )
-            },
-            shortcuts: shortcuts
-        )
-    }
-
-    public func namingWorkspace(_ id: WorkspaceID, name: String?) -> KkaciConfig? {
-        guard workspaces.contains(where: { $0.id == id }) else {
-            return nil
-        }
-        return KkaciConfig(
-            version: version,
-            workspaces: workspaces.map { workspace in
-                guard workspace.id == id else {
-                    return workspace
-                }
-                return WorkspaceConfig(
-                    id: workspace.id,
-                    name: name,
-                    display: workspace.display,
-                    shortcuts: workspace.shortcuts
                 )
             },
             shortcuts: shortcuts

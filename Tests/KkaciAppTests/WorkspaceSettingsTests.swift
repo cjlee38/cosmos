@@ -28,7 +28,6 @@ final class WorkspaceSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(snapshot.displays[0].workspaceIDs, ["1"])
-        XCTAssertEqual(snapshot.displays[0].workspaceTitles, ["Develop (1)"])
         XCTAssertEqual(snapshot.displays[0].name, "Built-in Retina Display")
         XCTAssertEqual(snapshot.displays[1].workspaceIDs, ["A"])
         XCTAssertEqual(snapshot.disconnectedMonitorSlots, [3])
@@ -37,7 +36,6 @@ final class WorkspaceSettingsTests: XCTestCase {
         XCTAssertEqual(snapshot.windowSwitcher.next, "option+tab")
         XCTAssertEqual(snapshot.windowSwitcher.previous, "option+shift+tab")
         XCTAssertEqual(snapshot.workspaces[0].switchShortcut, "option+1")
-        XCTAssertEqual(snapshot.workspaces[0].displayTitle, "Develop (1)")
         XCTAssertEqual(snapshot.workspaces[0].moveShortcut, "option+shift+1")
         XCTAssertNil(snapshot.workspaces[1].switchShortcut)
         XCTAssertFalse(snapshot.availableWorkspaceIDs.contains("1"))
@@ -61,7 +59,6 @@ final class WorkspaceSettingsTests: XCTestCase {
             },
             addWorkspaceHandler: { _, _ in },
             removeWorkspaceHandler: { _ in },
-            updateNameHandler: { _, _ in },
             beginShortcutRecordingHandler: {},
             cancelShortcutRecordingHandler: {},
             updateShortcutHandler: { _, _ in }
@@ -76,6 +73,8 @@ final class WorkspaceSettingsTests: XCTestCase {
         let targetItem = try XCTUnwrap(selector.itemArray.first { $0.representedObject as? DisplayID == 2 })
         XCTAssertEqual(targetItem.title, "2 · Studio Display")
         XCTAssertFalse(selector.menu?.autoenablesItems ?? true)
+        XCTAssertEqual(selector.bezelStyle, .rounded)
+        XCTAssertEqual(selector.controlSize, .regular)
 
         selector.select(targetItem)
         selector.sendAction(selector.action, to: selector.target)
@@ -91,7 +90,6 @@ final class WorkspaceSettingsTests: XCTestCase {
             updateMonitorHandler: { _, _ in },
             addWorkspaceHandler: { _, _ in },
             removeWorkspaceHandler: { _ in },
-            updateNameHandler: { _, _ in },
             beginShortcutRecordingHandler: {},
             cancelShortcutRecordingHandler: {},
             updateShortcutHandler: { _, _ in }
@@ -117,7 +115,6 @@ final class WorkspaceSettingsTests: XCTestCase {
             updateMonitorHandler: { _, _ in },
             addWorkspaceHandler: { _, _ in },
             removeWorkspaceHandler: { _ in },
-            updateNameHandler: { _, _ in },
             beginShortcutRecordingHandler: {},
             cancelShortcutRecordingHandler: {},
             updateShortcutHandler: { _, _ in }
@@ -153,7 +150,6 @@ final class WorkspaceSettingsTests: XCTestCase {
             updateMonitorHandler: { _, _ in },
             addWorkspaceHandler: { _, _ in },
             removeWorkspaceHandler: { _ in },
-            updateNameHandler: { _, _ in },
             beginShortcutRecordingHandler: {},
             cancelShortcutRecordingHandler: {},
             updateShortcutHandler: { _, _ in }
@@ -163,9 +159,6 @@ final class WorkspaceSettingsTests: XCTestCase {
 
         XCTAssertFalse(try XCTUnwrap(controls.first {
             $0.accessibilityIdentifier() == "kkaci.settings.workspace.add"
-        }).isEnabled)
-        XCTAssertFalse(try XCTUnwrap(controls.first {
-            $0.accessibilityIdentifier() == "kkaci.settings.workspace.1.name"
         }).isEnabled)
         XCTAssertTrue(controls.compactMap { $0 as? ShortcutRecorderButton }.allSatisfy { !$0.isEnabled })
         XCTAssertEqual(
@@ -271,7 +264,6 @@ private func snapshotConfig() -> KkaciConfig {
         workspaces: [
             WorkspaceConfig(
                 id: "1",
-                name: "Develop",
                 shortcuts: WorkspaceShortcutConfig(
                     switchWorkspace: "option+1",
                     moveWindow: "option+shift+1"

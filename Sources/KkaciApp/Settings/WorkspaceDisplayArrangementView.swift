@@ -113,7 +113,7 @@ private final class WorkspaceDisplayCardView: NSView {
         heading.translatesAutoresizingMaskIntoConstraints = false
 
         workspaceFlow.translatesAutoresizingMaskIntoConstraints = false
-        workspaceFlow.apply(item.workspaceTitles)
+        workspaceFlow.apply(item.workspaceIDs.map(\.rawValue))
 
         addSubview(heading)
         addSubview(workspaceFlow)
@@ -165,12 +165,12 @@ private final class WorkspacePillFlowView: NSView {
         true
     }
 
-    func apply(_ workspaceTitles: [String]) {
+    func apply(_ workspaceIDs: [String]) {
         for pill in pills {
             pill.removeFromSuperview()
         }
-        pills = workspaceTitles.map { title in
-            let pill = WorkspacePillView(title: title)
+        pills = workspaceIDs.map { workspaceID in
+            let pill = WorkspacePillView(title: workspaceID)
             addSubview(pill)
             return pill
         }

@@ -18,7 +18,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         workspaceMonitorChangedHandler: @escaping (String, DisplayID) throws -> Void,
         workspaceAddedHandler: @escaping ([WorkspaceID], DisplayID) throws -> Void,
         workspaceRemovedHandler: @escaping (WorkspaceID) throws -> Void,
-        workspaceNameChangedHandler: @escaping (WorkspaceID, String?) throws -> Void,
         shortcutRecordingBeganHandler: @escaping () throws -> Void,
         shortcutRecordingCancelledHandler: @escaping () throws -> Void,
         shortcutChangedHandler: @escaping (ShortcutTarget, String?) throws -> Void,
@@ -42,7 +41,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             updateMonitorHandler: workspaceMonitorChangedHandler,
             addWorkspaceHandler: workspaceAddedHandler,
             removeWorkspaceHandler: workspaceRemovedHandler,
-            updateNameHandler: workspaceNameChangedHandler,
             beginShortcutRecordingHandler: shortcutRecordingBeganHandler,
             cancelShortcutRecordingHandler: shortcutRecordingCancelledHandler,
             updateShortcutHandler: shortcutChangedHandler
@@ -129,6 +127,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
+        let toolbar = NSToolbar(identifier: "kkaci.settings.toolbar")
+        toolbar.displayMode = .iconOnly
+        toolbar.showsBaselineSeparator = false
+        toolbar.allowsUserCustomization = false
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]

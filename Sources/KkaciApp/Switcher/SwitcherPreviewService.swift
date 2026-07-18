@@ -66,7 +66,6 @@ final class SwitcherPreviewService {
             }
             return WorkspaceSwitcherGroup(
                 id: workspaceID,
-                displayName: controller.currentConfig.workspace(for: workspaceID)?.displayName ?? workspaceID,
                 windows: controller.windows(in: workspaceID).map(makeItem),
                 preview: workspaceThumbnailCache.thumbnail(for: workspaceID),
                 shortcutKey: shortcuts.key(for: workspaceID)

@@ -19,34 +19,4 @@ final class WorkspaceIdentityTests: XCTestCase {
         ))
     }
 
-    func testWorkspaceNameIsAnOptionalDisplayAlias() {
-        let named = WorkspaceConfig(id: "A", name: "  Develop  ")
-        let unnamed = WorkspaceConfig(id: "B", name: "   ")
-
-        XCTAssertEqual(named.name, "Develop")
-        XCTAssertEqual(named.displayName, "Develop")
-        XCTAssertNil(unnamed.name)
-        XCTAssertEqual(unnamed.displayName, "B")
-    }
-
-    func testNamingWorkspacePreservesIdentityDisplayAndShortcuts() throws {
-        let shortcuts = WorkspaceShortcutConfig(
-            switchWorkspace: "option+d",
-            moveWindow: "option+shift+d"
-        )
-        let config = KkaciConfig(workspaces: [
-            WorkspaceConfig(id: "D", display: 2, shortcuts: shortcuts)
-        ])
-
-        let named = try XCTUnwrap(config.namingWorkspace("D", name: "Develop"))
-        let workspace = try XCTUnwrap(named.workspace(for: "D"))
-        XCTAssertEqual(workspace.id, "D")
-        XCTAssertEqual(workspace.name, "Develop")
-        XCTAssertEqual(workspace.display, 2)
-        XCTAssertEqual(workspace.shortcuts, shortcuts)
-
-        let cleared = try XCTUnwrap(named.namingWorkspace("D", name: "  "))
-        XCTAssertNil(cleared.workspace(for: "D")?.name)
-        XCTAssertEqual(cleared.workspace(for: "D")?.displayName, "D")
-    }
 }

@@ -150,7 +150,6 @@ final class KkaciConfigTests: XCTestCase {
                 WorkspaceConfig(id: "1"),
                 WorkspaceConfig(
                     id: "D",
-                    name: "Deploy",
                     display: 2,
                     shortcuts: WorkspaceShortcutConfig(switchWorkspace: "option+d")
                 )
@@ -186,7 +185,6 @@ final class KkaciConfigTests: XCTestCase {
               switch: option+1
               move_window: option+shift+1
           - id: d
-            name: Deploy
             display: 2
             shortcuts:
               switch: option+d
@@ -198,7 +196,6 @@ final class KkaciConfigTests: XCTestCase {
 
         XCTAssertEqual(config.workspaceIDs, ["1", "D"])
         XCTAssertEqual(config.monitorSlot(for: "D"), 2)
-        XCTAssertEqual(config.workspace(for: "D")?.name, "Deploy")
         XCTAssertEqual(config.shortcuts.workspaceSwitcher.next, "ctrl+tab")
         XCTAssertEqual(config.workspaces[1].shortcuts.moveWindow, "option+shift+d")
     }

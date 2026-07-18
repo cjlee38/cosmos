@@ -124,7 +124,6 @@ struct WorkspaceSettingsSnapshot: Equatable {
         let workspaceItems = config.workspaces.map { workspace in
             WorkspaceSettingsItem(
                 id: workspace.id,
-                name: workspace.name,
                 monitorSlot: workspace.display,
                 switchShortcut: workspace.shortcuts.switchWorkspace,
                 moveShortcut: workspace.shortcuts.moveWindow
@@ -132,9 +131,6 @@ struct WorkspaceSettingsSnapshot: Equatable {
         }
         let idsByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
             .mapValues { $0.map(\.id) }
-        let titlesByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
-            .mapValues { $0.map(\.displayTitle) }
-
         self.displays = displays.map { display in
             let monitorSlot = slotByDisplayID[display.id]
             return WorkspaceSettingsDisplay(
@@ -143,8 +139,7 @@ struct WorkspaceSettingsSnapshot: Equatable {
                 frame: display.frame,
                 role: display.role,
                 monitorSlot: monitorSlot,
-                workspaceIDs: monitorSlot.flatMap { idsByMonitorSlot[$0] } ?? [],
-                workspaceTitles: monitorSlot.flatMap { titlesByMonitorSlot[$0] } ?? []
+                workspaceIDs: monitorSlot.flatMap { idsByMonitorSlot[$0] } ?? []
             )
         }
 
@@ -177,7 +172,6 @@ struct WorkspaceSettingsDisplay: Equatable {
     let role: DisplayRole
     let monitorSlot: MonitorSlot?
     let workspaceIDs: [WorkspaceID]
-    let workspaceTitles: [String]
 }
 
 struct WorkspaceDisplayOption: Equatable {
@@ -216,14 +210,9 @@ struct SwitcherSettingsShortcuts: Equatable {
 
 struct WorkspaceSettingsItem: Equatable {
     let id: WorkspaceID
-    let name: String?
     let monitorSlot: MonitorSlot
     let switchShortcut: String?
     let moveShortcut: String?
-
-    var displayTitle: String {
-        name.map { "\($0) (\(id.rawValue))" } ?? id.rawValue
-    }
 }
 
 enum ShortcutDisplayFormatter {
