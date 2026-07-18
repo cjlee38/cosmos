@@ -10,7 +10,6 @@ let package = Package(
     products: [
         .library(name: "KkaciCore", targets: ["KkaciCore"]),
         .executable(name: "kkaci-cli", targets: ["KkaciCli"]),
-        .executable(name: "Kkaci", targets: ["KkaciApp"]),
         .executable(name: "kkaci-fixture-app", targets: ["KkaciFixtureApp"])
     ],
     dependencies: [
@@ -38,13 +37,6 @@ let package = Package(
             path: "Sources/KkaciCli"
         ),
         .executableTarget(
-            name: "KkaciApp",
-            dependencies: [
-                "KkaciCore"
-            ],
-            path: "Sources/KkaciApp"
-        ),
-        .executableTarget(
             name: "KkaciFixtureApp",
             path: "Sources/KkaciFixtureApp"
         ),
@@ -54,14 +46,6 @@ let package = Package(
                 "KkaciCore"
             ],
             path: "Tests/KkaciCoreTests"
-        ),
-        .testTarget(
-            name: "KkaciAppTests",
-            dependencies: [
-                "KkaciApp",
-                "KkaciCore"
-            ],
-            path: "Tests/KkaciAppTests"
         )
     ]
 )

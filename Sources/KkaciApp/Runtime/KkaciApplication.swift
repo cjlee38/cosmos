@@ -1,11 +1,15 @@
 import AppKit
 
-let app = NSApplication.shared
-let appDelegate = AppDelegate(runtime: AppCompositionRoot().build())
-app.delegate = appDelegate
-app.mainMenu = makeMainMenu(for: app)
-app.setActivationPolicy(.accessory)
-app.run()
+enum KkaciApplication {
+    static func run() {
+        let app = NSApplication.shared
+        let appDelegate = AppDelegate(runtime: AppCompositionRoot().build())
+        app.delegate = appDelegate
+        app.mainMenu = makeMainMenu(for: app)
+        app.setActivationPolicy(.accessory)
+        app.run()
+    }
+}
 
 private func makeMainMenu(for app: NSApplication) -> NSMenu {
     let mainMenu = NSMenu()

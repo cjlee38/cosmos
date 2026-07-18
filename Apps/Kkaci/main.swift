@@ -1,0 +1,1 @@
+KkaciApplication.run()
