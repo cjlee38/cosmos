@@ -10,7 +10,6 @@ protocol ModifierFlagsMonitoring: AnyObject {
 final class ModifierFlagsMonitor {
     private let onModifiersChanged: (UInt32) -> Void
     private let currentModifierFlags: () -> CGEventFlags
-    private let ensureListenEventAccess: () -> Bool
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
@@ -18,14 +17,10 @@ final class ModifierFlagsMonitor {
         onModifiersChanged: @escaping (UInt32) -> Void,
         currentModifierFlags: @escaping () -> CGEventFlags = {
             CGEventSource.flagsState(.combinedSessionState)
-        },
-        ensureListenEventAccess: @escaping () -> Bool = {
-            CGPreflightListenEventAccess() || CGRequestListenEventAccess()
         }
     ) {
         self.onModifiersChanged = onModifiersChanged
         self.currentModifierFlags = currentModifierFlags
-        self.ensureListenEventAccess = ensureListenEventAccess
     }
 
     deinit {
@@ -35,10 +30,6 @@ final class ModifierFlagsMonitor {
     func start() throws {
         guard eventTap == nil else {
             return
-        }
-
-        guard ensureListenEventAccess() else {
-            throw ModifierFlagsMonitorError.listenEventAccessDenied
         }
 
         guard let eventTap = CGEvent.tapCreate(
@@ -113,7 +104,6 @@ final class ModifierFlagsMonitor {
 extension ModifierFlagsMonitor: ModifierFlagsMonitoring {}
 
 private enum ModifierFlagsMonitorError: Error {
-    case listenEventAccessDenied
     case eventTapCreationFailed
 }
 
