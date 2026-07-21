@@ -21,12 +21,106 @@ final class WorkspaceDisplayArrangementView: NSView {
     var onWorkspaceSelected: ((WorkspaceID) -> Void)?
     var onWorkspaceMoved: ((WorkspaceID, DisplayID) -> Void)?
 
+    private let scrollView = WorkspaceDisplayScrollView()
+    private let canvasView = WorkspaceDisplayCanvasView()
+    private var contentHeight: CGFloat = 210
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.drawsBackground = false
+        scrollView.hasHorizontalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.documentView = canvasView
+        addSubview(scrollView)
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+
+        canvasView.onDisplaySelected = { [weak self] in self?.onDisplaySelected?($0) }
+        canvasView.onSelectionCleared = { [weak self] in self?.onSelectionCleared?() }
+        canvasView.onWorkspaceSelected = { [weak self] in self?.onWorkspaceSelected?($0) }
+        canvasView.onWorkspaceMoved = { [weak self] in self?.onWorkspaceMoved?($0, $1) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: contentHeight)
+    }
+
+    override func layout() {
+        super.layout()
+        let canvasSize = canvasView.layoutContent(fittingWidth: max(bounds.width, 1))
+        canvasView.frame = NSRect(origin: .zero, size: canvasSize)
+        if abs(contentHeight - canvasSize.height) > 0.5 {
+            contentHeight = canvasSize.height
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    func apply(
+        _ displays: [WorkspaceSettingsDisplay],
+        selectedDisplayID: DisplayID?,
+        selectedWorkspaceID: WorkspaceID?,
+        isEditable: Bool
+    ) {
+        canvasView.apply(
+            displays,
+            selectedDisplayID: selectedDisplayID,
+            selectedWorkspaceID: selectedWorkspaceID,
+            isEditable: isEditable
+        )
+        needsLayout = true
+    }
+}
+
+private final class WorkspaceDisplayScrollView: NSScrollView {
+    override func scrollWheel(with event: NSEvent) {
+        guard abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX),
+              let parentScrollView
+        else {
+            super.scrollWheel(with: event)
+            return
+        }
+        parentScrollView.scrollWheel(with: event)
+    }
+
+    private var parentScrollView: NSScrollView? {
+        var ancestor = superview
+        while let view = ancestor {
+            if let scrollView = view as? NSScrollView {
+                return scrollView
+            }
+            ancestor = view.superview
+        }
+        return nil
+    }
+}
+
+private final class WorkspaceDisplayCanvasView: NSView {
+    var onDisplaySelected: ((DisplayID) -> Void)?
+    var onSelectionCleared: (() -> Void)?
+    var onWorkspaceSelected: ((WorkspaceID) -> Void)?
+    var onWorkspaceMoved: ((WorkspaceID, DisplayID) -> Void)?
+
+    private static let minimumCardSize = NSSize(width: 210, height: 130)
+    private static let preferredCardSize = NSSize(width: 320, height: 200)
+    private static let minimumCanvasHeight: CGFloat = 210
+    private static let padding: CGFloat = 14
+
     private var displayCards: [(item: WorkspaceSettingsDisplay, view: WorkspaceDisplayCardView)] = []
     private let emptyLabel = NSTextField(labelWithString: "No displays detected")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
         emptyLabel.font = .systemFont(ofSize: 13, weight: .medium)
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center
@@ -52,10 +146,7 @@ final class WorkspaceDisplayArrangementView: NSView {
         selectedWorkspaceID: WorkspaceID?,
         isEditable: Bool
     ) {
-        for displayCard in displayCards {
-            displayCard.view.removeFromSuperview()
-        }
-
+        displayCards.forEach { $0.view.removeFromSuperview() }
         displayCards = displays.map { item in
             let card = WorkspaceDisplayCardView(
                 item: item,
@@ -64,48 +155,52 @@ final class WorkspaceDisplayArrangementView: NSView {
                 isEditable: isEditable
             )
             card.onSelect = { [weak self] in self?.onDisplaySelected?(item.id) }
-            card.onWorkspaceSelected = { [weak self] workspaceID in
-                self?.onWorkspaceSelected?(workspaceID)
-            }
-            card.onWorkspaceMoved = { [weak self] workspaceID in
-                self?.onWorkspaceMoved?(workspaceID, item.id)
-            }
-            card.onOverflowSelected = { [weak self] in self?.onDisplaySelected?(item.id) }
+            card.onWorkspaceSelected = { [weak self] in self?.onWorkspaceSelected?($0) }
+            card.onWorkspaceMoved = { [weak self] in self?.onWorkspaceMoved?($0, item.id) }
             addSubview(card)
             return (item, card)
         }
         emptyLabel.isHidden = !displayCards.isEmpty
-        needsLayout = true
     }
 
-    override func layout() {
-        super.layout()
-        emptyLabel.frame = bounds
-
-        guard !displayCards.isEmpty else {
-            return
+    func layoutContent(fittingWidth viewportWidth: CGFloat) -> NSSize {
+        guard let firstCard = displayCards.first else {
+            emptyLabel.frame = NSRect(x: 0, y: 0, width: viewportWidth, height: Self.minimumCanvasHeight)
+            return NSSize(width: viewportWidth, height: Self.minimumCanvasHeight)
         }
 
-        let desktopBounds = displayCards
-            .map(\.item.frame)
-            .dropFirst()
-            .reduce(displayCards[0].item.frame) { $0.union($1) }
+        let desktopBounds = displayCards.dropFirst().reduce(firstCard.item.frame) {
+            $0.union($1.item.frame)
+        }
         guard desktopBounds.width > 0, desktopBounds.height > 0 else {
-            return
+            return NSSize(width: viewportWidth, height: Self.minimumCanvasHeight)
         }
 
-        let availableBounds = bounds.insetBy(dx: 14, dy: 14)
-        let scale = min(
-            availableBounds.width / desktopBounds.width,
-            availableBounds.height / desktopBounds.height
-        )
+        let fitScale = max(viewportWidth - Self.padding * 2, 1) / desktopBounds.width
+        let minimumScale = displayCards.map { card in
+            max(
+                Self.minimumCardSize.width / card.item.frame.width,
+                Self.minimumCardSize.height / card.item.frame.height
+            )
+        }.max() ?? fitScale
+        let preferredScale = displayCards.map { card in
+            min(
+                Self.preferredCardSize.width / card.item.frame.width,
+                Self.preferredCardSize.height / card.item.frame.height
+            )
+        }.min() ?? fitScale
+        let scale = max(min(fitScale, preferredScale), minimumScale)
         let renderedSize = NSSize(
             width: desktopBounds.width * scale,
             height: desktopBounds.height * scale
         )
+        let canvasSize = NSSize(
+            width: max(viewportWidth, renderedSize.width + Self.padding * 2),
+            height: max(Self.minimumCanvasHeight, renderedSize.height + Self.padding * 2)
+        )
         let renderedOrigin = NSPoint(
-            x: availableBounds.midX - renderedSize.width / 2,
-            y: availableBounds.midY - renderedSize.height / 2
+            x: (canvasSize.width - renderedSize.width) / 2,
+            y: (canvasSize.height - renderedSize.height) / 2
         )
 
         for displayCard in displayCards {
@@ -117,19 +212,25 @@ final class WorkspaceDisplayArrangementView: NSView {
                 height: frame.height * scale
             ).integral
         }
+        return canvasSize
     }
 }
 
 private final class WorkspaceDisplayCardView: NSView {
+    private static let parkingGuideURL = "<TODO>"
+
     var onSelect: (() -> Void)?
     var onWorkspaceSelected: ((WorkspaceID) -> Void)?
     var onWorkspaceMoved: ((WorkspaceID) -> Void)?
-    var onOverflowSelected: (() -> Void)?
 
     private let isSelected: Bool
     private let isEditable: Bool
+    private let isParkingObstructed: Bool
     private var isDropTarget = false
     private let workspaceFlow: WorkspacePillFlowView
+    private var overflowPopover: NSPopover?
+    private var parkingWarningPopover: NSPopover?
+    private let parkingWarning = NSButton()
 
     init(
         item: WorkspaceSettingsDisplay,
@@ -139,6 +240,7 @@ private final class WorkspaceDisplayCardView: NSView {
     ) {
         self.isSelected = isSelected
         self.isEditable = isEditable
+        isParkingObstructed = !item.hasUnobstructedParkingCorner
         workspaceFlow = WorkspacePillFlowView(
             workspaceIDs: item.workspaceIDs,
             selectedWorkspaceID: selectedWorkspaceID
@@ -147,6 +249,11 @@ private final class WorkspaceDisplayCardView: NSView {
         wantsLayer = true
         setAccessibilityIdentifier("kkaci.settings.display.\(item.monitorSlot)")
         registerForDraggedTypes([WorkspaceDragPayload.pasteboardType])
+
+        let parkingMessage = "No unobstructed parking corner is available. "
+            + "Hidden windows may remain visible and clickable on another display. "
+            + "Rearrange the displays in System Settings."
+        toolTip = isParkingObstructed ? parkingMessage : nil
 
         let title = NSTextField(labelWithString: "\(item.monitorSlot) (\(item.name))")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -169,18 +276,40 @@ private final class WorkspaceDisplayCardView: NSView {
         heading.spacing = 1
         heading.translatesAutoresizingMaskIntoConstraints = false
 
+        parkingWarning.image = NSImage(
+            systemSymbolName: "exclamationmark.circle.fill",
+            accessibilityDescription: "Unsafe display arrangement"
+        )
+        parkingWarning.isBordered = false
+        parkingWarning.contentTintColor = .systemRed
+        parkingWarning.toolTip = isParkingObstructed ? parkingMessage : nil
+        parkingWarning.isHidden = !isParkingObstructed
+        parkingWarning.target = self
+        parkingWarning.action = #selector(showParkingWarning)
+        parkingWarning.translatesAutoresizingMaskIntoConstraints = false
+        parkingWarning.setAccessibilityIdentifier(
+            "kkaci.settings.display-parking-warning.\(item.monitorSlot)"
+        )
+
         workspaceFlow.translatesAutoresizingMaskIntoConstraints = false
         workspaceFlow.onWorkspaceSelected = { [weak self] workspaceID in
             self?.onWorkspaceSelected?(workspaceID)
         }
-        workspaceFlow.onOverflowSelected = { [weak self] in self?.onOverflowSelected?() }
+        workspaceFlow.onOverflowSelected = { [weak self] workspaceIDs, sourceView in
+            self?.showOverflow(workspaceIDs, relativeTo: sourceView)
+        }
 
         addSubview(heading)
+        addSubview(parkingWarning)
         addSubview(workspaceFlow)
         NSLayoutConstraint.activate([
             heading.topAnchor.constraint(equalTo: topAnchor, constant: 10),
             heading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
-            heading.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -11),
+            heading.trailingAnchor.constraint(lessThanOrEqualTo: parkingWarning.leadingAnchor, constant: -7),
+            parkingWarning.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            parkingWarning.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            parkingWarning.widthAnchor.constraint(equalToConstant: 17),
+            parkingWarning.heightAnchor.constraint(equalToConstant: 17),
             workspaceFlow.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 8),
             workspaceFlow.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             workspaceFlow.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
@@ -198,9 +327,11 @@ private final class WorkspaceDisplayCardView: NSView {
     }
 
     override func updateLayer() {
-        layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.72).cgColor
+        layer?.backgroundColor = isSelected
+            ? NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
+            : NSColor.windowBackgroundColor.withAlphaComponent(0.72).cgColor
         layer?.borderColor = borderColor.cgColor
-        layer?.borderWidth = isSelected || isDropTarget ? 2 : 1
+        layer?.borderWidth = isParkingObstructed || isDropTarget ? 2 : 1
         layer?.cornerRadius = 7
     }
 
@@ -249,13 +380,51 @@ private final class WorkspaceDisplayCardView: NSView {
     }
 
     private var borderColor: NSColor {
-        isSelected || isDropTarget ? .controlAccentColor : .separatorColor
+        if isParkingObstructed {
+            return .systemRed
+        }
+        return isDropTarget ? .controlAccentColor : .separatorColor
+    }
+
+    private func showOverflow(_ workspaceIDs: [WorkspaceID], relativeTo sourceView: NSView) {
+        guard !workspaceIDs.isEmpty else {
+            return
+        }
+        overflowPopover?.close()
+
+        let content = WorkspaceOverflowViewController(
+            workspaceIDs: workspaceIDs,
+            onWorkspaceSelected: { [weak self] workspaceID in
+                self?.overflowPopover?.close()
+                self?.onWorkspaceSelected?(workspaceID)
+            }
+        )
+        let popover = NSPopover()
+        popover.behavior = .semitransient
+        popover.contentViewController = content
+        popover.contentSize = content.popoverContentSize
+        overflowPopover = popover
+        popover.show(relativeTo: sourceView.bounds, of: sourceView, preferredEdge: .maxY)
+    }
+
+    @objc private func showParkingWarning() {
+        parkingWarningPopover?.close()
+        let content = ParkingWarningViewController(
+            message: parkingWarning.toolTip ?? "",
+            detailsURL: Self.parkingGuideURL
+        )
+        let popover = NSPopover()
+        popover.behavior = .semitransient
+        popover.contentViewController = content
+        popover.contentSize = content.popoverContentSize
+        parkingWarningPopover = popover
+        popover.show(relativeTo: parkingWarning.bounds, of: parkingWarning, preferredEdge: .maxY)
     }
 }
 
 private final class WorkspacePillFlowView: NSView {
     var onWorkspaceSelected: ((WorkspaceID) -> Void)?
-    var onOverflowSelected: (() -> Void)?
+    var onOverflowSelected: (([WorkspaceID], NSView) -> Void)?
 
     private let workspaceIDs: [WorkspaceID]
     private var pills: [WorkspacePillView] = []
@@ -269,7 +438,12 @@ private final class WorkspacePillFlowView: NSView {
         emptyLabel.textColor = .tertiaryLabelColor
         addSubview(emptyLabel)
         addSubview(overflowPill)
-        overflowPill.onSelect = { [weak self] in self?.onOverflowSelected?() }
+        overflowPill.onSelect = { [weak self] sourceView in
+            guard let self else {
+                return
+            }
+            onOverflowSelected?(hiddenWorkspaceIDs, sourceView)
+        }
 
         pills = workspaceIDs.map { workspaceID in
             let pill = WorkspacePillView(
@@ -302,6 +476,7 @@ private final class WorkspacePillFlowView: NSView {
 
         if let frames = framesForItems(pills.map(\.intrinsicContentSize)) {
             apply(frames: frames, visiblePillCount: pills.count)
+            hiddenWorkspaceIDs = []
             return
         }
 
@@ -314,13 +489,26 @@ private final class WorkspacePillFlowView: NSView {
                 continue
             }
             apply(frames: Array(frames.dropLast()), visiblePillCount: visibleCount)
+            hiddenWorkspaceIDs = Array(workspaceIDs.dropFirst(visibleCount))
             overflowPill.frame = frames[frames.count - 1]
             overflowPill.isHidden = false
             return
         }
 
         pills.forEach { $0.isHidden = true }
+        hiddenWorkspaceIDs = workspaceIDs
+        overflowPill.title = "+\(workspaceIDs.count)"
+        overflowPill.frame = NSRect(
+            origin: .zero,
+            size: NSSize(
+                width: min(overflowPill.intrinsicContentSize.width, bounds.width),
+                height: min(overflowPill.intrinsicContentSize.height, bounds.height)
+            )
+        )
+        overflowPill.isHidden = false
     }
+
+    private var hiddenWorkspaceIDs: [WorkspaceID] = []
 
     private func apply(frames: [NSRect], visiblePillCount: Int) {
         for (index, pill) in pills.enumerated() {
@@ -457,7 +645,7 @@ private final class WorkspacePillView: NSView, NSDraggingSource {
 }
 
 private final class WorkspaceOverflowPillView: NSButton {
-    var onSelect: (() -> Void)?
+    var onSelect: ((NSView) -> Void)?
 
     override var intrinsicContentSize: NSSize {
         NSSize(width: max(38, super.intrinsicContentSize.width + 10), height: 24)
@@ -490,6 +678,115 @@ private final class WorkspaceOverflowPillView: NSButton {
     }
 
     @objc private func selectOverflow() {
-        onSelect?()
+        onSelect?(self)
+    }
+}
+
+private final class WorkspaceOverflowViewController: NSViewController {
+    let popoverContentSize: NSSize
+
+    init(
+        workspaceIDs: [WorkspaceID],
+        onWorkspaceSelected: @escaping (WorkspaceID) -> Void
+    ) {
+        let columns = 6
+        let workspaceRows = stride(from: 0, to: workspaceIDs.count, by: columns).map { start in
+            Array(workspaceIDs[start ..< min(start + columns, workspaceIDs.count)])
+        }
+        let rows = workspaceRows.map { rowIDs in
+            let pills = rowIDs.map { workspaceID in
+                let pill = WorkspacePillView(workspaceID: workspaceID, isSelected: false)
+                pill.onSelect = onWorkspaceSelected
+                return pill
+            }
+            let row = NSStackView(views: pills)
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 6
+            return row
+        }
+        let stack = NSStackView(views: rows)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let horizontalPadding: CGFloat = 14
+        let verticalPadding: CGFloat = 12
+        popoverContentSize = NSSize(
+            width: max(220, stack.fittingSize.width + horizontalPadding * 2),
+            height: max(44, stack.fittingSize.height + verticalPadding * 2)
+        )
+        super.init(nibName: nil, bundle: nil)
+        let container = NSView(frame: NSRect(origin: .zero, size: popoverContentSize))
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: verticalPadding),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: horizontalPadding),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -horizontalPadding),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -verticalPadding)
+        ])
+        view = container
+        view.setAccessibilityIdentifier("kkaci.settings.workspace-overflow-popover")
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+private final class ParkingWarningViewController: NSViewController {
+    let popoverContentSize: NSSize
+    private let detailsURL: String
+
+    init(message: String, detailsURL: String) {
+        self.detailsURL = detailsURL
+
+        let messageLabel = NSTextField(wrappingLabelWithString: message)
+        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.maximumNumberOfLines = 0
+        messageLabel.lineBreakMode = .byWordWrapping
+
+        let detailsButton = NSButton(title: "See details", target: nil, action: nil)
+        detailsButton.isBordered = false
+        detailsButton.contentTintColor = .linkColor
+
+        let content = NSStackView(views: [messageLabel, detailsButton])
+        content.orientation = .vertical
+        content.alignment = .leading
+        content.spacing = 8
+        content.translatesAutoresizingMaskIntoConstraints = false
+
+        popoverContentSize = NSSize(width: 360, height: 116)
+        super.init(nibName: nil, bundle: nil)
+        detailsButton.target = self
+        detailsButton.action = #selector(openDetails)
+        let container = NSView(frame: NSRect(origin: .zero, size: popoverContentSize))
+        container.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            content.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -12),
+            messageLabel.widthAnchor.constraint(equalTo: content.widthAnchor)
+        ])
+        view = container
+        view.setAccessibilityIdentifier("kkaci.settings.display-parking-popover")
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @objc private func openDetails() {
+        guard let url = URL(string: detailsURL),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http"
+        else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 }

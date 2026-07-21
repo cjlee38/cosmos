@@ -17,8 +17,7 @@ struct WorkspaceThumbnailRenderWindow {
 
 enum WorkspaceThumbnailRenderer {
     static func makeRenderGroups(
-        _ groups: [WorkspaceSwitcherGroup],
-        displayBounds: [CGRect]
+        _ groups: [WorkspaceSwitcherGroup]
     ) -> [WorkspaceThumbnailRenderGroup] {
         groups.map { group in
             let windows = group.windows.compactMap { item -> WorkspaceThumbnailRenderWindow? in
@@ -34,7 +33,7 @@ enum WorkspaceThumbnailRenderer {
             }
             return WorkspaceThumbnailRenderGroup(
                 id: group.id,
-                desktopBounds: desktopBounds(windowFrames: windows.map(\.frame), displays: displayBounds),
+                desktopBounds: group.displayFrame,
                 windows: windows
             )
         }
@@ -60,17 +59,6 @@ enum WorkspaceThumbnailRenderer {
         let originY = origin.y + usedSize.height - yFromTop - size.height
 
         return CGRect(x: originX, y: originY, width: size.width, height: size.height)
-    }
-
-    static func desktopBounds(windowFrames: [CGRect], displays: [CGRect]) -> CGRect {
-        let matchingDisplays = displays.filter { display in
-            windowFrames.contains { frame in
-                frame.intersects(display) || display.contains(frame.center)
-            }
-        }
-        return union(matchingDisplays)
-            ?? union(displays)
-            ?? CGRect(x: 0, y: 0, width: 1280, height: 720)
     }
 
     static func render(_ group: WorkspaceThumbnailRenderGroup) -> CGImage? {
@@ -179,13 +167,6 @@ enum WorkspaceThumbnailRenderer {
         let aspect = max(0.75, min(2.4, desktopBounds.width / max(desktopBounds.height, 1)))
         let width: CGFloat = 960
         return CGSize(width: width, height: round(width / aspect))
-    }
-
-    private static func union(_ rects: [CGRect]) -> CGRect? {
-        guard let first = rects.first else {
-            return nil
-        }
-        return rects.dropFirst().reduce(first) { $0.union($1) }
     }
 
     private static func drawText(

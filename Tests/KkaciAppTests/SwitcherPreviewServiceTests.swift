@@ -52,6 +52,27 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         XCTAssertEqual(group.id, "1")
     }
 
+    func testWorkspaceGroupUsesItsEffectiveDisplayFrame() throws {
+        let mainFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let extendedFrame = CGRect(x: 1000, y: 0, width: 1600, height: 900)
+        let (controller, _) = try makeSwitcherTestController(
+            windows: [],
+            displays: [
+                DisplaySnapshot(id: 1, frame: mainFrame, role: .main),
+                DisplaySnapshot(id: 2, frame: extendedFrame, role: .extended)
+            ]
+        )
+        try controller.applyConfig(KkaciConfig(workspaces: [
+            WorkspaceConfig(id: "1", display: 1),
+            WorkspaceConfig(id: "2", display: 2)
+        ]))
+        let service = makeSwitcherTestPreviewService(controller: controller)
+
+        let groups = service.workspaceGroups(ids: ["1", "2"])
+
+        XCTAssertEqual(groups.map(\.displayFrame), [mainFrame, extendedFrame])
+    }
+
     func testThumbnailCompletionReportsOnlyTheAffectedWindow() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 10, title: "One"),
@@ -155,17 +176,33 @@ extension SwitcherPreviewServiceTests {
         XCTAssertEqual(frame, CGRect(x: 10, y: 60, width: 50, height: 50))
     }
 
-    func testWorkspaceThumbnailBoundsUseOnlyDisplaysContainingWorkspaceWindows() {
-        let first = CGRect(x: 0, y: 0, width: 100, height: 100)
-        let second = CGRect(x: 100, y: 0, width: 100, height: 100)
+    func testWorkspaceThumbnailUsesAssignedDisplayWhenWorkspaceIsEmpty() throws {
+        let displayFrame = CGRect(x: 1000, y: 0, width: 1600, height: 900)
+        let renderGroup = try XCTUnwrap(WorkspaceThumbnailRenderer.makeRenderGroups([
+            thumbnailGroup(id: "1", displayFrame: displayFrame)
+        ]).first)
 
-        XCTAssertEqual(
-            WorkspaceThumbnailRenderer.desktopBounds(
-                windowFrames: [CGRect(x: 120, y: 10, width: 20, height: 20)],
-                displays: [first, second]
+        XCTAssertEqual(renderGroup.desktopBounds, displayFrame)
+    }
+
+    func testWorkspaceThumbnailDoesNotExpandWhenAWindowSpansDisplays() throws {
+        let displayFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        let spanningWindow = WindowSwitcherItem(
+            windowID: 10,
+            appName: "App",
+            title: "Window",
+            frame: WindowFrame(
+                origin: CGPoint(x: 900, y: 100),
+                size: CGSize(width: 300, height: 400)
             ),
-            second
+            preview: nil,
+            icon: nil
         )
+        let renderGroup = try XCTUnwrap(WorkspaceThumbnailRenderer.makeRenderGroups([
+            thumbnailGroup(id: "1", displayFrame: displayFrame, windows: [spanningWindow])
+        ]).first)
+
+        XCTAssertEqual(renderGroup.desktopBounds, displayFrame)
     }
 
     func testWorkspaceThumbnailCacheDoesNotPublishSupersededRender() {
@@ -188,9 +225,9 @@ extension SwitcherPreviewServiceTests {
         }
         cache.removeStaleThumbnails(keeping: ["1"])
 
-        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        cache.refresh(groups: [thumbnailGroup(id: "1")])
         wait(for: [firstRenderStarted], timeout: 1)
-        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        cache.refresh(groups: [thumbnailGroup(id: "1")])
         allowFirstRenderToFinish.signal()
 
         wait(for: [updatePublished], timeout: 1)
@@ -221,8 +258,7 @@ extension SwitcherPreviewServiceTests {
         cache.removeStaleThumbnails(keeping: ["1", "2"])
 
         cache.refresh(
-            groups: [thumbnailGroup(id: "1"), thumbnailGroup(id: "2")],
-            displayBounds: [.zero]
+            groups: [thumbnailGroup(id: "1"), thumbnailGroup(id: "2")]
         )
 
         wait(for: [firstUpdatePublished, secondRenderStarted], timeout: 1)
@@ -275,14 +311,12 @@ extension SwitcherPreviewServiceTests {
         }
         cache.removeStaleThumbnails(keeping: ["1", "2", "3"])
         cache.refresh(
-            groups: [thumbnailGroup(id: "1"), thumbnailGroup(id: "2"), thumbnailGroup(id: "3")],
-            displayBounds: [.zero]
+            groups: [thumbnailGroup(id: "1"), thumbnailGroup(id: "2"), thumbnailGroup(id: "3")]
         )
         wait(for: [firstRenderStarted], timeout: 1)
 
         cache.refresh(
             groups: [thumbnailGroup(id: "3")],
-            displayBounds: [.zero],
             priorityWorkspaceIDs: ["3"]
         )
         allowFirstRenderToFinish.signal()
@@ -310,12 +344,12 @@ extension SwitcherPreviewServiceTests {
             currentRenderPublished.fulfill()
         }
         cache.removeStaleThumbnails(keeping: ["1"])
-        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        cache.refresh(groups: [thumbnailGroup(id: "1")])
         wait(for: [firstRenderStarted], timeout: 1)
 
         cache.removeStaleThumbnails(keeping: [])
         cache.removeStaleThumbnails(keeping: ["1"])
-        cache.refresh(groups: [thumbnailGroup(id: "1")], displayBounds: [.zero])
+        cache.refresh(groups: [thumbnailGroup(id: "1")])
         allowFirstRenderToFinish.signal()
 
         wait(for: [currentRenderPublished], timeout: 1)
@@ -364,7 +398,16 @@ extension SwitcherPreviewServiceTests {
         XCTAssertTrue(condition())
     }
 
-    private func thumbnailGroup(id: String) -> WorkspaceSwitcherGroup {
-        WorkspaceSwitcherGroup(id: id, windows: [], preview: nil)
+    private func thumbnailGroup(
+        id: String,
+        displayFrame: CGRect = CGRect(x: 0, y: 0, width: 1000, height: 800),
+        windows: [WindowSwitcherItem] = []
+    ) -> WorkspaceSwitcherGroup {
+        WorkspaceSwitcherGroup(
+            id: id,
+            displayFrame: displayFrame,
+            windows: windows,
+            preview: nil
+        )
     }
 }

@@ -122,6 +122,7 @@ final class WorkspaceSettingsSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.displays[0].workspaceIDs, ["1"])
         XCTAssertEqual(snapshot.displays[0].name, "Built-in Retina Display")
         XCTAssertEqual(snapshot.displays[1].workspaceIDs, ["A"])
+        XCTAssertTrue(snapshot.displays.allSatisfy(\.hasUnobstructedParkingCorner))
         XCTAssertEqual(snapshot.disconnectedMonitorSlots, [3])
         XCTAssertEqual(snapshot.workspaceSwitcher.next, "ctrl+tab")
         XCTAssertEqual(snapshot.workspaceSwitcher.previous, "ctrl+shift+tab")
@@ -146,6 +147,22 @@ final class WorkspaceSettingsSnapshotTests: XCTestCase {
 final class WorkspaceSettingsViewTests: XCTestCase {
     private enum TestError: Error {
         case shortcutRestore
+    }
+
+    func testDisplaySectionIncludesDisplaySettingsButton() throws {
+        let viewController = WorkspaceSettingsViewController(
+            service: WorkspaceSettingsServiceStub(snapshot: settingsSnapshot())
+        )
+
+        let button = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? NSButton }
+                .first { $0.accessibilityIdentifier() == "kkaci.settings.display-settings" }
+        )
+
+        XCTAssertEqual(button.title, "Display Settings")
+        XCTAssertEqual(button.imagePosition, .imageLeading)
+        XCTAssertEqual(button.image?.accessibilityDescription, "Display Settings")
     }
 
     func testSelectingWorkspaceOpensInspectorAndMonitorSelectorUpdatesDisplay() throws {
@@ -212,14 +229,12 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         XCTAssertFalse(editor.isHidden)
     }
 
-    func testSelectingConfiguredKeyImmediatelyDeletesAnEmptyWorkspace() throws {
+    func testSelectingConfiguredKeyOpensWorkspaceInspector() throws {
         let snapshot = settingsSnapshot(workspaces: [
             WorkspaceConfig(id: "1"),
             WorkspaceConfig(id: "2")
         ])
         let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
-        var removedWorkspace: WorkspaceID?
-        service.onRemoveWorkspace = { removedWorkspace = $0 }
         let viewController = WorkspaceSettingsViewController(service: service)
 
         let displayCard = try XCTUnwrap(descendants(of: viewController.view).first {
@@ -233,6 +248,43 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         )
         configuredWorkspace.performClick(nil)
 
+        let inspector = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.inspector"
+        })
+        XCTAssertFalse(inspector.isHidden)
+        XCTAssertNotNil(descendants(of: inspector).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.1.remove"
+        })
+    }
+
+    func testDeleteModeRemovesConfiguredEmptyWorkspace() throws {
+        let snapshot = settingsSnapshot(workspaces: [
+            WorkspaceConfig(id: "1"),
+            WorkspaceConfig(id: "2")
+        ])
+        let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
+        var removedWorkspace: WorkspaceID?
+        service.onRemoveWorkspace = { removedWorkspace = $0 }
+        let viewController = WorkspaceSettingsViewController(service: service)
+
+        let displayCard = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.display.1"
+        })
+        displayCard.mouseDown(with: mouseEvent(type: .leftMouseDown))
+        let deleteMode = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? NSButton }
+                .first { $0.accessibilityIdentifier() == "kkaci.settings.workspace.delete-mode" }
+        )
+        deleteMode.performClick(nil)
+        let configuredWorkspace = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? WorkspaceIDKeyButton }
+                .first { $0.workspaceID == "1" }
+        )
+        configuredWorkspace.performClick(nil)
+
+        XCTAssertEqual(deleteMode.state, .on)
         XCTAssertEqual(removedWorkspace, "1")
     }
 
@@ -311,6 +363,9 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         )
 
         let recorders = descendants(of: viewController.view).compactMap { $0 as? ShortcutRecorderButton }
+        let labels = descendants(of: viewController.view)
+            .compactMap { $0 as? NSTextField }
+            .map(\.stringValue)
 
         XCTAssertEqual(recorders.map(\.shortcutTarget), [
             .workspaceSwitcherNext,
@@ -318,6 +373,10 @@ final class WorkspaceSettingsViewTests: XCTestCase {
             .windowSwitcherNext,
             .windowSwitcherPrevious
         ])
+        XCTAssertTrue(labels.contains("Workspace"))
+        XCTAssertTrue(labels.contains("Window"))
+        XCTAssertEqual(labels.filter { $0 == "Cycle Keybinding" }.count, 2)
+        XCTAssertEqual(labels.filter { $0 == "Switcher Size" }.count, 2)
     }
 
     func testClickingDisplayCardOutsideAWorkspaceClearsTheInspector() throws {
@@ -398,20 +457,31 @@ final class WorkspaceSettingsViewTests: XCTestCase {
     }
 
     func testWorkspaceIDPickerDistinguishesConfiguredAndAvailableSelections() throws {
-        let picker = WorkspaceIDPickerView(unavailableWorkspaceIDs: ["1", "A"])
+        let picker = WorkspaceIDPickerView()
+        picker.apply(
+            monitorSlotByWorkspaceID: ["1": 1, "A": 1, "C": 2],
+            selectedMonitorSlot: 1
+        )
         var availableSelection: WorkspaceID?
         var configuredSelection: WorkspaceID?
+        var removalSelection: WorkspaceID?
         picker.onWorkspaceSelected = { availableSelection = $0 }
         picker.onConfiguredWorkspaceSelected = { configuredSelection = $0 }
+        picker.onWorkspaceRemovalRequested = { removalSelection = $0 }
+        var deleteMode = false
+        picker.onDeleteModeChanged = { deleteMode = $0 }
         let buttons = descendants(of: picker).compactMap { $0 as? WorkspaceIDKeyButton }
         let zero = try XCTUnwrap(buttons.first { $0.workspaceID == "0" })
         let one = try XCTUnwrap(buttons.first { $0.workspaceID == "1" })
         let letterA = try XCTUnwrap(buttons.first { $0.workspaceID == "A" })
         let letterB = try XCTUnwrap(buttons.first { $0.workspaceID == "B" })
+        let letterC = try XCTUnwrap(buttons.first { $0.workspaceID == "C" })
 
         XCTAssertTrue(zero.isEnabled)
         XCTAssertTrue(one.isEnabled)
         XCTAssertTrue(letterA.isEnabled)
+        XCTAssertFalse(letterC.isEnabled)
+        XCTAssertEqual(letterC.toolTip, "Assigned to Display 2")
 
         letterA.performClick(nil)
         zero.performClick(nil)
@@ -419,10 +489,30 @@ final class WorkspaceSettingsViewTests: XCTestCase {
 
         XCTAssertEqual(configuredSelection, "A")
         XCTAssertEqual(availableSelection, "B")
+
+        let deleteButton = try XCTUnwrap(
+            descendants(of: picker)
+                .compactMap { $0 as? NSButton }
+                .first { $0.accessibilityIdentifier() == "kkaci.settings.workspace.delete-mode" }
+        )
+        deleteButton.performClick(nil)
+        XCTAssertTrue(deleteMode)
+
+        picker.apply(
+            monitorSlotByWorkspaceID: ["1": 1, "A": 1, "C": 2],
+            selectedMonitorSlot: 1,
+            isDeleteMode: deleteMode
+        )
+        XCTAssertFalse(zero.isEnabled)
+        XCTAssertTrue(one.isEnabled)
+        XCTAssertFalse(letterC.isEnabled)
+        one.performClick(nil)
+
+        XCTAssertEqual(removalSelection, "1")
     }
 
     func testWorkspaceIDPickerCentersTheKeyboard() {
-        let picker = WorkspaceIDPickerView(unavailableWorkspaceIDs: [])
+        let picker = WorkspaceIDPickerView()
         picker.frame = NSRect(x: 0, y: 0, width: 520, height: 184)
         picker.layoutSubtreeIfNeeded()
 
@@ -431,6 +521,14 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         let keyboardFrame = frames.reduce(NSRect.null) { $0.union($1) }
 
         XCTAssertEqual(keyboardFrame.midX, picker.bounds.midX, accuracy: 1)
+
+        let deleteButton = descendants(of: picker)
+            .compactMap { $0 as? NSButton }
+            .first { $0.accessibilityIdentifier() == "kkaci.settings.workspace.delete-mode" }
+        XCTAssertEqual(deleteButton?.frame.width, 32)
+        XCTAssertEqual(deleteButton?.frame.height, 32)
+        XCTAssertEqual(deleteButton?.frame.maxX, picker.bounds.maxX)
+        XCTAssertEqual(deleteButton?.frame.minY, picker.bounds.minY)
     }
 
     func testShortcutConflictsStayOnRecorderControlsWithoutASeparateSection() {
@@ -460,7 +558,9 @@ final class WorkspaceSettingsViewTests: XCTestCase {
             $0.accessibilityIdentifier() == "kkaci.settings.shortcut-conflicts"
         })
     }
+}
 
+final class WorkspaceDisplayArrangementTests: XCTestCase {
     func testWorkspaceDragPayloadRoundTripsWorkspaceID() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("kkaci.workspace-test"))
         pasteboard.clearContents()
@@ -527,6 +627,127 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         )
         XCTAssertFalse(overflow.isHidden)
         XCTAssertTrue(overflow.title.hasPrefix("+"))
+    }
+
+    func testDisplayArrangementShowsParkingWarningForObstructedDisplay() throws {
+        let obstructed = WorkspaceSettingsDisplay(
+            id: 1,
+            name: "Center Display",
+            frame: CGRect(x: 0, y: 0, width: 1000, height: 800),
+            role: .main,
+            monitorSlot: 1,
+            workspaceIDs: ["1"],
+            hasUnobstructedParkingCorner: false
+        )
+        let arrangement = WorkspaceDisplayArrangementView(frame: NSRect(x: 0, y: 0, width: 520, height: 210))
+        arrangement.apply(
+            [obstructed],
+            selectedDisplayID: nil,
+            selectedWorkspaceID: nil,
+            isEditable: true
+        )
+
+        let warning = try XCTUnwrap(descendants(of: arrangement).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.display-parking-warning.1"
+        })
+
+        XCTAssertFalse(warning.isHidden)
+        XCTAssertEqual(
+            warning.toolTip,
+            "No unobstructed parking corner is available. "
+                + "Hidden windows may remain visible and clickable on another display. "
+                + "Rearrange the displays in System Settings."
+        )
+    }
+
+    func testDisplayArrangementHidesParkingWarningForSafeDisplays() throws {
+        let arrangement = WorkspaceDisplayArrangementView(frame: NSRect(x: 0, y: 0, width: 520, height: 210))
+        arrangement.apply(
+            [settingsSnapshot().displays[0]],
+            selectedDisplayID: nil,
+            selectedWorkspaceID: nil,
+            isEditable: true
+        )
+
+        let warning = try XCTUnwrap(descendants(of: arrangement).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.display-parking-warning.1"
+        })
+
+        XCTAssertTrue(warning.isHidden)
+        XCTAssertNil(warning.toolTip)
+    }
+
+    func testDisplayArrangementPreservesMinimumCardSizeAndExpandsForVerticalLayouts() throws {
+        let displays = [
+            WorkspaceSettingsDisplay(
+                id: 1,
+                name: "Top",
+                frame: CGRect(x: 0, y: 900, width: 1440, height: 900),
+                role: .main,
+                monitorSlot: 1,
+                workspaceIDs: ["1"]
+            ),
+            WorkspaceSettingsDisplay(
+                id: 2,
+                name: "Bottom",
+                frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+                role: .extended,
+                monitorSlot: 2,
+                workspaceIDs: ["2"]
+            )
+        ]
+        let arrangement = WorkspaceDisplayArrangementView(
+            frame: NSRect(x: 0, y: 0, width: 360, height: 210)
+        )
+        arrangement.apply(
+            displays,
+            selectedDisplayID: nil,
+            selectedWorkspaceID: nil,
+            isEditable: true
+        )
+        arrangement.layoutSubtreeIfNeeded()
+
+        let cards = try displays.map { display in
+            try XCTUnwrap(descendants(of: arrangement).first {
+                $0.accessibilityIdentifier() == "kkaci.settings.display.\(display.monitorSlot)"
+            })
+        }
+        XCTAssertTrue(cards.allSatisfy { $0.frame.width >= 210 })
+        XCTAssertTrue(cards.allSatisfy { $0.frame.height >= 130 })
+        XCTAssertGreaterThan(arrangement.intrinsicContentSize.height, 210)
+    }
+
+    func testDisplayArrangementScrollsInsteadOfShrinkingWideLayouts() throws {
+        let displays = (0 ..< 3).map { index in
+            WorkspaceSettingsDisplay(
+                id: DisplayID(index + 1),
+                name: "Display \(index + 1)",
+                frame: CGRect(x: index * 1440, y: 0, width: 1440, height: 900),
+                role: index == 0 ? .main : .extended,
+                monitorSlot: index + 1,
+                workspaceIDs: [WorkspaceID.allCases[index + 1]]
+            )
+        }
+        let arrangement = WorkspaceDisplayArrangementView(
+            frame: NSRect(x: 0, y: 0, width: 360, height: 210)
+        )
+        arrangement.apply(
+            displays,
+            selectedDisplayID: nil,
+            selectedWorkspaceID: nil,
+            isEditable: true
+        )
+        arrangement.layoutSubtreeIfNeeded()
+
+        let scrollView = try XCTUnwrap(descendants(of: arrangement).compactMap { $0 as? NSScrollView }.first)
+        let documentView = try XCTUnwrap(scrollView.documentView)
+
+        XCTAssertGreaterThan(documentView.frame.width, scrollView.contentSize.width)
+        XCTAssertTrue(displays.allSatisfy { display in
+            descendants(of: arrangement).first {
+                $0.accessibilityIdentifier() == "kkaci.settings.display.\(display.monitorSlot)"
+            }.map { $0.frame.width >= 210 } ?? false
+        })
     }
 }
 

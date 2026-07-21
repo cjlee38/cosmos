@@ -9,13 +9,14 @@ final class WorkspaceSettingsViewController: NSViewController {
     private let displayStatusStack = NSStackView()
     private let displayEditorStack = NSStackView()
     private let displayEditorTitle = NSTextField(labelWithString: "")
-    private let workspacePicker = WorkspaceIDPickerView(unavailableWorkspaceIDs: [])
+    private let workspacePicker = WorkspaceIDPickerView()
     private let inspectorSection = NSStackView()
     private let configErrorLabel = NSTextField(wrappingLabelWithString: "")
     private lazy var configErrorNotice = WorkspaceSettingsControlFactory.configErrorNotice(label: configErrorLabel)
     private var selectedDisplayID: DisplayID?
     private var selectedWorkspaceID: WorkspaceID?
     private var isAddingWorkspace = false
+    private var isDeleteMode = false
 
     init(
         service: any WorkspaceSettingsServing,
@@ -85,7 +86,6 @@ final class WorkspaceSettingsViewController: NSViewController {
 private extension WorkspaceSettingsViewController {
     private func configureDisplayViews() {
         displayArrangementView.translatesAutoresizingMaskIntoConstraints = false
-        displayArrangementView.heightAnchor.constraint(equalToConstant: 210).isActive = true
         configureVerticalStack(displayStatusStack, spacing: 7)
         configureVerticalStack(displayEditorStack, spacing: 12)
 
@@ -112,6 +112,28 @@ private extension WorkspaceSettingsViewController {
     private func makeDisplaySection() -> NSView {
         let title = WorkspaceSettingsControlFactory.headerLabel("Displays")
 
+        let displaySettingsButton = NSButton(
+            title: "Display Settings",
+            target: self,
+            action: #selector(openDisplaySettings)
+        )
+        displaySettingsButton.image = NSImage(
+            systemSymbolName: "gearshape",
+            accessibilityDescription: "Display Settings"
+        )
+        displaySettingsButton.imagePosition = .imageLeading
+        displaySettingsButton.bezelStyle = .rounded
+        displaySettingsButton.controlSize = .regular
+        displaySettingsButton.setAccessibilityIdentifier("kkaci.settings.display-settings")
+
+        let header = NSStackView(views: [
+            title,
+            SettingsControlFactory.flexibleSpacer(),
+            displaySettingsButton
+        ])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+
         let content = NSStackView(views: [displayArrangementView, displayStatusStack])
         configureVerticalStack(content, spacing: 10)
         for arrangedView in content.arrangedSubviews {
@@ -120,8 +142,9 @@ private extension WorkspaceSettingsViewController {
         let group = SettingsControlFactory.groupBox(
             content: SettingsControlFactory.padded(content, vertical: 10, horizontal: 10)
         )
-        let section = NSStackView(views: [title, group])
+        let section = NSStackView(views: [header, group])
         configureVerticalStack(section, spacing: 8)
+        header.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
         group.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
         return section
     }
@@ -157,7 +180,17 @@ private extension WorkspaceSettingsViewController {
             self?.addWorkspace(workspaceID)
         }
         workspacePicker.onConfiguredWorkspaceSelected = { [weak self] workspaceID in
+            self?.selectWorkspace(workspaceID, keepWorkspaceEditorOpen: true)
+        }
+        workspacePicker.onWorkspaceRemovalRequested = { [weak self] workspaceID in
             self?.requestWorkspaceRemoval(workspaceID)
+        }
+        workspacePicker.onDeleteModeChanged = { [weak self] isDeleteMode in
+            guard let self else {
+                return
+            }
+            self.isDeleteMode = isDeleteMode
+            self.apply(service.snapshot())
         }
     }
 
@@ -179,7 +212,15 @@ private extension WorkspaceSettingsViewController {
             selectedWorkspaceID: selectedWorkspaceID,
             isEditable: snapshot.isEditable
         )
-        workspacePicker.apply(unavailableWorkspaceIDs: Set(snapshot.workspaces.map(\.id)))
+        workspacePicker.apply(
+            monitorSlotByWorkspaceID: Dictionary(
+                uniqueKeysWithValues: snapshot.workspaces.map { ($0.id, $0.monitorSlot) }
+            ),
+            selectedMonitorSlot: snapshot.displays
+                .first(where: { $0.id == selectedDisplayID })?
+                .monitorSlot,
+            isDeleteMode: isDeleteMode
+        )
         updateDisplayEditor(snapshot)
         rebuildDisplayStatus(snapshot)
         rebuildInspector(snapshot)
@@ -324,7 +365,9 @@ private extension WorkspaceSettingsViewController {
         selectedDisplayID = displayID
         selectedWorkspaceID = nil
         isAddingWorkspace = true
+        isDeleteMode = false
         apply(service.snapshot())
+        scrollToVisible(displayEditorStack)
     }
 
     private func selectWorkspace(
@@ -334,8 +377,10 @@ private extension WorkspaceSettingsViewController {
         selectedWorkspaceID = workspaceID
         if !keepWorkspaceEditorOpen {
             isAddingWorkspace = false
+            isDeleteMode = false
         }
         apply(service.snapshot())
+        scrollToVisible(inspectorSection)
     }
 
     private func addWorkspace(_ workspaceID: WorkspaceID) {
@@ -345,6 +390,7 @@ private extension WorkspaceSettingsViewController {
         selectedWorkspaceID = workspaceID
         do {
             try service.addWorkspaces([workspaceID], displayID: displayID)
+            scrollToVisible(inspectorSection)
         } catch {
             selectedWorkspaceID = nil
             isAddingWorkspace = true
@@ -446,6 +492,20 @@ private extension WorkspaceSettingsViewController {
             log.error("Workspace removal failed id=\(workspaceID.rawValue): \(String(describing: error))")
             refresh()
         }
+    }
+
+    private func scrollToVisible(_ section: NSView) {
+        view.layoutSubtreeIfNeeded()
+        section.scrollToVisible(section.bounds)
+    }
+
+    @objc private func openDisplaySettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.Displays-Settings.extension"
+        ) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 }
 

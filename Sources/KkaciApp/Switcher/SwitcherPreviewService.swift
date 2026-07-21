@@ -55,11 +55,14 @@ final class SwitcherPreviewService {
         let liveWorkspaceIDs = Set(controller.workspaces)
         let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.configuredShortcuts)
         return ids.compactMap { workspaceID in
-            guard liveWorkspaceIDs.contains(workspaceID) else {
+            guard liveWorkspaceIDs.contains(workspaceID),
+                  let displayFrame = displayFrame(for: workspaceID)
+            else {
                 return nil
             }
             return WorkspaceSwitcherGroup(
                 id: workspaceID,
+                displayFrame: displayFrame,
                 windows: controller.windows(in: workspaceID).map(makeItem),
                 preview: workspaceThumbnailCache.thumbnail(for: workspaceID),
                 shortcutKey: shortcuts.key(for: workspaceID)
@@ -95,7 +98,6 @@ final class SwitcherPreviewService {
         workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceIDs)
         workspaceThumbnailCache.refresh(
             groups: workspaceGroups(ids: controller.workspaces.filter(ids.contains)),
-            displayBounds: controller.displayTopology.displays.map(\.frame),
             priorityWorkspaceIDs: priorityIDs
         )
     }
@@ -129,6 +131,13 @@ final class SwitcherPreviewService {
             preview: windowThumbnailCache.thumbnail(for: window.id),
             icon: applicationIconCache.icon(for: window.app.pid)
         )
+    }
+
+    private func displayFrame(for workspaceID: String) -> CGRect? {
+        let monitorSlot = controller.effectiveMonitorSlot(for: workspaceID)
+        return controller.displayTopology.monitorSlots
+            .first { $0.slot == monitorSlot }?
+            .display.frame
     }
 
     private func refreshApplicationIcons(windows: [WindowSnapshot]) {

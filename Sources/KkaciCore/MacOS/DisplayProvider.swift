@@ -45,7 +45,7 @@ public struct WindowParkingPointProvider: HidePointProviding {
         }
 
         let visibleFrame = display.visibleFrame
-        switch optimalHideCorner(for: display.frame, among: displays.map(\.frame)) {
+        switch Self.assessment(for: display.frame, among: displays.map(\.frame)).corner {
         case .bottomLeft:
             return CGPoint(
                 x: visibleFrame.minX - frame.size.width + 1,
@@ -56,7 +56,10 @@ public struct WindowParkingPointProvider: HidePointProviding {
         }
     }
 
-    private func optimalHideCorner(for display: CGRect, among displays: [CGRect]) -> HideCorner {
+    public static func assessment(
+        for display: CGRect,
+        among displays: [CGRect]
+    ) -> WindowParkingAssessment {
         // Sample each corner's side, bottom, and diagonal; diagonal overlap is the strongest obstruction.
         let xOffset = display.width * 0.1
         let yOffset = display.height * 0.1
@@ -84,12 +87,25 @@ public struct WindowParkingPointProvider: HidePointProviding {
             diagonal: CGPoint(x: bottomRight.x + 2, y: bottomRight.y + 2)
         )
 
-        return leftScore < rightScore ? .bottomLeft : .bottomRight
+        return WindowParkingAssessment(
+            corner: leftScore < rightScore ? .bottomLeft : .bottomRight,
+            hasUnobstructedCorner: leftScore == 0 || rightScore == 0
+        )
     }
 
     private func bottomRight(of display: CGRect) -> CGPoint {
         CGPoint(x: display.maxX - 1, y: display.maxY - 1)
     }
+}
+
+public struct WindowParkingAssessment: Equatable {
+    public let corner: WindowParkingCorner
+    public let hasUnobstructedCorner: Bool
+}
+
+public enum WindowParkingCorner: Equatable {
+    case bottomLeft
+    case bottomRight
 }
 
 private extension DisplayProvider {
@@ -167,9 +183,4 @@ private enum DisplayProviderError: Error, CustomStringConvertible {
             "No active displays were found."
         }
     }
-}
-
-private enum HideCorner {
-    case bottomLeft
-    case bottomRight
 }

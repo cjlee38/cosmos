@@ -22,7 +22,8 @@ final class SwitcherSettingsViewController: NSViewController {
     )
     private let windowSwitcherSizeValueLabel = NSTextField(labelWithString: "")
     private let workspaceSwitcherSizeValueLabel = NSTextField(labelWithString: "")
-    private let keyboardContentStack = NSStackView()
+    private let workspaceShortcutStack = NSStackView()
+    private let windowShortcutStack = NSStackView()
     private let configErrorLabel = NSTextField(wrappingLabelWithString: "")
     private lazy var configErrorNotice = WorkspaceSettingsControlFactory.configErrorNotice(label: configErrorLabel)
 
@@ -61,19 +62,30 @@ final class SwitcherSettingsViewController: NSViewController {
         )
         configureValueLabel(windowSwitcherSizeValueLabel)
         configureValueLabel(workspaceSwitcherSizeValueLabel)
-        configureVerticalStack(keyboardContentStack, spacing: 0)
+        configureVerticalStack(workspaceShortcutStack, spacing: 0)
+        configureVerticalStack(windowShortcutStack, spacing: 0)
 
         let header = SettingsControlFactory.header(
             title: "Switcher",
             symbolName: "rectangle.on.rectangle.fill"
         )
-        let sizeSection = makeSizeSection()
-        let keyboardSection = makeKeyboardSection()
+        let workspaceSection = makeSwitcherSection(
+            title: "Workspace",
+            shortcutStack: workspaceShortcutStack,
+            sizeSlider: workspaceSwitcherSizeSlider,
+            sizeValueLabel: workspaceSwitcherSizeValueLabel
+        )
+        let windowSection = makeSwitcherSection(
+            title: "Window",
+            shortcutStack: windowShortcutStack,
+            sizeSlider: windowSwitcherSizeSlider,
+            sizeValueLabel: windowSwitcherSizeValueLabel
+        )
         let root = NSStackView(views: [
             header,
-            sizeSection,
             configErrorNotice,
-            keyboardSection
+            workspaceSection,
+            windowSection
         ])
         configureVerticalStack(root, spacing: 20)
         root.translatesAutoresizingMaskIntoConstraints = false
@@ -83,9 +95,9 @@ final class SwitcherSettingsViewController: NSViewController {
             root.topAnchor.constraint(equalTo: view.topAnchor, constant: 24),
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 26),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -26),
-            sizeSection.widthAnchor.constraint(equalTo: root.widthAnchor),
             configErrorNotice.widthAnchor.constraint(equalTo: root.widthAnchor),
-            keyboardSection.widthAnchor.constraint(equalTo: root.widthAnchor)
+            workspaceSection.widthAnchor.constraint(equalTo: root.widthAnchor),
+            windowSection.widthAnchor.constraint(equalTo: root.widthAnchor)
         ])
 
         refresh()
@@ -102,57 +114,42 @@ final class SwitcherSettingsViewController: NSViewController {
         updateSizeLabels()
 
         let workspaceSettings = settingsService.snapshot()
-        rebuildKeyboard(workspaceSettings)
+        rebuildShortcutRows(workspaceSettings)
         updateEditingState(workspaceSettings)
     }
 }
 
 private extension SwitcherSettingsViewController {
-    private func makeSizeSection() -> NSView {
-        let rows = NSStackView(views: [
-            SettingsControlFactory.padded(
-                optionRow(
-                    title: "Window Switcher",
-                    control: sliderControl(
-                        windowSwitcherSizeSlider,
-                        valueLabel: windowSwitcherSizeValueLabel
-                    )
-                )
-            ),
+    private func makeSwitcherSection(
+        title: String,
+        shortcutStack: NSStackView,
+        sizeSlider: NSSlider,
+        sizeValueLabel: NSTextField
+    ) -> NSView {
+        let content = NSStackView(views: [
+            shortcutStack,
             SettingsControlFactory.separator(),
-            SettingsControlFactory.padded(
-                optionRow(
-                    title: "Workspace Switcher",
-                    control: sliderControl(
-                        workspaceSwitcherSizeSlider,
-                        valueLabel: workspaceSwitcherSizeValueLabel
-                    )
-                )
-            )
+            SettingsControlFactory.padded(optionRow(
+                title: "Switcher Size",
+                control: sliderControl(sizeSlider, valueLabel: sizeValueLabel)
+            ))
         ])
-        configureVerticalStack(rows, spacing: 0)
-        for row in rows.arrangedSubviews {
-            row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
+        configureVerticalStack(content, spacing: 0)
+        for row in content.arrangedSubviews {
+            row.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         }
 
         return SettingsControlFactory.titledSection(
-            title: "Switcher Size",
-            content: SettingsControlFactory.groupBox(content: rows)
+            title: title,
+            content: SettingsControlFactory.groupBox(content: content)
         )
     }
 
-    private func makeKeyboardSection() -> NSView {
-        SettingsControlFactory.titledSection(
-            title: "Keyboard",
-            content: SettingsControlFactory.groupBox(content: keyboardContentStack)
-        )
-    }
-
-    private func rebuildKeyboard(_ snapshot: WorkspaceSettingsSnapshot) {
-        removeArrangedSubviews(from: keyboardContentStack)
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.padded(
+    private func rebuildShortcutRows(_ snapshot: WorkspaceSettingsSnapshot) {
+        removeArrangedSubviews(from: workspaceShortcutStack)
+        let workspaceRow = SettingsControlFactory.padded(
             WorkspaceSettingsControlFactory.switcherRow(
-                title: "Cycle Workspace",
+                title: "Cycle Keybinding",
                 shortcuts: snapshot.workspaceSwitcher,
                 targets: (.workspaceSwitcherNext, .workspaceSwitcherPrevious),
                 validationMessages: snapshot.shortcutValidationMessages,
@@ -160,11 +157,14 @@ private extension SwitcherSettingsViewController {
             ),
             vertical: 10,
             horizontal: 14
-        ))
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.separator())
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.padded(
+        )
+        workspaceShortcutStack.addArrangedSubview(workspaceRow)
+        workspaceRow.widthAnchor.constraint(equalTo: workspaceShortcutStack.widthAnchor).isActive = true
+
+        removeArrangedSubviews(from: windowShortcutStack)
+        let windowRow = SettingsControlFactory.padded(
             WorkspaceSettingsControlFactory.switcherRow(
-                title: "Cycle Window",
+                title: "Cycle Keybinding",
                 shortcuts: snapshot.windowSwitcher,
                 targets: (.windowSwitcherNext, .windowSwitcherPrevious),
                 validationMessages: snapshot.shortcutValidationMessages,
@@ -172,10 +172,9 @@ private extension SwitcherSettingsViewController {
             ),
             vertical: 10,
             horizontal: 14
-        ))
-        for row in keyboardContentStack.arrangedSubviews {
-            row.widthAnchor.constraint(equalTo: keyboardContentStack.widthAnchor).isActive = true
-        }
+        )
+        windowShortcutStack.addArrangedSubview(windowRow)
+        windowRow.widthAnchor.constraint(equalTo: windowShortcutStack.widthAnchor).isActive = true
     }
 
     private func updateEditingState(_ snapshot: WorkspaceSettingsSnapshot) {
@@ -183,7 +182,8 @@ private extension SwitcherSettingsViewController {
             ? ""
             : "Configuration is invalid. Fix config.yaml in General before editing shortcuts."
         configErrorNotice.isHidden = snapshot.isEditable
-        setControlsEnabled(snapshot.isEditable, in: keyboardContentStack)
+        setControlsEnabled(snapshot.isEditable, in: workspaceShortcutStack)
+        setControlsEnabled(snapshot.isEditable, in: windowShortcutStack)
     }
 
     private func setControlsEnabled(_ isEnabled: Bool, in view: NSView) {

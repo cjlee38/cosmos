@@ -121,6 +121,7 @@ struct WorkspaceSettingsSnapshot: Equatable {
         }
         let idsByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
             .mapValues { $0.map(\.id) }
+        let displayFrames = monitorSlots.map(\.display.frame)
         displays = monitorSlots.map { monitorSlot in
             WorkspaceSettingsDisplay(
                 id: monitorSlot.display.id,
@@ -128,7 +129,11 @@ struct WorkspaceSettingsSnapshot: Equatable {
                 frame: monitorSlot.display.frame,
                 role: monitorSlot.display.role,
                 monitorSlot: monitorSlot.slot,
-                workspaceIDs: idsByMonitorSlot[monitorSlot.slot] ?? []
+                workspaceIDs: idsByMonitorSlot[monitorSlot.slot] ?? [],
+                hasUnobstructedParkingCorner: WindowParkingPointProvider.assessment(
+                    for: monitorSlot.display.frame,
+                    among: displayFrames
+                ).hasUnobstructedCorner
             )
         }
 
@@ -161,6 +166,25 @@ struct WorkspaceSettingsDisplay: Equatable {
     let role: DisplayRole
     let monitorSlot: MonitorSlot
     let workspaceIDs: [WorkspaceID]
+    let hasUnobstructedParkingCorner: Bool
+
+    init(
+        id: DisplayID,
+        name: String,
+        frame: CGRect,
+        role: DisplayRole,
+        monitorSlot: MonitorSlot,
+        workspaceIDs: [WorkspaceID],
+        hasUnobstructedParkingCorner: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.frame = frame
+        self.role = role
+        self.monitorSlot = monitorSlot
+        self.workspaceIDs = workspaceIDs
+        self.hasUnobstructedParkingCorner = hasUnobstructedParkingCorner
+    }
 }
 
 struct WorkspaceDisplayOption: Equatable {

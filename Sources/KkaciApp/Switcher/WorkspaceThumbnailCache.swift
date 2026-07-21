@@ -39,10 +39,9 @@ final class WorkspaceThumbnailCache {
 
     func refresh(
         groups: [WorkspaceSwitcherGroup],
-        displayBounds: [CGRect],
         priorityWorkspaceIDs: [String] = []
     ) {
-        let renderGroups = WorkspaceThumbnailRenderer.makeRenderGroups(groups, displayBounds: displayBounds)
+        let renderGroups = WorkspaceThumbnailRenderer.makeRenderGroups(groups)
         let groupsByID = Dictionary(uniqueKeysWithValues: renderGroups.map { ($0.id, $0) })
         var seen: Set<String> = []
         let orderedIDs = (priorityWorkspaceIDs + renderGroups.map(\.id)).filter { id in

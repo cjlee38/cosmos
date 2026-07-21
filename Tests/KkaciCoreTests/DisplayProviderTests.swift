@@ -59,6 +59,38 @@ final class DisplayProviderTests: XCTestCase {
         XCTAssertEqual(point, CGPoint(x: 999, y: 923))
     }
 
+    func testParkingAssessmentIsSafeWhenEitherBottomCornerIsOpen() {
+        let displays = [
+            display(id: 1, x: 0, y: 0).frame,
+            display(id: 2, x: 1000, y: 0).frame
+        ]
+
+        let assessment = WindowParkingPointProvider.assessment(
+            for: displays[0],
+            among: displays
+        )
+
+        XCTAssertEqual(assessment.corner, .bottomLeft)
+        XCTAssertTrue(assessment.hasUnobstructedCorner)
+    }
+
+    func testParkingAssessmentIsObstructedWhenBothBottomCornersAreBlocked() {
+        let center = display(id: 1, x: 0, y: 0).frame
+        let displays = [
+            center,
+            display(id: 2, x: -1000, y: 0).frame,
+            display(id: 3, x: 1000, y: 0).frame
+        ]
+
+        let assessment = WindowParkingPointProvider.assessment(
+            for: center,
+            among: displays
+        )
+
+        XCTAssertEqual(assessment.corner, .bottomRight)
+        XCTAssertFalse(assessment.hasUnobstructedCorner)
+    }
+
     private func display(id: UInt32, x: CGFloat, y: CGFloat) -> DisplaySnapshot {
         DisplaySnapshot(
             id: id,

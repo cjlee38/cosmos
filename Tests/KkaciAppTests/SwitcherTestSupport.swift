@@ -89,12 +89,18 @@ final class SwitcherTestWindowSystem: WindowSystem {
 }
 
 struct SwitcherTestDisplayProvider: DisplayProviding {
+    let snapshots: [DisplaySnapshot]
+
+    init(snapshots: [DisplaySnapshot] = [DisplaySnapshot(
+        id: 1,
+        frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+        role: .main
+    )]) {
+        self.snapshots = snapshots
+    }
+
     func displays() throws -> [DisplaySnapshot] {
-        [DisplaySnapshot(
-            id: 1,
-            frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
-            role: .main
-        )]
+        snapshots
     }
 }
 
@@ -117,12 +123,14 @@ func makeSwitcherTestWindow(
 }
 
 func makeSwitcherTestController(
-    windows: [WindowSnapshot]
+    windows: [WindowSnapshot],
+    displays: [DisplaySnapshot]? = nil
 ) throws -> (WorkspaceController, SwitcherTestWindowSystem) {
     let windowSystem = SwitcherTestWindowSystem(windows: windows)
     let controller = WorkspaceController(
         windowSystem: windowSystem,
-        displayProvider: SwitcherTestDisplayProvider()
+        displayProvider: displays.map { SwitcherTestDisplayProvider(snapshots: $0) }
+            ?? SwitcherTestDisplayProvider()
     )
     try controller.bootstrapWindowState()
     return (controller, windowSystem)
