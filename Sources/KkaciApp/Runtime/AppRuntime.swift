@@ -65,7 +65,6 @@ final class AppRuntime {
     }
 
     func start() {
-        statusMenuController.showDebugStatusWindow()
         startKeyboardShortcuts()
 
         let hasPermission = permissionController.checkAtLaunch()
