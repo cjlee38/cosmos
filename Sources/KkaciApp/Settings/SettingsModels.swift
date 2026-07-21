@@ -3,15 +3,15 @@ import KkaciCore
 
 enum SettingsSection: CaseIterable, Hashable {
     case general
-    case appearance
+    case switcher
     case workspaces
 
     var title: String {
         switch self {
         case .general:
             "General"
-        case .appearance:
-            "Appearance"
+        case .switcher:
+            "Switcher"
         case .workspaces:
             "Workspaces"
         }
@@ -21,8 +21,8 @@ enum SettingsSection: CaseIterable, Hashable {
         switch self {
         case .general:
             "gearshape"
-        case .appearance:
-            "paintbrush"
+        case .switcher:
+            "rectangle.on.rectangle"
         case .workspaces:
             "rectangle.3.group"
         }
@@ -103,15 +103,10 @@ struct WorkspaceSettingsSnapshot: Equatable {
         return WorkspaceID.allCases.filter { !configuredIDs.contains($0) }
     }
 
-    var workspaceDisplayOptions: [WorkspaceDisplayOption] {
-        displays
-            .map(WorkspaceDisplayOption.init)
-            .sorted { $0.monitorSlot < $1.monitorSlot }
-    }
-
     init(
         config: KkaciConfig,
         monitorSlots: [MonitorSlotSnapshot],
+        workspaceWindowCounts: [WorkspaceID: Int] = [:],
         isEditable: Bool = true,
         shortcutValidationMessages: [ShortcutTarget: String] = [:]
     ) {
@@ -120,7 +115,8 @@ struct WorkspaceSettingsSnapshot: Equatable {
                 id: workspace.id,
                 monitorSlot: workspace.display,
                 switchShortcut: workspace.shortcuts.switchWorkspace,
-                moveShortcut: workspace.shortcuts.moveWindow
+                moveShortcut: workspace.shortcuts.moveWindow,
+                windowCount: workspaceWindowCounts[workspace.id] ?? 0
             )
         }
         let idsByMonitorSlot = Dictionary(grouping: workspaceItems, by: \.monitorSlot)
@@ -199,12 +195,13 @@ struct WorkspaceSettingsItem: Equatable {
     let monitorSlot: MonitorSlot
     let switchShortcut: String?
     let moveShortcut: String?
+    let windowCount: Int
 }
 
 enum ShortcutDisplayFormatter {
     static func format(_ shortcut: String?) -> String {
         guard let shortcut else {
-            return "Not set"
+            return "-"
         }
         guard let parsed = try? Shortcut(parsing: shortcut) else {
             return shortcut

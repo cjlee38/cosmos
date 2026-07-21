@@ -11,6 +11,8 @@ final class GeneralSettingsViewController: NSViewController {
     private let configURLProvider: () -> URL?
     private let configStatusProvider: () -> ConfigRuntimeStatus
     private let reloadConfigHandler: () -> Void
+    private let appSettingsStore: AppSettingsStore
+    private let appSettingsChanged: () -> Void
 
     private let launchAtLoginSwitch = NSSwitch()
     private let launchAtLoginStatusLabel = NSTextField(labelWithString: "")
@@ -26,6 +28,12 @@ final class GeneralSettingsViewController: NSViewController {
     private let openConfigButton = SettingsFilledButton(title: "Open in Editor")
     private let revealConfigButton = SettingsFilledButton(title: "Reveal in Finder")
     private let reloadConfigButton = SettingsFilledButton(title: "Reload from Disk")
+    private let menuBarStyleControl = NSSegmentedControl(
+        labels: MenuBarIconStyle.allCases.map(\.preview),
+        trackingMode: .selectOne,
+        target: nil,
+        action: nil
+    )
     private var permissionControls: [SettingsPermission: PermissionControls] = [:]
     private var permissionByButtonID: [ObjectIdentifier: SettingsPermission] = [:]
 
@@ -33,12 +41,16 @@ final class GeneralSettingsViewController: NSViewController {
         service: GeneralSettingsService,
         configURLProvider: @escaping () -> URL?,
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
-        reloadConfigHandler: @escaping () -> Void
+        reloadConfigHandler: @escaping () -> Void,
+        appSettingsStore: AppSettingsStore,
+        appSettingsChanged: @escaping () -> Void
     ) {
         self.service = service
         self.configURLProvider = configURLProvider
         self.configStatusProvider = configStatusProvider
         self.reloadConfigHandler = reloadConfigHandler
+        self.appSettingsStore = appSettingsStore
+        self.appSettingsChanged = appSettingsChanged
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -58,10 +70,12 @@ final class GeneralSettingsViewController: NSViewController {
 
         let header = SettingsControlFactory.header(title: "General", symbolName: "gearshape.fill")
         let launchSection = makeLaunchAtLoginSection()
+        let menuBarSection = makeMenuBarSection()
         let configurationSection = makeConfigurationSection()
         let permissionsSection = makePermissionsSection()
         root.addArrangedSubview(header)
         root.addArrangedSubview(launchSection)
+        root.addArrangedSubview(menuBarSection)
         root.addArrangedSubview(configurationSection)
         root.addArrangedSubview(permissionsSection)
         view.addSubview(root)
@@ -71,6 +85,7 @@ final class GeneralSettingsViewController: NSViewController {
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 26),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -26),
             launchSection.widthAnchor.constraint(equalTo: root.widthAnchor),
+            menuBarSection.widthAnchor.constraint(equalTo: root.widthAnchor),
             permissionsSection.widthAnchor.constraint(equalTo: root.widthAnchor),
             configurationSection.widthAnchor.constraint(equalTo: root.widthAnchor)
         ])
@@ -85,12 +100,39 @@ final class GeneralSettingsViewController: NSViewController {
 
         let snapshot = service.snapshot()
         updateLaunchAtLogin(snapshot.launchAtLoginStatus)
+        updateMenuBarStyle()
         updatePermissions(snapshot.permissions)
         updateConfiguration()
     }
 }
 
 private extension GeneralSettingsViewController {
+    private func makeMenuBarSection() -> NSView {
+        menuBarStyleControl.segmentStyle = .rounded
+        menuBarStyleControl.target = self
+        menuBarStyleControl.action = #selector(menuBarStyleChanged)
+        menuBarStyleControl.translatesAutoresizingMaskIntoConstraints = false
+        menuBarStyleControl.widthAnchor.constraint(equalToConstant: 260).isActive = true
+        menuBarStyleControl.setAccessibilityIdentifier("kkaci.settings.general.menu-bar-style")
+
+        let title = NSTextField(labelWithString: "Icon Style")
+        title.font = .systemFont(ofSize: 14, weight: .medium)
+        let row = NSStackView(views: [
+            title,
+            SettingsControlFactory.flexibleSpacer(),
+            menuBarStyleControl
+        ])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+        return SettingsControlFactory.titledSection(
+            title: "Menu Bar",
+            content: SettingsControlFactory.groupBox(
+                content: SettingsControlFactory.padded(row)
+            )
+        )
+    }
+
     private func makeLaunchAtLoginSection() -> NSView {
         launchAtLoginSwitch.target = self
         launchAtLoginSwitch.action = #selector(launchAtLoginChanged)
@@ -266,6 +308,11 @@ private extension GeneralSettingsViewController {
 }
 
 private extension GeneralSettingsViewController {
+    private func updateMenuBarStyle() {
+        let style = appSettingsStore.snapshot().menuBarIconStyle
+        menuBarStyleControl.selectedSegment = MenuBarIconStyle.allCases.firstIndex(of: style) ?? 0
+    }
+
     private func updateLaunchAtLogin(_ status: LaunchAtLoginStatus) {
         launchAtLoginSwitch.state = status == .enabled ? .on : .off
         launchAtLoginSettingsButton.isHidden = status != .requiresApproval
@@ -334,6 +381,15 @@ private extension GeneralSettingsViewController {
             NSApp.presentError(error)
         }
         refresh()
+    }
+
+    @objc private func menuBarStyleChanged() {
+        let styles = MenuBarIconStyle.allCases
+        guard styles.indices.contains(menuBarStyleControl.selectedSegment) else {
+            return
+        }
+        appSettingsStore.setMenuBarIconStyle(styles[menuBarStyleControl.selectedSegment])
+        appSettingsChanged()
     }
 
     @objc private func openLoginItemsSettings() {

@@ -60,6 +60,40 @@ final class WorkspaceSettingsServiceTests: XCTestCase {
         XCTAssertTrue(configStore.savedConfigs.isEmpty)
         XCTAssertEqual(refreshCount, 0)
     }
+
+    func testSnapshotCountsAllAssignedWindowsIncludingMinimizedWindows() throws {
+        let visible = makeSwitcherTestWindow(id: 10, title: "Visible")
+        let laterMinimized = makeSwitcherTestWindow(id: 20, title: "Minimized")
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [visible, laterMinimized])
+        windowSystem.replaceWindows([
+            visible,
+            WindowSnapshot(
+                id: laterMinimized.id,
+                app: laterMinimized.app,
+                title: laterMinimized.title,
+                frame: laterMinimized.frame,
+                isMinimized: true
+            )
+        ])
+        _ = try controller.handleWindowSetChanged()
+        let configStore = ConfigStoreSpy(loadedConfig: controller.currentConfig)
+        let service = WorkspaceSettingsService(
+            controller: controller,
+            configRuntime: ConfigRuntime(
+                configStore: configStore,
+                configURL: nil,
+                controller: controller,
+                keyboardShortcutManager: WorkspaceSettingsShortcutInstaller(),
+                keyboardBindingMapper: KeyboardBindingMapper()
+            ),
+            actions: NoopShortcutActions(),
+            refreshAfterChange: {}
+        )
+
+        let workspace = try XCTUnwrap(service.snapshot().workspaces.first { $0.id == "1" })
+
+        XCTAssertEqual(workspace.windowCount, 2)
+    }
 }
 
 final class WorkspaceSettingsSnapshotTests: XCTestCase {
@@ -81,7 +115,8 @@ final class WorkspaceSettingsSnapshotTests: XCTestCase {
             monitorSlots: [
                 MonitorSlotSnapshot(slot: 1, display: main),
                 MonitorSlotSnapshot(slot: 2, display: extended)
-            ]
+            ],
+            workspaceWindowCounts: ["1": 2, "A": 1]
         )
 
         XCTAssertEqual(snapshot.displays[0].workspaceIDs, ["1"])
@@ -95,6 +130,7 @@ final class WorkspaceSettingsSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.workspaces[0].switchShortcut, "option+1")
         XCTAssertEqual(snapshot.workspaces[0].moveShortcut, "option+shift+1")
         XCTAssertNil(snapshot.workspaces[1].switchShortcut)
+        XCTAssertEqual(snapshot.workspaces.map(\.windowCount), [2, 1, 0])
         XCTAssertFalse(snapshot.availableWorkspaceIDs.contains("1"))
         XCTAssertFalse(snapshot.availableWorkspaceIDs.contains("A"))
         XCTAssertTrue(snapshot.availableWorkspaceIDs.contains("B"))
@@ -103,7 +139,7 @@ final class WorkspaceSettingsSnapshotTests: XCTestCase {
     func testShortcutFormatterUsesMacModifierSymbols() {
         XCTAssertEqual(ShortcutDisplayFormatter.format("ctrl+shift+tab"), "⌃ ⇧ Tab")
         XCTAssertEqual(ShortcutDisplayFormatter.format("option+a"), "⌥ A")
-        XCTAssertEqual(ShortcutDisplayFormatter.format(nil), "Not set")
+        XCTAssertEqual(ShortcutDisplayFormatter.format(nil), "-")
     }
 }
 
@@ -112,7 +148,7 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         case shortcutRestore
     }
 
-    func testMonitorSelectorSendsWorkspaceAndSelectedMonitor() throws {
+    func testSelectingWorkspaceOpensInspectorAndMonitorSelectorUpdatesDisplay() throws {
         let snapshot = settingsSnapshot()
         var update: (workspace: WorkspaceID, displayID: DisplayID)?
         let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
@@ -122,6 +158,11 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         let viewController = WorkspaceSettingsViewController(service: service)
 
         _ = viewController.view
+        let workspacePill = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.1"
+        })
+        workspacePill.mouseUp(with: mouseEvent(type: .leftMouseUp))
+
         let selector = try XCTUnwrap(
             descendants(of: viewController.view)
                 .compactMap { $0 as? NSPopUpButton }
@@ -130,8 +171,8 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         let targetItem = try XCTUnwrap(selector.itemArray.first { $0.representedObject as? DisplayID == 2 })
         XCTAssertEqual(targetItem.title, "2 · Studio Display")
         XCTAssertFalse(selector.menu?.autoenablesItems ?? true)
-        XCTAssertEqual(selector.bezelStyle, .rounded)
-        XCTAssertEqual(selector.controlSize, .regular)
+        XCTAssertEqual(selector.bezelStyle, .badge)
+        XCTAssertEqual(selector.controlSize, .large)
 
         selector.select(targetItem)
         selector.sendAction(selector.action, to: selector.target)
@@ -140,29 +181,133 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         XCTAssertEqual(update?.displayID, 2)
     }
 
-    func testWorkspaceControlsExposeAddAndPreventDeletingTheLastWorkspace() throws {
+    func testSelectingDisplayOpensInlineEditorAndAddsWorkspaceImmediately() throws {
+        let snapshot = settingsSnapshot()
+        let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
+        var addition: (workspaceIDs: [WorkspaceID], displayID: DisplayID)?
+        service.onAddWorkspaces = { workspaceIDs, displayID in
+            addition = (workspaceIDs, displayID)
+        }
+        let viewController = WorkspaceSettingsViewController(service: service)
+
+        _ = viewController.view
+        let displayCard = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.display.2"
+        })
+        displayCard.mouseDown(with: mouseEvent(type: .leftMouseDown))
+
+        let editor = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.editor"
+        })
+        XCTAssertFalse(editor.isHidden)
+        let workspaceB = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? WorkspaceIDKeyButton }
+                .first { $0.workspaceID == "B" }
+        )
+        workspaceB.performClick(nil)
+
+        XCTAssertEqual(addition?.workspaceIDs, ["B"])
+        XCTAssertEqual(addition?.displayID, 2)
+        XCTAssertFalse(editor.isHidden)
+    }
+
+    func testSelectingConfiguredKeyImmediatelyDeletesAnEmptyWorkspace() throws {
+        let snapshot = settingsSnapshot(workspaces: [
+            WorkspaceConfig(id: "1"),
+            WorkspaceConfig(id: "2")
+        ])
+        let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
+        var removedWorkspace: WorkspaceID?
+        service.onRemoveWorkspace = { removedWorkspace = $0 }
+        let viewController = WorkspaceSettingsViewController(service: service)
+
+        let displayCard = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.display.1"
+        })
+        displayCard.mouseDown(with: mouseEvent(type: .leftMouseDown))
+        let configuredWorkspace = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? WorkspaceIDKeyButton }
+                .first { $0.workspaceID == "1" }
+        )
+        configuredWorkspace.performClick(nil)
+
+        XCTAssertEqual(removedWorkspace, "1")
+    }
+
+    func testDeletingWorkspaceWithWindowsRequiresIconlessConfirmation() throws {
+        let snapshot = settingsSnapshot(
+            workspaces: [WorkspaceConfig(id: "1"), WorkspaceConfig(id: "2")],
+            workspaceWindowCounts: ["1": 1]
+        )
+        let service = WorkspaceSettingsServiceStub(snapshot: snapshot)
+        var removedWorkspace: WorkspaceID?
+        service.onRemoveWorkspace = { removedWorkspace = $0 }
+        let viewController = WorkspaceSettingsViewController(service: service)
+        let window = NSWindow(contentViewController: viewController)
+        defer { window.close() }
+
+        let workspacePill = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.1"
+        })
+        workspacePill.mouseUp(with: mouseEvent(type: .leftMouseUp))
+        let removeButton = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? NSButton }
+                .first { $0.accessibilityIdentifier() == "kkaci.settings.workspace.1.remove" }
+        )
+        removeButton.performClick(nil)
+
+        let sheet = try XCTUnwrap(window.attachedSheet)
+        let visibleIcons = try descendants(of: XCTUnwrap(sheet.contentView))
+            .compactMap { $0 as? NSImageView }
+            .filter { !$0.isHidden }
+        XCTAssertTrue(visibleIcons.isEmpty)
+        XCTAssertNil(removedWorkspace)
+
+        let deleteButton = try XCTUnwrap(
+            try descendants(of: XCTUnwrap(sheet.contentView))
+                .compactMap { $0 as? NSButton }
+                .first { $0.title == "Delete" }
+        )
+        deleteButton.performClick(nil)
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        XCTAssertEqual(removedWorkspace, "1")
+    }
+
+    func testWorkspaceInspectorExposesWorkspaceRecordersOnlyAfterSelection() throws {
         let snapshot = settingsSnapshot()
         let viewController = WorkspaceSettingsViewController(
             service: WorkspaceSettingsServiceStub(snapshot: snapshot)
         )
 
-        _ = viewController.view
-        let buttons = descendants(of: viewController.view).compactMap { $0 as? NSButton }
-        let addButton = try XCTUnwrap(buttons.first {
-            $0.accessibilityIdentifier() == "kkaci.settings.workspace.add"
-        })
-        let removeButton = try XCTUnwrap(buttons.first {
-            $0.accessibilityIdentifier() == "kkaci.settings.workspace.1.remove"
-        })
+        var recorders = descendants(of: viewController.view).compactMap { $0 as? ShortcutRecorderButton }
+        XCTAssertTrue(recorders.isEmpty)
 
-        XCTAssertTrue(addButton.isEnabled)
-        XCTAssertFalse(removeButton.isEnabled)
+        let workspacePill = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.1"
+        })
+        workspacePill.mouseUp(with: mouseEvent(type: .leftMouseUp))
+        recorders = descendants(of: viewController.view).compactMap { $0 as? ShortcutRecorderButton }
+
+        XCTAssertEqual(Set(recorders.map(\.shortcutTarget)), Set([
+            .switchWorkspace("1"),
+            .moveWindow("1")
+        ]))
     }
 
-    func testWorkspaceSettingsExposeRecordersForEveryShortcutTarget() {
-        let snapshot = settingsSnapshot()
-        let viewController = WorkspaceSettingsViewController(
-            service: WorkspaceSettingsServiceStub(snapshot: snapshot)
+    func testSwitcherSettingsExposeCycleRecorders() throws {
+        let service = WorkspaceSettingsServiceStub(snapshot: settingsSnapshot())
+        let suiteName = "SwitcherSettingsViewTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let viewController = SwitcherSettingsViewController(
+            store: AppSettingsStore(defaults: defaults),
+            settingsService: service,
+            shortcutRecordingController: ShortcutRecordingController(service: service),
+            onChange: {}
         )
 
         let recorders = descendants(of: viewController.view).compactMap { $0 as? ShortcutRecorderButton }
@@ -171,10 +316,31 @@ final class WorkspaceSettingsViewTests: XCTestCase {
             .workspaceSwitcherNext,
             .workspaceSwitcherPrevious,
             .windowSwitcherNext,
-            .windowSwitcherPrevious,
-            .switchWorkspace("1"),
-            .moveWindow("1")
+            .windowSwitcherPrevious
         ])
+    }
+
+    func testClickingDisplayCardOutsideAWorkspaceClearsTheInspector() throws {
+        let viewController = WorkspaceSettingsViewController(
+            service: WorkspaceSettingsServiceStub(snapshot: settingsSnapshot())
+        )
+
+        let workspacePill = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.1"
+        })
+        workspacePill.mouseUp(with: mouseEvent(type: .leftMouseUp))
+        XCTAssertFalse(try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.inspector"
+        }).isHidden)
+
+        let displayCard = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.display.1"
+        })
+        displayCard.mouseDown(with: mouseEvent(type: .leftMouseDown))
+
+        XCTAssertTrue(try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace.inspector"
+        }).isHidden)
     }
 
     func testUnreadableConfigDisablesWorkspaceEditing() throws {
@@ -195,9 +361,11 @@ final class WorkspaceSettingsViewTests: XCTestCase {
 
         let controls = descendants(of: viewController.view).compactMap { $0 as? NSControl }
 
-        XCTAssertFalse(try XCTUnwrap(controls.first {
-            $0.accessibilityIdentifier() == "kkaci.settings.workspace.add"
-        }).isEnabled)
+        XCTAssertTrue(
+            controls
+                .compactMap { $0 as? WorkspaceIDKeyButton }
+                .allSatisfy { !$0.isEnabled }
+        )
         XCTAssertTrue(controls.compactMap { $0 as? ShortcutRecorderButton }.allSatisfy { !$0.isEnabled })
         XCTAssertEqual(
             try XCTUnwrap(controls.compactMap { $0 as? NSTextField }.first {
@@ -211,6 +379,10 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         let service = WorkspaceSettingsServiceStub(snapshot: settingsSnapshot())
         service.cancelShortcutRecordingError = TestError.shortcutRestore
         let viewController = WorkspaceSettingsViewController(service: service)
+        let workspacePill = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.1"
+        })
+        workspacePill.mouseUp(with: mouseEvent(type: .leftMouseUp))
         let recorder = try XCTUnwrap(
             descendants(of: viewController.view)
                 .compactMap { $0 as? ShortcutRecorderButton }
@@ -225,8 +397,12 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         XCTAssertTrue(descendants(of: viewController.view).contains { $0 === recorder })
     }
 
-    func testWorkspaceIDPickerDimsConfiguredIDsAndSelectsAvailableIDs() throws {
+    func testWorkspaceIDPickerDistinguishesConfiguredAndAvailableSelections() throws {
         let picker = WorkspaceIDPickerView(unavailableWorkspaceIDs: ["1", "A"])
+        var availableSelection: WorkspaceID?
+        var configuredSelection: WorkspaceID?
+        picker.onWorkspaceSelected = { availableSelection = $0 }
+        picker.onConfiguredWorkspaceSelected = { configuredSelection = $0 }
         let buttons = descendants(of: picker).compactMap { $0 as? WorkspaceIDKeyButton }
         let zero = try XCTUnwrap(buttons.first { $0.workspaceID == "0" })
         let one = try XCTUnwrap(buttons.first { $0.workspaceID == "1" })
@@ -234,63 +410,144 @@ final class WorkspaceSettingsViewTests: XCTestCase {
         let letterB = try XCTUnwrap(buttons.first { $0.workspaceID == "B" })
 
         XCTAssertTrue(zero.isEnabled)
-        XCTAssertFalse(one.isEnabled)
-        XCTAssertFalse(letterA.isEnabled)
+        XCTAssertTrue(one.isEnabled)
+        XCTAssertTrue(letterA.isEnabled)
 
+        letterA.performClick(nil)
         zero.performClick(nil)
         letterB.performClick(nil)
 
-        XCTAssertEqual(picker.selectedWorkspaceIDs, ["0", "B"])
+        XCTAssertEqual(configuredSelection, "A")
+        XCTAssertEqual(availableSelection, "B")
     }
 
-    func testWorkspaceIDPickerAddsSelectedIDsToTheChosenDisplay() throws {
-        var addition: (workspaceIDs: [WorkspaceID], displayID: DisplayID)?
-        let viewController = WorkspaceIDPickerViewController(
-            unavailableWorkspaceIDs: ["1"],
-            displayOptions: [
-                WorkspaceDisplayOption(
-                    displayID: 1,
-                    monitorSlot: 1,
-                    name: "Built-in Retina Display"
-                ),
-                WorkspaceDisplayOption(displayID: 2, monitorSlot: 2, name: "Studio Display")
-            ],
-            addHandler: { workspaceIDs, displayID in
-                addition = (workspaceIDs, displayID)
-            }
+    func testWorkspaceIDPickerCentersTheKeyboard() {
+        let picker = WorkspaceIDPickerView(unavailableWorkspaceIDs: [])
+        picker.frame = NSRect(x: 0, y: 0, width: 520, height: 184)
+        picker.layoutSubtreeIfNeeded()
+
+        let buttons = descendants(of: picker).compactMap { $0 as? WorkspaceIDKeyButton }
+        let frames = buttons.map { picker.convert($0.bounds, from: $0) }
+        let keyboardFrame = frames.reduce(NSRect.null) { $0.union($1) }
+
+        XCTAssertEqual(keyboardFrame.midX, picker.bounds.midX, accuracy: 1)
+    }
+
+    func testShortcutConflictsStayOnRecorderControlsWithoutASeparateSection() {
+        let base = settingsSnapshot()
+        let snapshot = WorkspaceSettingsSnapshot(
+            config: KkaciConfig(workspaces: [WorkspaceConfig(id: "1")]),
+            monitorSlots: base.displays.map { display in
+                MonitorSlotSnapshot(
+                    slot: display.monitorSlot,
+                    display: DisplaySnapshot(
+                        id: display.id,
+                        name: display.name,
+                        frame: display.frame,
+                        role: display.role
+                    )
+                )
+            },
+            shortcutValidationMessages: [
+                .switchWorkspace("1"): "Already assigned to \"Cycle Workspace · Next\"."
+            ]
         )
-        let parent = NSViewController()
-        let window = NSWindow(contentViewController: parent)
-        defer { window.close() }
-        parent.presentAsSheet(viewController)
-
-        _ = viewController.view
-        let views = descendants(of: viewController.view)
-        let displaySelector = try XCTUnwrap(views.compactMap { $0 as? NSPopUpButton }.first {
-            $0.accessibilityIdentifier() == "kkaci.workspace-picker.display"
-        })
-        XCTAssertEqual(
-            displaySelector.itemTitles,
-            ["1 · Built-in Retina Display", "2 · Studio Display"]
+        let viewController = WorkspaceSettingsViewController(
+            service: WorkspaceSettingsServiceStub(snapshot: snapshot)
         )
-        XCTAssertFalse(displaySelector.menu?.autoenablesItems ?? true)
-        displaySelector.selectItem(at: 1)
 
-        let workspaceB = try XCTUnwrap(views.compactMap { $0 as? WorkspaceIDKeyButton }.first {
-            $0.workspaceID == "B"
+        XCTAssertNil(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.shortcut-conflicts"
         })
-        workspaceB.performClick(nil)
-        let addButton = try XCTUnwrap(views.compactMap { $0 as? NSButton }.first {
-            $0.title == "Add Workspaces"
-        })
-        addButton.performClick(nil)
+    }
 
-        XCTAssertEqual(addition?.workspaceIDs, ["B"])
-        XCTAssertEqual(addition?.displayID, 2)
+    func testWorkspaceDragPayloadRoundTripsWorkspaceID() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("kkaci.workspace-test"))
+        pasteboard.clearContents()
+        pasteboard.writeObjects([WorkspaceDragPayload.pasteboardItem(for: "A")])
+
+        XCTAssertEqual(WorkspaceDragPayload.workspaceID(from: pasteboard), "A")
+    }
+
+    func testDisplayArrangementHitTestsTheWorkspaceUnderThePointer() throws {
+        let display = WorkspaceSettingsDisplay(
+            id: 1,
+            name: "Display",
+            frame: CGRect(x: 0, y: 0, width: 1000, height: 800),
+            role: .main,
+            monitorSlot: 1,
+            workspaceIDs: ["1", "Y"]
+        )
+        let arrangement = WorkspaceDisplayArrangementView(frame: NSRect(x: 0, y: 0, width: 520, height: 210))
+        arrangement.apply(
+            [display],
+            selectedDisplayID: nil,
+            selectedWorkspaceID: nil,
+            isEditable: true
+        )
+        arrangement.layoutSubtreeIfNeeded()
+
+        let one = try XCTUnwrap(descendants(of: arrangement).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.1"
+        })
+        let letterY = try XCTUnwrap(descendants(of: arrangement).first {
+            $0.accessibilityIdentifier() == "kkaci.settings.workspace-pill.Y"
+        })
+        let onePoint = NSPoint(x: one.frame.midX, y: one.frame.midY)
+        let letterYPoint = NSPoint(x: letterY.frame.midX, y: letterY.frame.midY)
+
+        XCTAssertTrue(one.hitTest(onePoint) === one)
+        XCTAssertTrue(letterY.hitTest(letterYPoint) === letterY)
+        XCTAssertNil(one.hitTest(letterYPoint))
+        XCTAssertNil(letterY.hitTest(onePoint))
+    }
+
+    func testDisplayArrangementShowsOverflowInsteadOfDroppingWorkspaceIDs() throws {
+        let display = WorkspaceSettingsDisplay(
+            id: 1,
+            name: "Small Display",
+            frame: CGRect(x: 0, y: 0, width: 1000, height: 800),
+            role: .main,
+            monitorSlot: 1,
+            workspaceIDs: WorkspaceID.allCases
+        )
+        let arrangement = WorkspaceDisplayArrangementView(frame: NSRect(x: 0, y: 0, width: 260, height: 140))
+        arrangement.apply(
+            [display],
+            selectedDisplayID: 1,
+            selectedWorkspaceID: nil,
+            isEditable: true
+        )
+        arrangement.layoutSubtreeIfNeeded()
+
+        let overflow = try XCTUnwrap(
+            descendants(of: arrangement)
+                .compactMap { $0 as? NSButton }
+                .first { $0.accessibilityIdentifier() == "kkaci.settings.workspace-overflow" }
+        )
+        XCTAssertFalse(overflow.isHidden)
+        XCTAssertTrue(overflow.title.hasPrefix("+"))
     }
 }
 
-private func settingsSnapshot() -> WorkspaceSettingsSnapshot {
+private func mouseEvent(type: NSEvent.EventType) -> NSEvent {
+    NSEvent.mouseEvent(
+        with: type,
+        location: .zero,
+        modifierFlags: [],
+        timestamp: 0,
+        windowNumber: 0,
+        context: nil,
+        eventNumber: 0,
+        clickCount: 1,
+        pressure: 0
+    )!
+}
+
+private func settingsSnapshot(
+    workspaces: [WorkspaceConfig] = [WorkspaceConfig(id: "1")],
+    workspaceWindowCounts: [WorkspaceID: Int] = [:]
+) -> WorkspaceSettingsSnapshot {
     let main = DisplaySnapshot(
         id: 1,
         name: "Built-in Retina Display",
@@ -304,13 +561,12 @@ private func settingsSnapshot() -> WorkspaceSettingsSnapshot {
         role: .extended
     )
     return WorkspaceSettingsSnapshot(
-        config: KkaciConfig(
-            workspaces: [WorkspaceConfig(id: "1")]
-        ),
+        config: KkaciConfig(workspaces: workspaces),
         monitorSlots: [
             MonitorSlotSnapshot(slot: 1, display: main),
             MonitorSlotSnapshot(slot: 2, display: extended)
-        ]
+        ],
+        workspaceWindowCounts: workspaceWindowCounts
     )
 }
 
@@ -347,6 +603,8 @@ private func descendants(of view: NSView) -> [NSView] {
 private final class WorkspaceSettingsServiceStub: WorkspaceSettingsServing {
     let currentSnapshot: WorkspaceSettingsSnapshot
     var onUpdateMonitor: (WorkspaceID, DisplayID) throws -> Void = { _, _ in }
+    var onAddWorkspaces: ([WorkspaceID], DisplayID) throws -> Void = { _, _ in }
+    var onRemoveWorkspace: (WorkspaceID) throws -> Void = { _ in }
     var cancelShortcutRecordingError: Error?
 
     init(snapshot: WorkspaceSettingsSnapshot) {
@@ -365,9 +623,13 @@ private final class WorkspaceSettingsServiceStub: WorkspaceSettingsServing {
         try onUpdateMonitor(workspaceID, displayID)
     }
 
-    func addWorkspaces(_: [WorkspaceID], displayID _: DisplayID) throws {}
+    func addWorkspaces(_ workspaceIDs: [WorkspaceID], displayID: DisplayID) throws {
+        try onAddWorkspaces(workspaceIDs, displayID)
+    }
 
-    func removeWorkspace(_: WorkspaceID) throws {}
+    func removeWorkspace(_ workspaceID: WorkspaceID) throws {
+        try onRemoveWorkspace(workspaceID)
+    }
 
     func beginShortcutRecording() throws {}
 

@@ -25,24 +25,33 @@ final class SettingsCoordinator {
             actions: actions,
             refreshAfterChange: workspaceConfigChanged
         )
+        let shortcutRecordingController = ShortcutRecordingController(
+            service: workspaceSettingsService
+        )
         let generalViewController = GeneralSettingsViewController(
             service: generalSettingsService,
             configURLProvider: { configRuntime.configURL },
             configStatusProvider: { configRuntime.status },
-            reloadConfigHandler: reloadConfig
+            reloadConfigHandler: reloadConfig,
+            appSettingsStore: appSettingsStore,
+            appSettingsChanged: appearanceChanged
         )
-        let appearanceViewController = AppearanceSettingsViewController(
+        let switcherViewController = SwitcherSettingsViewController(
             store: appSettingsStore,
+            settingsService: workspaceSettingsService,
+            shortcutRecordingController: shortcutRecordingController,
             onChange: appearanceChanged
         )
         let workspaceViewController = WorkspaceSettingsViewController(
-            service: workspaceSettingsService
+            service: workspaceSettingsService,
+            shortcutRecordingController: shortcutRecordingController
         )
 
         windowController = SettingsWindowController(
             generalViewController: generalViewController,
-            appearanceViewController: appearanceViewController,
-            workspaceViewController: workspaceViewController
+            switcherViewController: switcherViewController,
+            workspaceViewController: workspaceViewController,
+            shortcutRecordingController: shortcutRecordingController
         )
         windowController.onClose = { [weak self] in
             self?.didCloseWindow()

@@ -32,9 +32,18 @@ final class WorkspaceSettingsService: WorkspaceSettingsServing {
     }
 
     func snapshot() -> WorkspaceSettingsSnapshot {
-        WorkspaceSettingsSnapshot(
-            config: configRuntime.settingsConfig,
+        let config = configRuntime.settingsConfig
+        var windowCounts: [WorkspaceID: Int] = [:]
+        for window in controller.currentWindows() {
+            guard let workspace = controller.membership(for: window.id).flatMap(WorkspaceID.init(rawValue:)) else {
+                continue
+            }
+            windowCounts[workspace, default: 0] += 1
+        }
+        return WorkspaceSettingsSnapshot(
+            config: config,
             monitorSlots: controller.displayTopology.monitorSlots,
+            workspaceWindowCounts: windowCounts,
             isEditable: configRuntime.isSettingsEditable,
             shortcutValidationMessages: configRuntime.shortcutValidationMessages
         )

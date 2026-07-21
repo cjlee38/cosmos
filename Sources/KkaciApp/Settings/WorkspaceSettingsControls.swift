@@ -56,23 +56,8 @@ final class WorkspaceMonitorPopUpButton: NSPopUpButton {
     }
 
     private func displayOrder(_ lhs: WorkspaceSettingsDisplay, _ rhs: WorkspaceSettingsDisplay)
-        -> Bool
-    {
+        -> Bool {
         lhs.monitorSlot < rhs.monitorSlot
-    }
-}
-
-final class WorkspaceAddButton: NSButton {
-    let availableWorkspaceIDs: [WorkspaceID]
-
-    init(availableWorkspaceIDs: [WorkspaceID]) {
-        self.availableWorkspaceIDs = availableWorkspaceIDs
-        super.init(frame: .zero)
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
     }
 }
 
@@ -192,30 +177,13 @@ enum WorkspaceSettingsControlFactory {
         )
     }
 
-    static func identityLabel(workspace: WorkspaceSettingsItem) -> NSView {
-        let id = NSTextField(labelWithString: workspace.id.rawValue)
-        id.font = .systemFont(ofSize: 13, weight: .semibold)
-        id.alignment = .center
-        id.translatesAutoresizingMaskIntoConstraints = false
-        id.widthAnchor.constraint(equalToConstant: 20).isActive = true
-        return id
-    }
-
-    static func addButton(
-        availableWorkspaceIDs: [WorkspaceID],
-        target: AnyObject,
-        action: Selector
-    ) -> NSButton {
-        let button = WorkspaceAddButton(availableWorkspaceIDs: availableWorkspaceIDs)
-        button.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "Add Workspace")
-        button.imagePosition = .imageOnly
-        button.bezelStyle = .accessoryBarAction
-        button.toolTip = "Add Workspace"
-        button.target = target
-        button.action = action
-        button.isEnabled = !availableWorkspaceIDs.isEmpty
-        button.setAccessibilityIdentifier("kkaci.settings.workspace.add")
-        return button
+    static func labeledControl(title: String, control: NSView) -> NSView {
+        let label = headerLabel(title)
+        let stack = NSStackView(views: [label, control])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 5
+        return stack
     }
 
     static func removeButton(
@@ -226,13 +194,14 @@ enum WorkspaceSettingsControlFactory {
     ) -> NSButton {
         let button = WorkspaceRemoveButton(workspaceID: workspaceID)
         button.image = NSImage(
-            systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
+            systemSymbolName: "trash", accessibilityDescription: "Delete Workspace"
+        )
         button.imagePosition = .imageOnly
         button.bezelStyle = .accessoryBarAction
         button.toolTip =
             isEnabled
-            ? "Delete Workspace \(workspaceID.rawValue)"
-            : "At least one workspace is required"
+                ? "Delete Workspace \(workspaceID.rawValue)"
+                : "At least one workspace is required"
         button.target = target
         button.action = action
         button.isEnabled = isEnabled

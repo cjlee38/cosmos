@@ -8,26 +8,29 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     var onWindowChanged: ((WindowID) -> Void)?
 
     private let generalViewController: GeneralSettingsViewController
-    private let appearanceViewController: AppearanceSettingsViewController
+    private let switcherViewController: SwitcherSettingsViewController
     private let workspaceViewController: WorkspaceSettingsViewController
+    private let shortcutRecordingController: ShortcutRecordingController
     init(
         generalViewController: GeneralSettingsViewController,
-        appearanceViewController: AppearanceSettingsViewController,
-        workspaceViewController: WorkspaceSettingsViewController
+        switcherViewController: SwitcherSettingsViewController,
+        workspaceViewController: WorkspaceSettingsViewController,
+        shortcutRecordingController: ShortcutRecordingController
     ) {
         self.generalViewController = generalViewController
-        self.appearanceViewController = appearanceViewController
+        self.switcherViewController = switcherViewController
         self.workspaceViewController = workspaceViewController
+        self.shortcutRecordingController = shortcutRecordingController
 
         let sidebar = SettingsSidebarViewController()
         let content = SettingsContentViewController()
         let viewControllers: [SettingsSection: NSViewController] = [
             .general: generalViewController,
-            .appearance: appearanceViewController,
+            .switcher: switcherViewController,
             .workspaces: workspaceViewController
         ]
         sidebar.onSelectionChanged = { section in
-            guard workspaceViewController.cancelShortcutRecording(),
+            guard shortcutRecordingController.cancel(),
                   let viewController = viewControllers[section]
             else {
                 return false
@@ -60,8 +63,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func refresh() {
+        guard shortcutRecordingController.cancel() else {
+            return
+        }
         generalViewController.refresh()
-        appearanceViewController.refresh()
+        switcherViewController.refresh()
         workspaceViewController.refresh()
     }
 
@@ -86,7 +92,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard workspaceViewController.cancelShortcutRecording() else {
+        guard shortcutRecordingController.cancel() else {
             return false
         }
         sender.orderOut(nil)
@@ -129,7 +135,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
-        window.minSize = NSSize(width: 720, height: 520)
+        window.minSize = NSSize(width: 760, height: 520)
         window.setAccessibilityIdentifier(accessibilityIdentifier)
         window.contentViewController = contentViewController
         return window

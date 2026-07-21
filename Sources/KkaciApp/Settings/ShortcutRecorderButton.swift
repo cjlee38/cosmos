@@ -208,6 +208,62 @@ final class ShortcutRecorderButton: NSButton {
     }
 }
 
+final class ShortcutRecordingController {
+    private let log = Log(category: "settings")
+    private let service: any WorkspaceSettingsServing
+    private var activeRecorder: ShortcutRecorderButton?
+
+    init(service: any WorkspaceSettingsServing) {
+        self.service = service
+    }
+
+    @discardableResult
+    func cancel() -> Bool {
+        activeRecorder?.cancelRecording() ?? true
+    }
+
+    func begin(_ recorder: ShortcutRecorderButton) {
+        guard activeRecorder?.cancelRecording() != false else {
+            return
+        }
+        do {
+            try service.beginShortcutRecording()
+        } catch {
+            log.error("Shortcut recording failed to start: \(String(describing: error))")
+            NSSound.beep()
+            return
+        }
+
+        activeRecorder = recorder
+        let shortcutTarget = recorder.shortcutTarget
+        recorder.startRecording(
+            onCommit: { [unowned self] shortcut in
+                do {
+                    return try service.updateShortcut(shortcut, for: shortcutTarget)
+                } catch {
+                    log.error("Shortcut update failed: \(String(describing: error))")
+                    throw error
+                }
+            },
+            onCancel: { [unowned self] in
+                do {
+                    try service.cancelShortcutRecording()
+                } catch {
+                    log.error("Shortcut recording cancel failed: \(String(describing: error))")
+                    throw error
+                }
+            },
+            onFinish: { [weak self, weak recorder] didPersistChange in
+                guard self?.activeRecorder === recorder else {
+                    return
+                }
+                self?.activeRecorder = nil
+                self?.service.shortcutRecordingDidFinish(didPersistChange: didPersistChange)
+            }
+        )
+    }
+}
+
 final class ShortcutRecorderControl: NSStackView {
     let recorderButton: ShortcutRecorderButton
     let warningIcon = NSImageView()

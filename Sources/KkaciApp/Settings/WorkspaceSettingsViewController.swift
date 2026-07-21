@@ -4,15 +4,26 @@ import KkaciCore
 final class WorkspaceSettingsViewController: NSViewController {
     private let log = Log(category: "settings")
     private let service: any WorkspaceSettingsServing
+    private let shortcutRecordingController: ShortcutRecordingController
     private let displayArrangementView = WorkspaceDisplayArrangementView()
     private let displayStatusStack = NSStackView()
-    private let keyboardContentStack = NSStackView()
+    private let displayEditorStack = NSStackView()
+    private let displayEditorTitle = NSTextField(labelWithString: "")
+    private let workspacePicker = WorkspaceIDPickerView(unavailableWorkspaceIDs: [])
+    private let inspectorSection = NSStackView()
     private let configErrorLabel = NSTextField(wrappingLabelWithString: "")
     private lazy var configErrorNotice = WorkspaceSettingsControlFactory.configErrorNotice(label: configErrorLabel)
-    private weak var activeShortcutRecorder: ShortcutRecorderButton?
+    private var selectedDisplayID: DisplayID?
+    private var selectedWorkspaceID: WorkspaceID?
+    private var isAddingWorkspace = false
 
-    init(service: any WorkspaceSettingsServing) {
+    init(
+        service: any WorkspaceSettingsServing,
+        shortcutRecordingController: ShortcutRecordingController? = nil
+    ) {
         self.service = service
+        self.shortcutRecordingController = shortcutRecordingController
+            ?? ShortcutRecordingController(service: service)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -27,28 +38,15 @@ final class WorkspaceSettingsViewController: NSViewController {
         let (scrollView, documentView) = makeScrollView()
         view.addSubview(scrollView)
 
-        displayArrangementView.translatesAutoresizingMaskIntoConstraints = false
-        displayArrangementView.heightAnchor.constraint(equalToConstant: 190).isActive = true
-        configureVerticalStack(displayStatusStack, spacing: 7)
-        configureVerticalStack(keyboardContentStack, spacing: 0)
+        configureDisplayViews()
+        configureVerticalStack(inspectorSection, spacing: 8)
 
-        let displayContent = NSStackView(views: [displayArrangementView, displayStatusStack])
-        configureVerticalStack(displayContent, spacing: 8)
-        let displaySection = SettingsControlFactory.titledSection(
-            title: "Displays",
-            content: SettingsControlFactory.groupBox(
-                content: SettingsControlFactory.padded(displayContent, vertical: 10, horizontal: 10)
-            )
-        )
-        let keyboardSection = SettingsControlFactory.titledSection(
-            title: "Keyboard",
-            content: SettingsControlFactory.groupBox(content: keyboardContentStack)
-        )
         let root = NSStackView(views: [
             SettingsControlFactory.header(title: "Workspaces", symbolName: "rectangle.3.group.fill"),
-            displaySection,
             configErrorNotice,
-            keyboardSection
+            makeDisplaySection(),
+            displayEditorStack,
+            inspectorSection
         ])
         configureVerticalStack(root, spacing: 20)
         root.translatesAutoresizingMaskIntoConstraints = false
@@ -63,12 +61,13 @@ final class WorkspaceSettingsViewController: NSViewController {
             root.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 24),
             root.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 26),
             root.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -26),
-            root.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -24),
-            displaySection.widthAnchor.constraint(equalTo: root.widthAnchor),
-            configErrorNotice.widthAnchor.constraint(equalTo: root.widthAnchor),
-            keyboardSection.widthAnchor.constraint(equalTo: root.widthAnchor)
+            root.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -24)
         ])
+        for section in root.arrangedSubviews.dropFirst() {
+            section.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        }
 
+        wireActions()
         refresh()
     }
 
@@ -76,34 +75,64 @@ final class WorkspaceSettingsViewController: NSViewController {
         guard isViewLoaded else {
             return
         }
-        guard cancelShortcutRecording() else {
+        guard shortcutRecordingController.cancel() else {
             return
         }
-        let snapshot = service.snapshot()
-        displayArrangementView.apply(snapshot.displays)
-        rebuildDisplayStatus(snapshot)
-        rebuildKeyboard(snapshot)
-        updateEditingState(snapshot)
-    }
-
-    @discardableResult
-    func cancelShortcutRecording() -> Bool {
-        activeShortcutRecorder?.cancelRecording() ?? true
-    }
-
-    override func viewWillDisappear() {
-        cancelShortcutRecording()
-        super.viewWillDisappear()
+        apply(service.snapshot())
     }
 }
 
 private extension WorkspaceSettingsViewController {
+    private func configureDisplayViews() {
+        displayArrangementView.translatesAutoresizingMaskIntoConstraints = false
+        displayArrangementView.heightAnchor.constraint(equalToConstant: 210).isActive = true
+        configureVerticalStack(displayStatusStack, spacing: 7)
+        configureVerticalStack(displayEditorStack, spacing: 12)
+
+        displayEditorTitle.font = .systemFont(ofSize: 12.5, weight: .semibold)
+        displayEditorTitle.textColor = .secondaryLabelColor
+        workspacePicker.translatesAutoresizingMaskIntoConstraints = false
+
+        let pickerContainer = NSView()
+        pickerContainer.addSubview(workspacePicker)
+        NSLayoutConstraint.activate([
+            workspacePicker.topAnchor.constraint(equalTo: pickerContainer.topAnchor, constant: 12),
+            workspacePicker.centerXAnchor.constraint(equalTo: pickerContainer.centerXAnchor),
+            workspacePicker.leadingAnchor.constraint(greaterThanOrEqualTo: pickerContainer.leadingAnchor, constant: 12),
+            workspacePicker.trailingAnchor.constraint(lessThanOrEqualTo: pickerContainer.trailingAnchor, constant: -12),
+            workspacePicker.bottomAnchor.constraint(equalTo: pickerContainer.bottomAnchor, constant: -12)
+        ])
+        let pickerGroup = SettingsControlFactory.groupBox(content: pickerContainer)
+        displayEditorStack.addArrangedSubview(displayEditorTitle)
+        displayEditorStack.addArrangedSubview(pickerGroup)
+        pickerGroup.widthAnchor.constraint(equalTo: displayEditorStack.widthAnchor).isActive = true
+        displayEditorStack.setAccessibilityIdentifier("kkaci.settings.workspace.editor")
+    }
+
+    private func makeDisplaySection() -> NSView {
+        let title = WorkspaceSettingsControlFactory.headerLabel("Displays")
+
+        let content = NSStackView(views: [displayArrangementView, displayStatusStack])
+        configureVerticalStack(content, spacing: 10)
+        for arrangedView in content.arrangedSubviews {
+            arrangedView.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+        }
+        let group = SettingsControlFactory.groupBox(
+            content: SettingsControlFactory.padded(content, vertical: 10, horizontal: 10)
+        )
+        let section = NSStackView(views: [title, group])
+        configureVerticalStack(section, spacing: 8)
+        group.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
+        return section
+    }
+
     private func makeScrollView() -> (scrollView: NSScrollView, documentView: NSView) {
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
         scrollView.automaticallyAdjustsContentInsets = false
         let documentView = WorkspaceSettingsDocumentView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
@@ -111,121 +140,138 @@ private extension WorkspaceSettingsViewController {
         return (scrollView, documentView)
     }
 
+    private func wireActions() {
+        displayArrangementView.onDisplaySelected = { [weak self] displayID in
+            self?.openWorkspaceEditor(for: displayID)
+        }
+        displayArrangementView.onSelectionCleared = { [weak self] in
+            self?.clearWorkspaceSelection()
+        }
+        displayArrangementView.onWorkspaceSelected = { [weak self] workspaceID in
+            self?.selectWorkspace(workspaceID)
+        }
+        displayArrangementView.onWorkspaceMoved = { [weak self] workspaceID, displayID in
+            self?.moveWorkspace(workspaceID, to: displayID)
+        }
+        workspacePicker.onWorkspaceSelected = { [weak self] workspaceID in
+            self?.addWorkspace(workspaceID)
+        }
+        workspacePicker.onConfiguredWorkspaceSelected = { [weak self] workspaceID in
+            self?.requestWorkspaceRemoval(workspaceID)
+        }
+    }
+
+    private func apply(_ snapshot: WorkspaceSettingsSnapshot) {
+        let displayIDs = Set(snapshot.displays.map(\.id))
+        if let selectedDisplayID, !displayIDs.contains(selectedDisplayID) {
+            self.selectedDisplayID = nil
+        }
+        selectedDisplayID = selectedDisplayID ?? snapshot.displays.first?.id
+
+        if let selectedWorkspaceID,
+           !snapshot.workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
+            self.selectedWorkspaceID = nil
+        }
+
+        displayArrangementView.apply(
+            snapshot.displays,
+            selectedDisplayID: isAddingWorkspace ? selectedDisplayID : nil,
+            selectedWorkspaceID: selectedWorkspaceID,
+            isEditable: snapshot.isEditable
+        )
+        workspacePicker.apply(unavailableWorkspaceIDs: Set(snapshot.workspaces.map(\.id)))
+        updateDisplayEditor(snapshot)
+        rebuildDisplayStatus(snapshot)
+        rebuildInspector(snapshot)
+        updateEditingState(snapshot)
+    }
+
+    private func updateDisplayEditor(_ snapshot: WorkspaceSettingsSnapshot) {
+        displayEditorStack.isHidden = !isAddingWorkspace
+        guard let display = snapshot.displays.first(where: { $0.id == selectedDisplayID }) else {
+            displayEditorTitle.stringValue = "Add Workspace"
+            return
+        }
+        displayEditorTitle.stringValue = "Add Workspace to \(display.monitorSlot) · \(display.name)"
+    }
+
     private func rebuildDisplayStatus(_ snapshot: WorkspaceSettingsSnapshot) {
         removeArrangedSubviews(from: displayStatusStack)
         for monitorSlot in snapshot.disconnectedMonitorSlots {
-            let names = snapshot.workspaces
+            let workspaceIDs = snapshot.workspaces
                 .filter { $0.monitorSlot == monitorSlot }
                 .map(\.id.rawValue)
                 .joined(separator: ", ")
             displayStatusStack.addArrangedSubview(WorkspaceSettingsControlFactory.statusRow(
                 symbol: "rectangle.slash",
-                text: "Monitor \(monitorSlot) · Disconnected    \(names)",
+                text: "Monitor \(monitorSlot) · Disconnected    \(workspaceIDs)",
                 color: .secondaryLabelColor
             ))
         }
-
         displayStatusStack.isHidden = displayStatusStack.arrangedSubviews.isEmpty
     }
 
-    private func rebuildKeyboard(_ snapshot: WorkspaceSettingsSnapshot) {
-        removeArrangedSubviews(from: keyboardContentStack)
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.padded(
-            WorkspaceSettingsControlFactory.switcherRow(
-                title: "Cycle Workspace",
-                shortcuts: snapshot.workspaceSwitcher,
-                targets: (.workspaceSwitcherNext, .workspaceSwitcherPrevious),
-                validationMessages: snapshot.shortcutValidationMessages,
-                action: (self, #selector(beginShortcutRecording(_:)))
-            ),
-            vertical: 10,
-            horizontal: 14
-        ))
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.separator())
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.padded(
-            WorkspaceSettingsControlFactory.switcherRow(
-                title: "Cycle Window",
-                shortcuts: snapshot.windowSwitcher,
-                targets: (.windowSwitcherNext, .windowSwitcherPrevious),
-                validationMessages: snapshot.shortcutValidationMessages,
-                action: (self, #selector(beginShortcutRecording(_:)))
-            ),
-            vertical: 10,
-            horizontal: 14
-        ))
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.separator())
-        keyboardContentStack.addArrangedSubview(SettingsControlFactory.padded(
-            workspaceGrid(snapshot),
-            vertical: 10,
-            horizontal: 14
-        ))
-        for view in keyboardContentStack.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: keyboardContentStack.widthAnchor).isActive = true
+    private func rebuildInspector(_ snapshot: WorkspaceSettingsSnapshot) {
+        removeArrangedSubviews(from: inspectorSection)
+        guard let selectedWorkspaceID,
+              let workspace = snapshot.workspaces.first(where: { $0.id == selectedWorkspaceID })
+        else {
+            inspectorSection.isHidden = true
+            return
         }
-    }
 
-    private func workspaceGrid(_ snapshot: WorkspaceSettingsSnapshot) -> NSView {
-        var rows: [[NSView]] = [[
-            WorkspaceSettingsControlFactory.headerLabel("Workspace"),
-            WorkspaceSettingsControlFactory.headerLabel("Display"),
-            WorkspaceSettingsControlFactory.headerLabel("Switch"),
-            WorkspaceSettingsControlFactory.headerLabel("Move Window"),
-            WorkspaceSettingsControlFactory.addButton(
-                availableWorkspaceIDs: snapshot.availableWorkspaceIDs,
-                target: self,
-                action: #selector(showAddWorkspacePicker(_:))
-            )
-        ]]
-        rows.append(contentsOf: snapshot.workspaces.map { workspaceRow($0, snapshot: snapshot) })
+        let title = WorkspaceSettingsControlFactory.headerLabel("Workspace \(selectedWorkspaceID.rawValue)")
+        let remove = WorkspaceSettingsControlFactory.removeButton(
+            workspaceID: selectedWorkspaceID,
+            isEnabled: snapshot.workspaces.count > 1,
+            target: self,
+            action: #selector(removeWorkspace(_:))
+        )
+        let titleRow = NSStackView(views: [title, SettingsControlFactory.flexibleSpacer(), remove])
+        titleRow.orientation = .horizontal
+        titleRow.alignment = .centerY
 
-        let grid = NSGridView(views: rows)
-        grid.rowSpacing = 8
-        grid.columnSpacing = 10
-        grid.column(at: 0).width = 90
-        grid.column(at: 1).width = 126
-        grid.column(at: 2).width = 94
-        grid.column(at: 3).width = 112
-        grid.column(at: 4).width = 28
-        for index in rows.indices {
-            grid.row(at: index).yPlacement = .center
-        }
-        return grid
-    }
+        let selector = monitorSelector(workspace: workspace, displays: snapshot.displays)
+        selector.translatesAutoresizingMaskIntoConstraints = false
+        selector.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        let switchRecorder = WorkspaceSettingsControlFactory.shortcutRecorder(
+            shortcutTarget: .switchWorkspace(workspace.id),
+            shortcut: workspace.switchShortcut,
+            validationMessage: snapshot.shortcutValidationMessage(for: .switchWorkspace(workspace.id)),
+            target: self,
+            action: #selector(beginShortcutRecording(_:))
+        )
+        let moveRecorder = WorkspaceSettingsControlFactory.shortcutRecorder(
+            shortcutTarget: .moveWindow(workspace.id),
+            shortcut: workspace.moveShortcut,
+            validationMessage: snapshot.shortcutValidationMessage(for: .moveWindow(workspace.id)),
+            target: self,
+            action: #selector(beginShortcutRecording(_:))
+        )
+        let fields = NSStackView(views: [
+            WorkspaceSettingsControlFactory.labeledControl(title: "Display", control: selector),
+            WorkspaceSettingsControlFactory.labeledControl(title: "Switch", control: switchRecorder),
+            WorkspaceSettingsControlFactory.labeledControl(title: "Move Window", control: moveRecorder)
+        ])
+        fields.orientation = .horizontal
+        fields.alignment = .bottom
+        fields.spacing = 18
 
-    private func workspaceRow(
-        _ workspace: WorkspaceSettingsItem,
-        snapshot: WorkspaceSettingsSnapshot
-    ) -> [NSView] {
-        [
-            WorkspaceSettingsControlFactory.identityLabel(workspace: workspace),
-            monitorSelector(workspace: workspace, displays: snapshot.displays),
-            WorkspaceSettingsControlFactory.shortcutRecorder(
-                shortcutTarget: .switchWorkspace(workspace.id),
-                shortcut: workspace.switchShortcut,
-                validationMessage: snapshot.shortcutValidationMessage(for: .switchWorkspace(workspace.id)),
-                target: self,
-                action: #selector(beginShortcutRecording(_:))
-            ),
-            WorkspaceSettingsControlFactory.shortcutRecorder(
-                shortcutTarget: .moveWindow(workspace.id),
-                shortcut: workspace.moveShortcut,
-                validationMessage: snapshot.shortcutValidationMessage(for: .moveWindow(workspace.id)),
-                target: self,
-                action: #selector(beginShortcutRecording(_:))
-            ),
-            WorkspaceSettingsControlFactory.removeButton(
-                workspaceID: workspace.id,
-                isEnabled: snapshot.workspaces.count > 1,
-                target: self,
-                action: #selector(removeWorkspace(_:))
-            )
-        ]
+        let content = NSStackView(views: [titleRow, fields])
+        configureVerticalStack(content, spacing: 10)
+        let group = SettingsControlFactory.groupBox(
+            content: SettingsControlFactory.padded(content, vertical: 10, horizontal: 14)
+        )
+        inspectorSection.addArrangedSubview(group)
+        group.widthAnchor.constraint(equalTo: inspectorSection.widthAnchor).isActive = true
+        inspectorSection.setAccessibilityIdentifier("kkaci.settings.workspace.inspector")
+        inspectorSection.isHidden = false
     }
 
     private func monitorSelector(
         workspace: WorkspaceSettingsItem,
         displays: [WorkspaceSettingsDisplay]
-    ) -> NSView {
+    ) -> WorkspaceMonitorPopUpButton {
         let selector = WorkspaceMonitorPopUpButton(
             workspaceID: workspace.id,
             currentMonitorSlot: workspace.monitorSlot,
@@ -255,7 +301,8 @@ private extension WorkspaceSettingsViewController {
             : "Configuration is invalid. Fix config.yaml in General before editing workspaces."
         configErrorNotice.isHidden = snapshot.isEditable
         if !snapshot.isEditable {
-            disableControls(in: keyboardContentStack)
+            disableControls(in: displayEditorStack)
+            disableControls(in: inspectorSection)
         }
     }
 
@@ -268,6 +315,64 @@ private extension WorkspaceSettingsViewController {
         }
     }
 
+    private func clearWorkspaceSelection() {
+        selectedWorkspaceID = nil
+        apply(service.snapshot())
+    }
+
+    private func openWorkspaceEditor(for displayID: DisplayID) {
+        selectedDisplayID = displayID
+        selectedWorkspaceID = nil
+        isAddingWorkspace = true
+        apply(service.snapshot())
+    }
+
+    private func selectWorkspace(
+        _ workspaceID: WorkspaceID,
+        keepWorkspaceEditorOpen: Bool = false
+    ) {
+        selectedWorkspaceID = workspaceID
+        if !keepWorkspaceEditorOpen {
+            isAddingWorkspace = false
+        }
+        apply(service.snapshot())
+    }
+
+    private func addWorkspace(_ workspaceID: WorkspaceID) {
+        guard let displayID = selectedDisplayID else {
+            return
+        }
+        selectedWorkspaceID = workspaceID
+        do {
+            try service.addWorkspaces([workspaceID], displayID: displayID)
+        } catch {
+            selectedWorkspaceID = nil
+            isAddingWorkspace = true
+            log.error("Workspace add failed id=\(workspaceID.rawValue): \(String(describing: error))")
+            refresh()
+        }
+    }
+
+    private func moveWorkspace(_ workspaceID: WorkspaceID, to displayID: DisplayID) {
+        let snapshot = service.snapshot()
+        guard snapshot.workspaces.first(where: { $0.id == workspaceID })?.monitorSlot
+            != snapshot.displays.first(where: { $0.id == displayID })?.monitorSlot
+        else {
+            return
+        }
+        selectedWorkspaceID = workspaceID
+        selectedDisplayID = displayID
+        do {
+            try service.updateMonitor(workspaceID, displayID: displayID)
+        } catch {
+            log.error(
+                "Workspace drag failed workspace=\(workspaceID.rawValue) "
+                    + "display=\(displayID): \(String(describing: error))"
+            )
+            refresh()
+        }
+    }
+
     @objc private func monitorSelectionChanged(_ sender: WorkspaceMonitorPopUpButton) {
         guard let displayID = sender.selectedItem?.representedObject as? DisplayID,
               displayID != sender.currentDisplayID
@@ -275,6 +380,7 @@ private extension WorkspaceSettingsViewController {
             return
         }
 
+        selectedDisplayID = displayID
         do {
             try service.updateMonitor(sender.workspaceID, displayID: displayID)
         } catch {
@@ -287,72 +393,57 @@ private extension WorkspaceSettingsViewController {
     }
 
     @objc private func beginShortcutRecording(_ sender: ShortcutRecorderButton) {
-        guard activeShortcutRecorder?.cancelRecording() != false else {
-            return
-        }
-        do {
-            try service.beginShortcutRecording()
-        } catch {
-            log.error("Shortcut recording failed to start: \(String(describing: error))")
-            NSSound.beep()
-            return
-        }
-
-        activeShortcutRecorder = sender
-        let shortcutTarget = sender.shortcutTarget
-        sender.startRecording(
-            onCommit: { [unowned self] shortcut in
-                do {
-                    return try service.updateShortcut(shortcut, for: shortcutTarget)
-                } catch {
-                    log.error("Shortcut update failed: \(String(describing: error))")
-                    throw error
-                }
-            },
-            onCancel: { [unowned self] in
-                do {
-                    try service.cancelShortcutRecording()
-                } catch {
-                    log.error("Shortcut recording cancel failed: \(String(describing: error))")
-                    throw error
-                }
-            },
-            onFinish: { [weak self, weak sender] didPersistChange in
-                guard self?.activeShortcutRecorder === sender else {
-                    return
-                }
-                self?.activeShortcutRecorder = nil
-                self?.service.shortcutRecordingDidFinish(didPersistChange: didPersistChange)
-            }
-        )
-    }
-
-    @objc private func showAddWorkspacePicker(_ sender: WorkspaceAddButton) {
-        let picker = WorkspaceIDPickerViewController(
-            unavailableWorkspaceIDs: Set(WorkspaceID.allCases).subtracting(sender.availableWorkspaceIDs),
-            displayOptions: service.snapshot().workspaceDisplayOptions,
-            addHandler: service.addWorkspaces
-        )
-        presentAsSheet(picker)
+        shortcutRecordingController.begin(sender)
     }
 
     @objc private func removeWorkspace(_ sender: WorkspaceRemoveButton) {
-        let alert = NSAlert()
-        alert.messageText = "Delete Workspace \(sender.workspaceID.rawValue)?"
-        alert.informativeText = "Its windows will move to the current workspace."
-        alert.alertStyle = .warning
-        alert.icon = NSImage(systemSymbolName: "trash", accessibilityDescription: "Delete Workspace")
-        alert.addButton(withTitle: "Delete")
-        alert.buttons[0].hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else {
+        requestWorkspaceRemoval(sender.workspaceID)
+    }
+
+    private func requestWorkspaceRemoval(_ workspaceID: WorkspaceID) {
+        let snapshot = service.snapshot()
+        guard snapshot.workspaces.count > 1,
+              let workspace = snapshot.workspaces.first(where: { $0.id == workspaceID })
+        else {
+            return
+        }
+        guard workspace.windowCount > 0 else {
+            performWorkspaceRemoval(workspaceID)
             return
         }
 
+        presentWorkspaceRemovalConfirmation(workspaceID)
+    }
+
+    private func presentWorkspaceRemovalConfirmation(_ workspaceID: WorkspaceID) {
+        guard let window = view.window else {
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Delete Workspace \(workspaceID.rawValue)?"
+        alert.informativeText = "Its windows will move to the current workspace."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete")
+        alert.buttons[0].hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else {
+                return
+            }
+            self?.performWorkspaceRemoval(workspaceID)
+        }
+    }
+
+    private func performWorkspaceRemoval(_ workspaceID: WorkspaceID) {
+        let previousSelection = selectedWorkspaceID
+        if selectedWorkspaceID == workspaceID {
+            selectedWorkspaceID = nil
+        }
         do {
-            try service.removeWorkspace(sender.workspaceID)
+            try service.removeWorkspace(workspaceID)
         } catch {
-            log.error("Workspace removal failed id=\(sender.workspaceID.rawValue): \(String(describing: error))")
+            selectedWorkspaceID = previousSelection
+            log.error("Workspace removal failed id=\(workspaceID.rawValue): \(String(describing: error))")
             refresh()
         }
     }
