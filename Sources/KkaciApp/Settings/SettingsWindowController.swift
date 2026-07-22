@@ -124,7 +124,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let sidebarItem = NSSplitViewItem(viewController: sidebar)
         sidebarItem.canCollapse = false
         sidebarItem.minimumThickness = 180
-        sidebarItem.maximumThickness = 220
+        sidebarItem.maximumThickness = 180
         splitViewController.addSplitViewItem(sidebarItem)
         splitViewController.addSplitViewItem(NSSplitViewItem(viewController: content))
         return splitViewController

@@ -7,7 +7,7 @@ final class SettingsSidebarViewController: NSViewController {
     private var buttons: [SettingsSection: SettingsSidebarButton] = [:]
 
     override func loadView() {
-        let sidebar = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 190, height: 540))
+        let sidebar = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 180, height: 540))
         sidebar.material = .sidebar
         sidebar.blendingMode = .behindWindow
         sidebar.state = .active

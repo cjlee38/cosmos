@@ -37,6 +37,7 @@ final class GeneralSettingsViewController: NSViewController {
     )
     private var permissionControls: [SettingsPermission: PermissionControls] = [:]
     private var permissionByButtonID: [ObjectIdentifier: SettingsPermission] = [:]
+    private var requestedPermissions: Set<SettingsPermission> = []
 
     init(
         service: GeneralSettingsService,
@@ -393,6 +394,9 @@ private extension GeneralSettingsViewController {
             controls.statusIcon.contentTintColor = status.isGranted ? .systemGreen : .systemRed
             controls.statusLabel.stringValue = status.isGranted ? "Allowed" : "Not allowed"
             controls.settingsButton.isHidden = status.isGranted
+            controls.settingsButton.title = requestedPermissions.contains(status.permission)
+                ? "Open System Settings"
+                : "Request Permission"
         }
     }
 
@@ -453,7 +457,13 @@ private extension GeneralSettingsViewController {
         guard let permission = permissionByButtonID[ObjectIdentifier(sender)] else {
             return
         }
-        service.openSystemSettings(for: permission)
+        if requestedPermissions.contains(permission) {
+            service.openSystemSettings(for: permission)
+        } else {
+            requestedPermissions.insert(permission)
+            service.requestPermission(permission)
+            refresh()
+        }
     }
 
     @objc private func openConfig() {
