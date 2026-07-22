@@ -34,6 +34,10 @@ final class WindowStateCache {
         windows.first { $0.id == id }
     }
 
+    func updateDisplayTopology(_ displayTopology: DisplayTopologySnapshot) {
+        self.displayTopology = displayTopology
+    }
+
     func updateFrame(_ frame: WindowFrame, for id: WindowID) {
         guard let index = windows.firstIndex(where: { $0.id == id }) else {
             return

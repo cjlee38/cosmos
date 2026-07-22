@@ -71,6 +71,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         workspaceViewController.refresh()
     }
 
+    func dismiss() -> Bool {
+        guard shortcutRecordingController.cancel() else {
+            return false
+        }
+        window?.orderOut(nil)
+        return true
+    }
+
     func windowDidBecomeKey(_: Notification) {
         refresh()
     }

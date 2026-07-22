@@ -102,6 +102,12 @@ enum SettingsControlFactory {
     }
 }
 
+final class SettingsDocumentView: NSView {
+    override var isFlipped: Bool {
+        true
+    }
+}
+
 private final class SettingsGroupView: NSView {
     init(content: NSView) {
         super.init(frame: .zero)

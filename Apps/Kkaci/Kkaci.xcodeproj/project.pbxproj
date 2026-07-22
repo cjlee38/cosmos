@@ -57,6 +57,9 @@
 		AFFC41ECBD3D513B734548D5 /* AppCompositionRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F7C62CD7201633BF12BFB1 /* AppCompositionRoot.swift */; };
 		A10000000000000000000002 /* KeyboardShortcutKeyCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* KeyboardShortcutKeyCodec.swift */; };
 		A20000000000000000000002 /* SettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* SettingsControls.swift */; };
+		A30000000000000000000002 /* OnboardingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000001 /* OnboardingCoordinator.swift */; };
+		A30000000000000000000004 /* OnboardingStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000003 /* OnboardingStateStore.swift */; };
+		A30000000000000000000006 /* OnboardingPermissionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000005 /* OnboardingPermissionViewController.swift */; };
 		B6B8DCB9229512FE3511DC5D /* WorkspaceSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69A22CC6D1A445A26A5BDBF /* WorkspaceSettingsTests.swift */; };
 		B6EC5A0D09D5A2F3AFE4FDDC /* WindowSwitcherViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D116B22259C91A8E99E96EF /* WindowSwitcherViews.swift */; };
 		BBFDF71D4E1F760F49FEDA7D /* KeyboardShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14F9C6E1BAFBCE1ADE3CEAB5 /* KeyboardShortcutManager.swift */; };
@@ -155,6 +158,9 @@
 		F45070B9F813E6A9A1BA0D0E /* KeyboardShortcutResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutResolver.swift; sourceTree = "<group>"; };
 		A10000000000000000000001 /* KeyboardShortcutKeyCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutKeyCodec.swift; sourceTree = "<group>"; };
 		A20000000000000000000001 /* SettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsControls.swift; sourceTree = "<group>"; };
+		A30000000000000000000001 /* OnboardingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCoordinator.swift; sourceTree = "<group>"; };
+		A30000000000000000000003 /* OnboardingStateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStateStore.swift; sourceTree = "<group>"; };
+		A30000000000000000000005 /* OnboardingPermissionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPermissionViewController.swift; sourceTree = "<group>"; };
 		F69A22CC6D1A445A26A5BDBF /* WorkspaceSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsTests.swift; sourceTree = "<group>"; };
 		F8C4BF202BF4D09ADA3BDB86 /* SwitcherPreviewService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPreviewService.swift; sourceTree = "<group>"; };
 		FAEF94D847B787BE09CB8DCC /* SwitcherCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherCoordinator.swift; sourceTree = "<group>"; };
@@ -193,6 +199,9 @@
 				0A65ED208864F99A20C9A0BF /* ConfigRuntime.swift */,
 				51EFD77086498FA29C9CD2B7 /* KkaciApplication.swift */,
 				85DEB94005203CA045AFDC68 /* Log.swift */,
+				A30000000000000000000001 /* OnboardingCoordinator.swift */,
+				A30000000000000000000005 /* OnboardingPermissionViewController.swift */,
+				A30000000000000000000003 /* OnboardingStateStore.swift */,
 				6A3825B797E23797D8988D63 /* StatusMenuController.swift */,
 				E3E7D9BDF57C766FD89FDCAA /* WindowEventMonitor.swift */,
 				31796FE52334A52C16A26B5F /* WindowRuntimeEventHandler.swift */,
@@ -449,6 +458,9 @@
 				0C1C6E3D55E91C177A67B9BF /* KkaciApplication.swift in Sources */,
 				3FBB8C9396F8E56C9F176DEC /* Log.swift in Sources */,
 				78E3D54448546695C1157733 /* ModifierFlagsMonitor.swift in Sources */,
+				A30000000000000000000002 /* OnboardingCoordinator.swift in Sources */,
+				A30000000000000000000006 /* OnboardingPermissionViewController.swift in Sources */,
+				A30000000000000000000004 /* OnboardingStateStore.swift in Sources */,
 				E270DA89AF461A93A7D221BB /* SettingsModels.swift in Sources */,
 				A20000000000000000000002 /* SettingsControls.swift in Sources */,
 				8B3E9A2F6D5C4B3A291807F6 /* SettingsCoordinator.swift in Sources */,

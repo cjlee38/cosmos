@@ -23,6 +23,7 @@ struct AppCompositionRoot {
         )
         let keyboardShortcutManager = KeyboardShortcutManager()
         let appSettingsStore = AppSettingsStore()
+        let onboardingStateStore = OnboardingStateStore()
 
         return AppRuntime(
             controller: controller,
@@ -37,6 +38,7 @@ struct AppCompositionRoot {
             permissionController: AccessibilityPermissionController(axClient: axClient),
             generalSettingsService: GeneralSettingsService(axClient: axClient),
             appSettingsStore: appSettingsStore,
+            onboardingStateStore: onboardingStateStore,
             keyboardShortcutManager: keyboardShortcutManager,
             previewService: previewService
         )

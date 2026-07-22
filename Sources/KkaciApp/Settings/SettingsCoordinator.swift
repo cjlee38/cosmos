@@ -15,7 +15,8 @@ final class SettingsCoordinator {
         workspaceConfigChanged: @escaping () -> Void,
         ownWindowVisibilityChanged: @escaping () -> Void,
         ownWindowChanged: @escaping (WindowID) -> Void,
-        reloadConfig: @escaping () -> Void
+        reloadConfig: @escaping () -> Void,
+        runSetup: @escaping () -> Void
     ) {
         self.ownWindowVisibilityChanged = ownWindowVisibilityChanged
 
@@ -34,7 +35,8 @@ final class SettingsCoordinator {
             configStatusProvider: { configRuntime.status },
             reloadConfigHandler: reloadConfig,
             appSettingsStore: appSettingsStore,
-            appSettingsChanged: appearanceChanged
+            appSettingsChanged: appearanceChanged,
+            runSetupHandler: runSetup
         )
         let switcherViewController = SwitcherSettingsViewController(
             store: appSettingsStore,
@@ -67,6 +69,14 @@ final class SettingsCoordinator {
 
     func refresh() {
         windowController.refresh()
+    }
+
+    func dismiss() -> Bool {
+        guard windowController.dismiss() else {
+            return false
+        }
+        didCloseWindow()
+        return true
     }
 
     private func didCloseWindow() {

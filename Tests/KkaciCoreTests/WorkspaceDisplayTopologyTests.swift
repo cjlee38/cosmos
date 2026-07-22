@@ -3,6 +3,23 @@ import CoreGraphics
 import XCTest
 
 final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
+    func testRefreshDisplayTopologyDoesNotEnumerateWindows() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Untouched", frame: .frame(x: 100, y: 100))
+        ])
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider()
+        )
+
+        try controller.refreshDisplayTopology()
+
+        XCTAssertEqual(controller.displayTopology.monitorSlots.map(\.display.id), [1, 2])
+        XCTAssertEqual(windowSystem.refreshCount, 0)
+        XCTAssertTrue(controller.currentWindows().isEmpty)
+        XCTAssertNil(controller.membership(for: 100))
+    }
+
     func testDisconnectedWorkspaceFallsBackToMainAndReturnsHomeWhenDisplayReconnects() throws {
         let displayProvider = twoDisplayProvider()
         let store = InMemoryWorkspaceConfigStore()

@@ -194,6 +194,10 @@ public extension WorkspaceController {
         windowCache.displayTopology
     }
 
+    func refreshDisplayTopology() throws {
+        try displayCoordinator.refreshDisplayTopology()
+    }
+
     @discardableResult
     func bootstrapWindowState() throws -> HiddenWindowRecordStartupApplyResult {
         let hiddenRecords = try applyHiddenWindowRecordsAtStartup()

@@ -9,10 +9,13 @@ final class AppRuntime {
     private let permissionController: AccessibilityPermissionController
     private let generalSettingsService: GeneralSettingsService
     private let appSettingsStore: AppSettingsStore
+    private let onboardingStateStore: OnboardingStateStore
     private let keyboardShortcutManager: KeyboardShortcutManager
     private let previewService: SwitcherPreviewService
     private var windowEventMonitor: WindowEventMonitor?
     private var settingsCoordinator: SettingsCoordinator?
+    private var onboardingCoordinator: OnboardingCoordinator?
+    private var didBootstrapWindowState = false
 
     private lazy var actionController = WorkspaceActionController(
         controller: controller,
@@ -52,6 +55,7 @@ final class AppRuntime {
         permissionController: AccessibilityPermissionController,
         generalSettingsService: GeneralSettingsService,
         appSettingsStore: AppSettingsStore,
+        onboardingStateStore: OnboardingStateStore,
         keyboardShortcutManager: KeyboardShortcutManager,
         previewService: SwitcherPreviewService
     ) {
@@ -60,11 +64,40 @@ final class AppRuntime {
         self.permissionController = permissionController
         self.generalSettingsService = generalSettingsService
         self.appSettingsStore = appSettingsStore
+        self.onboardingStateStore = onboardingStateStore
         self.keyboardShortcutManager = keyboardShortcutManager
         self.previewService = previewService
     }
 
     func start() {
+        do {
+            try controller.refreshDisplayTopology()
+        } catch {
+            log.error("Initial display discovery failed: \(String(describing: error))")
+        }
+        _ = statusMenuController
+        guard !onboardingStateStore.requiresOnboarding else {
+            showOnboardingWindow()
+            return
+        }
+        startManagedRuntime()
+    }
+
+    func shutdown() {
+        guard didBootstrapWindowState else {
+            return
+        }
+        do {
+            try controller.restoreHiddenWindowsForShutdown()
+        } catch {
+            log.error("Hidden-window shutdown restore failed: \(String(describing: error))")
+        }
+    }
+
+    private func startManagedRuntime() {
+        guard !didBootstrapWindowState else {
+            return
+        }
         startKeyboardShortcuts()
 
         let hasPermission = permissionController.checkAtLaunch()
@@ -75,17 +108,10 @@ final class AppRuntime {
         }
 
         let bootstrapSucceeded = bootstrapWindowStateAfterPermission()
+        didBootstrapWindowState = bootstrapSucceeded
         if let startupConfigLoadError = controller.startupConfigLoadError, bootstrapSucceeded {
             let errorMessage = String(describing: startupConfigLoadError)
             log.error("Config load failed; using defaults until reload: \(errorMessage)")
-        }
-    }
-
-    func shutdown() {
-        do {
-            try controller.restoreHiddenWindowsForShutdown()
-        } catch {
-            log.error("Hidden-window shutdown restore failed: \(String(describing: error))")
         }
     }
 
@@ -123,10 +149,45 @@ final class AppRuntime {
 
 private extension AppRuntime {
     func showSettingsWindow() {
+        guard !onboardingStateStore.requiresOnboarding else {
+            showOnboardingWindow()
+            return
+        }
         if settingsCoordinator == nil {
             settingsCoordinator = makeSettingsCoordinator()
         }
         settingsCoordinator?.show()
+    }
+
+    func showOnboardingWindow() {
+        if onboardingCoordinator == nil {
+            onboardingCoordinator = makeOnboardingCoordinator()
+        }
+        onboardingCoordinator?.show()
+    }
+
+    func makeOnboardingCoordinator() -> OnboardingCoordinator {
+        let workspaceSettingsService = WorkspaceSettingsService(
+            controller: controller,
+            configRuntime: configRuntime,
+            actions: actionController,
+            refreshAfterChange: { [unowned self] in
+                refreshWorkspacePresentation()
+                onboardingCoordinator?.refresh()
+            }
+        )
+        return OnboardingCoordinator(
+            stateStore: onboardingStateStore,
+            generalSettingsService: generalSettingsService,
+            workspaceSettingsService: workspaceSettingsService,
+            shortcutRecordingController: ShortcutRecordingController(
+                service: workspaceSettingsService
+            ),
+            onComplete: { [unowned self] in
+                refreshStatusSurfaces()
+                startManagedRuntime()
+            }
+        )
     }
 
     func makeSettingsCoordinator() -> SettingsCoordinator {
@@ -140,8 +201,16 @@ private extension AppRuntime {
             workspaceConfigChanged: { [unowned self] in refreshWorkspacePresentation() },
             ownWindowVisibilityChanged: { [unowned self] in handleSettingsVisibilityChanged() },
             ownWindowChanged: { [unowned self] windowID in handleSettingsWindowChanged(windowID) },
-            reloadConfig: { [unowned self] in reloadConfig() }
+            reloadConfig: { [unowned self] in reloadConfig() },
+            runSetup: { [unowned self] in runSetupAgain() }
         )
+    }
+
+    func runSetupAgain() {
+        guard settingsCoordinator?.dismiss() == true else {
+            return
+        }
+        showOnboardingWindow()
     }
 
     func refreshWorkspacePresentation() {

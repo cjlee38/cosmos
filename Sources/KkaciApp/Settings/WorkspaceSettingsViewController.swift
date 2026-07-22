@@ -157,7 +157,7 @@ private extension WorkspaceSettingsViewController {
         scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
         scrollView.automaticallyAdjustsContentInsets = false
-        let documentView = WorkspaceSettingsDocumentView()
+        let documentView = SettingsDocumentView()
         documentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = documentView
         return (scrollView, documentView)
@@ -506,11 +506,5 @@ private extension WorkspaceSettingsViewController {
             return
         }
         NSWorkspace.shared.open(url)
-    }
-}
-
-private final class WorkspaceSettingsDocumentView: NSView {
-    override var isFlipped: Bool {
-        true
     }
 }

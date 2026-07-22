@@ -31,15 +31,12 @@ enum SettingsSection: CaseIterable, Hashable {
 
 enum SettingsPermission: CaseIterable, Hashable {
     case accessibility
-    case inputMonitoring
     case screenRecording
 
     var title: String {
         switch self {
         case .accessibility:
             "Accessibility"
-        case .inputMonitoring:
-            "Input Monitoring"
         case .screenRecording:
             "Screen Recording"
         }

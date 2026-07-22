@@ -15,6 +15,10 @@ final class WorkspaceDisplayCoordinator {
         self.monitorSlotResolver = monitorSlotResolver
     }
 
+    func refreshDisplayTopology() throws {
+        try windowCache.updateDisplayTopology(monitorSlotResolver.topology())
+    }
+
     func synchronizeDisplayConfiguration(
         state: inout WorkspaceState
     ) throws -> DisplayConfigurationSyncResult {

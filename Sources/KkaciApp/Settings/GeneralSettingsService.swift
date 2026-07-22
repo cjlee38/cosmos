@@ -7,6 +7,7 @@ final class GeneralSettingsService {
     private let launchAtLoginStatusProvider: () -> LaunchAtLoginStatus
     private let setLaunchAtLoginHandler: (Bool) throws -> Void
     private let permissionStatusProvider: (SettingsPermission) -> Bool
+    private let requestPermissionHandler: (SettingsPermission) -> Void
     private let openPermissionSettingsHandler: (SettingsPermission) -> Void
     private let openLoginItemsSettingsHandler: () -> Void
 
@@ -21,6 +22,9 @@ final class GeneralSettingsService {
             },
             permissionStatusProvider: { permission in
                 Self.isPermissionGranted(permission, axClient: axClient)
+            },
+            requestPermissionHandler: { permission in
+                Self.requestPermission(permission, axClient: axClient)
             },
             openPermissionSettingsHandler: { permission in
                 guard let url = Self.systemSettingsURL(for: permission) else {
@@ -38,12 +42,14 @@ final class GeneralSettingsService {
         launchAtLoginStatusProvider: @escaping () -> LaunchAtLoginStatus,
         setLaunchAtLoginHandler: @escaping (Bool) throws -> Void,
         permissionStatusProvider: @escaping (SettingsPermission) -> Bool,
+        requestPermissionHandler: @escaping (SettingsPermission) -> Void = { _ in },
         openPermissionSettingsHandler: @escaping (SettingsPermission) -> Void,
         openLoginItemsSettingsHandler: @escaping () -> Void
     ) {
         self.launchAtLoginStatusProvider = launchAtLoginStatusProvider
         self.setLaunchAtLoginHandler = setLaunchAtLoginHandler
         self.permissionStatusProvider = permissionStatusProvider
+        self.requestPermissionHandler = requestPermissionHandler
         self.openPermissionSettingsHandler = openPermissionSettingsHandler
         self.openLoginItemsSettingsHandler = openLoginItemsSettingsHandler
     }
@@ -65,6 +71,10 @@ final class GeneralSettingsService {
         openPermissionSettingsHandler(permission)
     }
 
+    func requestPermission(_ permission: SettingsPermission) {
+        requestPermissionHandler(permission)
+    }
+
     func openLoginItemsSettings() {
         openLoginItemsSettingsHandler()
     }
@@ -73,8 +83,6 @@ final class GeneralSettingsService {
         let anchor = switch permission {
         case .accessibility:
             "Privacy_Accessibility"
-        case .inputMonitoring:
-            "Privacy_ListenEvent"
         case .screenRecording:
             "Privacy_ScreenCapture"
         }
@@ -117,10 +125,20 @@ final class GeneralSettingsService {
         switch permission {
         case .accessibility:
             axClient.ensureAccessibilityPermission(prompt: false)
-        case .inputMonitoring:
-            CGPreflightListenEventAccess()
         case .screenRecording:
             CGPreflightScreenCaptureAccess()
+        }
+    }
+
+    private static func requestPermission(
+        _ permission: SettingsPermission,
+        axClient: AXClient
+    ) {
+        switch permission {
+        case .accessibility:
+            _ = axClient.ensureAccessibilityPermission(prompt: true)
+        case .screenRecording:
+            _ = CGRequestScreenCaptureAccess()
         }
     }
 }

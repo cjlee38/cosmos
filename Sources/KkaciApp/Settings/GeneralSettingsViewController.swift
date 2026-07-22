@@ -13,6 +13,7 @@ final class GeneralSettingsViewController: NSViewController {
     private let reloadConfigHandler: () -> Void
     private let appSettingsStore: AppSettingsStore
     private let appSettingsChanged: () -> Void
+    private let runSetupHandler: () -> Void
 
     private let launchAtLoginSwitch = NSSwitch()
     private let launchAtLoginStatusLabel = NSTextField(labelWithString: "")
@@ -43,7 +44,8 @@ final class GeneralSettingsViewController: NSViewController {
         configStatusProvider: @escaping () -> ConfigRuntimeStatus,
         reloadConfigHandler: @escaping () -> Void,
         appSettingsStore: AppSettingsStore,
-        appSettingsChanged: @escaping () -> Void
+        appSettingsChanged: @escaping () -> Void,
+        runSetupHandler: @escaping () -> Void
     ) {
         self.service = service
         self.configURLProvider = configURLProvider
@@ -51,6 +53,7 @@ final class GeneralSettingsViewController: NSViewController {
         self.reloadConfigHandler = reloadConfigHandler
         self.appSettingsStore = appSettingsStore
         self.appSettingsChanged = appSettingsChanged
+        self.runSetupHandler = runSetupHandler
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -61,6 +64,9 @@ final class GeneralSettingsViewController: NSViewController {
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
+
+        let (scrollView, documentView) = makeScrollView()
+        view.addSubview(scrollView)
 
         let root = NSStackView()
         root.translatesAutoresizingMaskIntoConstraints = false
@@ -73,21 +79,30 @@ final class GeneralSettingsViewController: NSViewController {
         let menuBarSection = makeMenuBarSection()
         let configurationSection = makeConfigurationSection()
         let permissionsSection = makePermissionsSection()
+        let setupSection = makeSetupSection()
         root.addArrangedSubview(header)
         root.addArrangedSubview(launchSection)
         root.addArrangedSubview(menuBarSection)
         root.addArrangedSubview(configurationSection)
         root.addArrangedSubview(permissionsSection)
-        view.addSubview(root)
+        root.addArrangedSubview(setupSection)
+        documentView.addSubview(root)
 
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 24),
-            root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 26),
-            root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -26),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            root.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 24),
+            root.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 26),
+            root.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -26),
+            root.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -24),
             launchSection.widthAnchor.constraint(equalTo: root.widthAnchor),
             menuBarSection.widthAnchor.constraint(equalTo: root.widthAnchor),
             permissionsSection.widthAnchor.constraint(equalTo: root.widthAnchor),
-            configurationSection.widthAnchor.constraint(equalTo: root.widthAnchor)
+            configurationSection.widthAnchor.constraint(equalTo: root.widthAnchor),
+            setupSection.widthAnchor.constraint(equalTo: root.widthAnchor)
         ])
 
         refresh()
@@ -107,6 +122,20 @@ final class GeneralSettingsViewController: NSViewController {
 }
 
 private extension GeneralSettingsViewController {
+    private func makeScrollView() -> (scrollView: NSScrollView, documentView: NSView) {
+        let scrollView = NSScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.automaticallyAdjustsContentInsets = false
+        let documentView = SettingsDocumentView()
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = documentView
+        return (scrollView, documentView)
+    }
+
     private func makeMenuBarSection() -> NSView {
         menuBarStyleControl.segmentStyle = .rounded
         menuBarStyleControl.target = self
@@ -156,6 +185,30 @@ private extension GeneralSettingsViewController {
         row.spacing = 10
         return SettingsControlFactory.groupBox(
             content: SettingsControlFactory.padded(row)
+        )
+    }
+
+    private func makeSetupSection() -> NSView {
+        let title = NSTextField(labelWithString: "Setup Assistant")
+        title.font = .systemFont(ofSize: 14, weight: .medium)
+        let detail = NSTextField(labelWithString: "Review permissions, displays, and workspaces.")
+        detail.textColor = .secondaryLabelColor
+        let labels = NSStackView(views: [title, detail])
+        labels.orientation = .vertical
+        labels.alignment = .leading
+        labels.spacing = 3
+
+        let button = NSButton(title: "Run Setup Again...", target: self, action: #selector(runSetupAgain))
+        button.bezelStyle = .rounded
+        button.controlSize = .regular
+        button.setAccessibilityIdentifier("kkaci.settings.general.run-setup")
+        let row = NSStackView(views: [labels, SettingsControlFactory.flexibleSpacer(), button])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+        return SettingsControlFactory.titledSection(
+            title: "Setup",
+            content: SettingsControlFactory.groupBox(content: SettingsControlFactory.padded(row))
         )
     }
 
@@ -420,5 +473,9 @@ private extension GeneralSettingsViewController {
     @objc private func reloadConfig() {
         reloadConfigHandler()
         refresh()
+    }
+
+    @objc private func runSetupAgain() {
+        runSetupHandler()
     }
 }
