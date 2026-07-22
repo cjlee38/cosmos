@@ -188,6 +188,41 @@ final class KeyboardShortcutManagerTests: XCTestCase {
         XCTAssertNil(repeatController.action)
     }
 
+    func testWindowSwitcherCommitsWhenOptionIsReleasedWithSharedSwitcherModifier() throws {
+        let harness = KeyboardManagerHarness(repeatController: ShortcutRepeatSpy())
+        var workspaceReleaseCount = 0
+        var windowReleaseCount = 0
+        try harness.manager.start()
+        try harness.manager.replaceShortcuts([
+            .hold(
+                key: "option+shift+tab",
+                name: "workspace-switcher",
+                releaseGroup: "workspace-switcher",
+                actions: .init(
+                    onPress: {},
+                    onRelease: { workspaceReleaseCount += 1 },
+                    onCancel: {}
+                )
+            ),
+            .hold(
+                key: "option+tab",
+                name: "window-switcher",
+                releaseGroup: "window-switcher",
+                actions: .init(
+                    onPress: {},
+                    onRelease: { windowReleaseCount += 1 },
+                    onCancel: {}
+                )
+            )
+        ])
+
+        harness.keyboardHandler?(.hotKeyPressed(2))
+        harness.modifierHandler?(0)
+
+        XCTAssertEqual(workspaceReleaseCount, 0)
+        XCTAssertEqual(windowReleaseCount, 1)
+    }
+
     func testReplacingShortcutsStopsRepeatAndCancelsHoldGroup() throws {
         let repeatController = ShortcutRepeatSpy()
         let harness = KeyboardManagerHarness(repeatController: repeatController)

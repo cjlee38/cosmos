@@ -295,8 +295,8 @@ final class WindowSwitcherTileView: NSView {
     private func layoutPreviewContent() {
         previewImageView.frame = previewContainer.bounds
         fallbackIconView.frame = previewContainer.bounds.insetBy(
-            dx: previewContainer.bounds.width * 0.28,
-            dy: previewContainer.bounds.height * 0.28
+            dx: previewContainer.bounds.width * 0.17,
+            dy: previewContainer.bounds.height * 0.17
         )
         fallbackInitialLabel.frame = previewContainer.bounds
     }
