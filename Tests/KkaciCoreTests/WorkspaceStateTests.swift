@@ -25,6 +25,25 @@ final class WorkspaceStateTests: XCTestCase {
         XCTAssertNil(state.findWorkspace("4"))
     }
 
+    func testWorkspaceRecencyFollowsActivationOrder() {
+        var state = WorkspaceState()
+
+        state.activate("2")
+        state.activate("3")
+
+        XCTAssertEqual(state.workspaces, ["1", "2", "3"])
+        XCTAssertEqual(state.workspacesByRecency, ["3", "2", "1"])
+    }
+
+    func testApplyConfigPreservesRecencyAndAppendsNewWorkspaces() {
+        var state = WorkspaceState(config: KkaciConfig(workspaces: workspaceConfigs(["1", "2", "3"])))
+        state.activate("2")
+
+        state.applyConfig(KkaciConfig(workspaces: workspaceConfigs(["1", "2", "A"])))
+
+        XCTAssertEqual(state.workspacesByRecency, ["2", "1", "A"])
+    }
+
     func testApplyConfigReassignsRemovedWorkspaceWindowsToCurrentWorkspace() {
         var state = WorkspaceState(config: KkaciConfig(workspaces: workspaceConfigs(["1", "2", "A"])))
         state.assign(100, to: "A")

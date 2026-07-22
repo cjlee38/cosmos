@@ -25,6 +25,10 @@ struct WorkspaceState {
         catalog.workspaces
     }
 
+    var workspacesByRecency: [WorkspaceID] {
+        catalog.workspacesByRecency
+    }
+
     func membership(for id: WindowID) -> WorkspaceID? {
         memberships.workspace(for: id)
     }

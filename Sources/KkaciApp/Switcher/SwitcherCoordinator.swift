@@ -127,7 +127,7 @@ private extension SwitcherCoordinator {
         let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: activeWindowID)
 
         guard let selection = SwitcherSession(
-            items: controller.workspaces,
+            items: controller.workspacesByRecency,
             currentItem: controller.currentWorkspace,
             direction: direction
         ) else {
@@ -298,7 +298,7 @@ private extension SwitcherCoordinator {
         case .workspaces:
             let activeWindowID = controller.windows(in: controller.currentWorkspace).first?.id
             let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: activeWindowID)
-            guard session?.reconcileWorkspaces(controller.workspaces, anchorFrame: anchorFrame) == true else {
+            guard session?.reconcileWorkspaces(controller.workspacesByRecency, anchorFrame: anchorFrame) == true else {
                 endSession()
                 return
             }

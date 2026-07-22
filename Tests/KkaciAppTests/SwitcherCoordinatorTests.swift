@@ -117,6 +117,19 @@ final class SwitcherCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.currentWorkspace, "3")
     }
 
+    func testWorkspaceSwitcherSelectsThePreviouslyActiveWorkspaceFirst() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        _ = try controller.switchWorkspace(to: "2")
+        _ = try controller.switchWorkspace(to: "1")
+        let coordinator = makeCoordinator(controller: controller)
+
+        coordinator.stepWorkspace(direction: .forward)
+        coordinator.commitWorkspaceSelection()
+
+        XCTAssertEqual(controller.currentWorkspace, "2")
+        XCTAssertEqual(controller.workspacesByRecency, ["2", "1", "3"])
+    }
+
     func testPreviewCompletionUpdatesOnlyTheAffectedTileAndPreservesSelection() throws {
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 10, title: "One"),

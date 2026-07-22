@@ -4,10 +4,12 @@ struct WorkspaceCatalog {
     private(set) var config: KkaciConfig
     private(set) var currentWorkspace: WorkspaceID
     private var visibleWorkspaceByMonitorSlot: [MonitorSlot: WorkspaceID]
+    private(set) var workspacesByRecency: [WorkspaceID]
 
     init(config: KkaciConfig) {
         self.config = config
         currentWorkspace = config.workspaces[0].id
+        workspacesByRecency = config.workspaces.map(\.id)
         visibleWorkspaceByMonitorSlot = [
             config.workspaces[0].display: config.workspaces[0].id
         ]
@@ -27,6 +29,13 @@ struct WorkspaceCatalog {
         if !contains(currentWorkspace) {
             currentWorkspace = config.workspaces[0].id
         }
+        let validWorkspaces = Set(workspaces)
+        workspacesByRecency.removeAll { !validWorkspaces.contains($0) }
+        var recentWorkspaces = Set(workspacesByRecency)
+        for workspace in workspaces where recentWorkspaces.insert(workspace).inserted {
+            workspacesByRecency.append(workspace)
+        }
+        recordActivation(of: currentWorkspace)
         pruneVisibleWorkspaces()
         visibleWorkspaceByMonitorSlot[monitorSlot(for: currentWorkspace)] = currentWorkspace
         seedVisibleWorkspaces()
@@ -34,6 +43,7 @@ struct WorkspaceCatalog {
 
     mutating func activate(_ workspace: WorkspaceID) {
         currentWorkspace = workspace
+        recordActivation(of: workspace)
         visibleWorkspaceByMonitorSlot[monitorSlot(for: workspace)] = workspace
     }
 
@@ -98,5 +108,10 @@ struct WorkspaceCatalog {
                 result[entry.key] = entry.value
             }
         }
+    }
+
+    private mutating func recordActivation(of workspace: WorkspaceID) {
+        workspacesByRecency.removeAll { $0 == workspace }
+        workspacesByRecency.insert(workspace, at: 0)
     }
 }

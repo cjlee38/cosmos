@@ -195,6 +195,7 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
 
         XCTAssertThrowsError(try controller.switchWorkspace(to: "2"))
         XCTAssertEqual(controller.currentWorkspace, "1")
+        XCTAssertEqual(controller.workspacesByRecency.first, "1")
         XCTAssertFalse(controller.isHiddenByWorkspace(100))
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
     }

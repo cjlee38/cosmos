@@ -23,6 +23,10 @@ public final class WorkspaceController {
         state.workspaces.map(\.rawValue)
     }
 
+    public var workspacesByRecency: [String] {
+        state.workspacesByRecency.map(\.rawValue)
+    }
+
     public var visibleWorkspaces: [String] {
         let visibleWorkspaces = state.visibleWorkspaces(
             availableMonitorSlots: windowCache.displayTopology.availableMonitorSlots
