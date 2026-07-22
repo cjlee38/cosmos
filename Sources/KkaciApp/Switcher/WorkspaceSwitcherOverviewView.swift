@@ -129,6 +129,7 @@ private final class WorkspacePreviewCardView: NSView {
     private let subtitleLabel = NSTextField(labelWithString: "")
     private let previewSurface = NSView()
     private let previewImageView = NSImageView()
+    private let applicationIconStrip = WorkspaceApplicationIconStripView()
     private let fallbackLabel = NSTextField(labelWithString: "")
     private let shortcutLabel = NSTextField(labelWithString: "")
 
@@ -200,6 +201,7 @@ private final class WorkspacePreviewCardView: NSView {
         onHover = nil
         onClick = nil
         previewImageView.image = nil
+        applicationIconStrip.update(windows: [], isVisible: false)
     }
 
     func update(group: WorkspaceSwitcherGroup) {
@@ -211,9 +213,16 @@ private final class WorkspacePreviewCardView: NSView {
         shortcutLabel.stringValue = group.shortcutKey?.uppercased() ?? ""
         shortcutLabel.isHidden = group.shortcutKey == nil
         previewImageView.image = group.preview
-        previewImageView.isHidden = group.preview == nil
+        previewImageView.isHidden = group.previewStyle != .spatial || group.preview == nil
+        applicationIconStrip.update(
+            windows: group.windows,
+            isVisible: group.previewStyle == .applicationIcons
+        )
         fallbackLabel.stringValue = group.windows.isEmpty ? "No windows" : "Preview pending"
-        fallbackLabel.isHidden = !group.windows.isEmpty && group.preview != nil
+        fallbackLabel.isHidden = group.windows.isEmpty
+            ? false
+            : (group.previewStyle == .applicationIcons && applicationIconStrip.hasVisibleIcon)
+            || (group.previewStyle == .spatial && group.preview != nil)
     }
 
     func updateSelection(_ isSelected: Bool) {
@@ -271,6 +280,7 @@ private final class WorkspacePreviewCardView: NSView {
         shortcutLabel.textColor = NSColor.white.withAlphaComponent(0.5)
         shortcutLabel.maximumNumberOfLines = 1
         previewSurface.addSubview(previewImageView)
+        previewSurface.addSubview(applicationIconStrip)
         previewSurface.addSubview(fallbackLabel)
         previewSurface.addSubview(shortcutLabel)
 
@@ -309,6 +319,7 @@ private final class WorkspacePreviewCardView: NSView {
             height: max(1, subtitleBottom - padding * 1.35)
         )
         previewImageView.frame = previewSurface.bounds
+        applicationIconStrip.frame = previewSurface.bounds
         shortcutLabel.font = .systemFont(ofSize: previewSurface.bounds.height * 0.5, weight: .semibold)
         shortcutLabel.sizeToFit()
         shortcutLabel.frame = NSRect(

@@ -1,5 +1,4 @@
 import AppKit
-import CoreText
 import KkaciCore
 
 struct WorkspaceThumbnailRenderGroup {
@@ -9,26 +8,20 @@ struct WorkspaceThumbnailRenderGroup {
 }
 
 struct WorkspaceThumbnailRenderWindow {
-    let appInitial: String
     let frame: CGRect
     let preview: CGImage?
-    let icon: CGImage?
 }
 
 enum WorkspaceThumbnailRenderer {
-    static func makeRenderGroups(
-        _ groups: [WorkspaceSwitcherGroup]
-    ) -> [WorkspaceThumbnailRenderGroup] {
+    static func makeRenderGroups(_ groups: [WorkspaceSwitcherGroup]) -> [WorkspaceThumbnailRenderGroup] {
         groups.map { group in
             let windows = group.windows.compactMap { item -> WorkspaceThumbnailRenderWindow? in
                 guard let frame = item.frame?.rect else {
                     return nil
                 }
                 return WorkspaceThumbnailRenderWindow(
-                    appInitial: item.appName.first.map(String.init) ?? "?",
                     frame: frame,
-                    preview: item.preview?.cgImageValue,
-                    icon: item.icon?.cgImageValue
+                    preview: item.preview?.cgImageValue
                 )
             }
             return WorkspaceThumbnailRenderGroup(
@@ -124,7 +117,6 @@ enum WorkspaceThumbnailRenderer {
 
         drawWindowContent(
             window,
-            visiblePreviewRect: visiblePreviewRect,
             fullPreviewRect: previewFrame(for: window.frame, desktopBounds: desktopBounds, imageSize: imageSize),
             context: context
         )
@@ -138,28 +130,12 @@ enum WorkspaceThumbnailRenderer {
 
     private static func drawWindowContent(
         _ window: WorkspaceThumbnailRenderWindow,
-        visiblePreviewRect: CGRect,
         fullPreviewRect: CGRect,
         context: CGContext
     ) {
         if let preview = window.preview {
             context.interpolationQuality = .high
             context.draw(preview, in: fullPreviewRect)
-        } else if let icon = window.icon {
-            let iconRect = visiblePreviewRect.insetBy(
-                dx: visiblePreviewRect.width * 0.30,
-                dy: visiblePreviewRect.height * 0.30
-            )
-            context.interpolationQuality = .high
-            context.draw(icon, in: iconRect)
-        } else {
-            drawText(
-                window.appInitial,
-                size: max(18, min(visiblePreviewRect.width, visiblePreviewRect.height) * 0.34),
-                color: CGColor(gray: 1, alpha: 1),
-                in: visiblePreviewRect,
-                context: context
-            )
         }
     }
 
@@ -167,29 +143,6 @@ enum WorkspaceThumbnailRenderer {
         let aspect = max(0.75, min(2.4, desktopBounds.width / max(desktopBounds.height, 1)))
         let width: CGFloat = 960
         return CGSize(width: width, height: round(width / aspect))
-    }
-
-    private static func drawText(
-        _ text: String,
-        size: CGFloat,
-        color: CGColor,
-        in rect: CGRect,
-        context: CGContext
-    ) {
-        let font = CTFontCreateWithName("SF Pro Display" as CFString, size, nil)
-        let attributes: [CFString: Any] = [
-            kCTFontAttributeName: font,
-            kCTForegroundColorAttributeName: color
-        ]
-        let line = CTLineCreateWithAttributedString(
-            NSAttributedString(string: text, attributes: attributes as [NSAttributedString.Key: Any])
-        )
-        let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
-        context.textPosition = CGPoint(
-            x: rect.midX - bounds.width / 2 - bounds.minX,
-            y: rect.midY - bounds.height / 2 - bounds.minY
-        )
-        CTLineDraw(line, context)
     }
 }
 
@@ -203,11 +156,5 @@ private extension NSImage {
 private extension WindowFrame {
     var rect: CGRect {
         CGRect(origin: origin, size: size)
-    }
-}
-
-private extension CGRect {
-    var center: CGPoint {
-        CGPoint(x: midX, y: midY)
     }
 }

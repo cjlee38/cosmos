@@ -52,6 +52,17 @@ final class SwitcherPreviewService {
     }
 
     func workspaceGroups(ids: [String]) -> [WorkspaceSwitcherGroup] {
+        let previewStyle = currentWorkspacePreviewStyle()
+        if previewStyle == .applicationIcons {
+            workspaceThumbnailCache.invalidate()
+        }
+        return makeWorkspaceGroups(ids: ids, previewStyle: previewStyle)
+    }
+
+    private func makeWorkspaceGroups(
+        ids: [String],
+        previewStyle: WorkspacePreviewStyle
+    ) -> [WorkspaceSwitcherGroup] {
         let liveWorkspaceIDs = Set(controller.workspaces)
         let shortcuts = WorkspaceShortcutBindings(controller.currentConfig.configuredShortcuts)
         return ids.compactMap { workspaceID in
@@ -64,7 +75,10 @@ final class SwitcherPreviewService {
                 id: workspaceID,
                 displayFrame: displayFrame,
                 windows: controller.windows(in: workspaceID).map(makeItem),
-                preview: workspaceThumbnailCache.thumbnail(for: workspaceID),
+                preview: previewStyle == .spatial
+                    ? workspaceThumbnailCache.thumbnail(for: workspaceID)
+                    : nil,
+                previewStyle: previewStyle,
                 shortcutKey: shortcuts.key(for: workspaceID)
             )
         }
@@ -96,8 +110,17 @@ final class SwitcherPreviewService {
         let liveWorkspaceIDs = Set(controller.workspaces)
         let ids = ids.intersection(liveWorkspaceIDs)
         workspaceThumbnailCache.removeStaleThumbnails(keeping: liveWorkspaceIDs)
+        let previewStyle = currentWorkspacePreviewStyle()
+        guard previewStyle == .spatial else {
+            workspaceThumbnailCache.invalidate()
+            notify(workspaceIDs: ids)
+            return
+        }
         workspaceThumbnailCache.refresh(
-            groups: workspaceGroups(ids: controller.workspaces.filter(ids.contains)),
+            groups: makeWorkspaceGroups(
+                ids: controller.workspaces.filter(ids.contains),
+                previewStyle: previewStyle
+            ),
             priorityWorkspaceIDs: priorityIDs
         )
     }
@@ -142,6 +165,10 @@ final class SwitcherPreviewService {
 
     private func refreshApplicationIcons(windows: [WindowSnapshot]) {
         applicationIconCache.refresh(pids: Set(windows.map(\.app.pid)))
+    }
+
+    private func currentWorkspacePreviewStyle() -> WorkspacePreviewStyle {
+        windowThumbnailCache.refreshCaptureAvailability() ? .spatial : .applicationIcons
     }
 
     private func handleApplicationIconUpdated(_ pid: pid_t) {

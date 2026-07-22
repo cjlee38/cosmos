@@ -163,6 +163,57 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         wait(for: [currentWindowsUpdated], timeout: 1)
         XCTAssertNotNil(service.windowItems(ids: [20]).first?.icon)
     }
+
+    func testMissingScreenCapturePermissionSkipsCaptureAndUsesNativeApplicationIcons() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One")
+        ])
+        let captureAttempted = expectation(description: "window capture is not attempted")
+        captureAttempted.isInverted = true
+        let workspaceRendered = expectation(description: "workspace bitmap is not rendered")
+        workspaceRendered.isInverted = true
+        let service = makeSwitcherTestPreviewService(
+            controller: controller,
+            captureImage: { _ in
+                captureAttempted.fulfill()
+                return makeSwitcherTestImage()
+            },
+            canCapture: { false },
+            renderWorkspace: { _ in
+                workspaceRendered.fulfill()
+                return makeSwitcherTestImage()
+            }
+        )
+
+        service.refresh(windowIDs: [10], workspaceIDs: ["1"])
+        let group = try XCTUnwrap(service.workspaceGroups(ids: ["1"]).first)
+
+        wait(for: [workspaceRendered, captureAttempted], timeout: 0.25)
+        XCTAssertEqual(group.previewStyle, .applicationIcons)
+        XCTAssertNil(group.preview)
+        XCTAssertNil(service.windowItems(ids: [10]).first?.preview)
+    }
+
+    func testRevokedScreenCapturePermissionImmediatelyStopsUsingCachedWorkspacePreview() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One")
+        ])
+        var canCapture = true
+        let service = makeSwitcherTestPreviewService(
+            controller: controller,
+            canCapture: { canCapture },
+            renderWorkspace: { _ in makeSwitcherTestImage() }
+        )
+
+        service.refreshWorkspaces(ids: ["1"])
+        waitUntil { service.workspaceGroups(ids: ["1"]).first?.preview != nil }
+
+        canCapture = false
+        let group = try XCTUnwrap(service.workspaceGroups(ids: ["1"]).first)
+
+        XCTAssertEqual(group.previewStyle, .applicationIcons)
+        XCTAssertNil(group.preview)
+    }
 }
 
 extension SwitcherPreviewServiceTests {
@@ -357,6 +408,28 @@ extension SwitcherPreviewServiceTests {
         XCTAssertEqual(updateCount, 1)
     }
 
+    func testWorkspaceThumbnailCacheDoesNotPublishRenderAfterInvalidation() {
+        let renderStarted = expectation(description: "render started")
+        let allowRenderToFinish = DispatchSemaphore(value: 0)
+        let updatePublished = expectation(description: "invalidated render is not published")
+        updatePublished.isInverted = true
+        let cache = WorkspaceThumbnailCache { _ in
+            renderStarted.fulfill()
+            allowRenderToFinish.wait()
+            return makeSwitcherTestImage()
+        }
+        cache.setUpdateHandler { _ in updatePublished.fulfill() }
+        cache.removeStaleThumbnails(keeping: ["1"])
+        cache.refresh(groups: [thumbnailGroup(id: "1")])
+        wait(for: [renderStarted], timeout: 1)
+
+        cache.invalidate()
+        allowRenderToFinish.signal()
+
+        wait(for: [updatePublished], timeout: 0.25)
+        XCTAssertNil(cache.thumbnail(for: "1"))
+    }
+
     func testWorkspaceOverviewCardsNeverExceedTheirGridCells() {
         let layout = WorkspaceOverviewLayout(
             groupCount: 36,
@@ -385,6 +458,78 @@ extension SwitcherPreviewServiceTests {
         let cell = layout.cellFrame(row: 0, column: 0)
         XCTAssertEqual(layout.cardSize.height, cell.height, accuracy: 1)
         XCTAssertEqual(layout.contentSize.height, layout.cardSize.height, accuracy: 1)
+    }
+
+    func testWorkspaceApplicationIconsUseAtMostSeventyPercentOfPreviewWidth() throws {
+        let bounds = NSRect(x: 0, y: 0, width: 400, height: 200)
+        let layout = WorkspaceApplicationIconLayout(bounds: bounds, applicationCount: 13)
+        let frames = try layout.iconFrames + [XCTUnwrap(layout.overflowFrame)]
+        let minimumX = try XCTUnwrap(frames.map(\.minX).min())
+        let maximumX = try XCTUnwrap(frames.map(\.maxX).max())
+
+        XCTAssertLessThanOrEqual(maximumX - minimumX, 280)
+        XCTAssertEqual(Set(frames.map(\.minY)).count, 2)
+    }
+
+    func testWorkspaceApplicationIconsUseOneRowWhenTwoRowsDoNotFit() throws {
+        let bounds = NSRect(x: 0, y: 0, width: 400, height: 24)
+        let layout = WorkspaceApplicationIconLayout(bounds: bounds, applicationCount: 20)
+        let frames = try layout.iconFrames + [XCTUnwrap(layout.overflowFrame)]
+
+        XCTAssertEqual(Set(frames.map(\.minY)).count, 1)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(frames.map(\.maxY).max()), bounds.maxY)
+    }
+
+    func testWorkspaceApplicationIconOverflowUsesAnIconSizedLayoutSlot() throws {
+        let layout = WorkspaceApplicationIconLayout(
+            bounds: NSRect(x: 0, y: 0, width: 400, height: 200),
+            applicationCount: 20
+        )
+        let overflowFrame = try XCTUnwrap(layout.overflowFrame)
+
+        XCTAssertGreaterThan(layout.overflowCount, 0)
+        XCTAssertEqual(overflowFrame.width, try XCTUnwrap(layout.iconFrames.first).width)
+        XCTAssertEqual(overflowFrame.height, try XCTUnwrap(layout.iconFrames.first).height)
+    }
+
+    func testWorkspaceApplicationIconGridIsVerticallyCentered() throws {
+        let bounds = NSRect(x: 0, y: 0, width: 400, height: 200)
+        let layout = WorkspaceApplicationIconLayout(bounds: bounds, applicationCount: 13)
+        let frames = try layout.iconFrames + [XCTUnwrap(layout.overflowFrame)]
+        let minimumY = try XCTUnwrap(frames.map(\.minY).min())
+        let maximumY = try XCTUnwrap(frames.map(\.maxY).max())
+
+        XCTAssertEqual((minimumY + maximumY) / 2, bounds.midY, accuracy: 0.001)
+    }
+
+    func testWorkspaceApplicationIconSizeScalesWithPreviewArea() throws {
+        let small = WorkspaceApplicationIconLayout(
+            bounds: NSRect(x: 0, y: 0, width: 300, height: 120),
+            applicationCount: 2
+        )
+        let large = WorkspaceApplicationIconLayout(
+            bounds: NSRect(x: 0, y: 0, width: 600, height: 240),
+            applicationCount: 2
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(large.iconFrames.first).width,
+            try XCTUnwrap(small.iconFrames.first).width * 2,
+            accuracy: 0.001
+        )
+    }
+
+    func testWorkspaceApplicationIconColumnCountDoesNotShrinkAsPreviewGrows() {
+        let small = WorkspaceApplicationIconLayout(
+            bounds: NSRect(x: 0, y: 0, width: 411, height: 232),
+            applicationCount: 20
+        )
+        let large = WorkspaceApplicationIconLayout(
+            bounds: NSRect(x: 0, y: 0, width: 779, height: 506),
+            applicationCount: 20
+        )
+
+        XCTAssertGreaterThanOrEqual(large.columns, small.columns)
     }
 
     private func waitUntil(

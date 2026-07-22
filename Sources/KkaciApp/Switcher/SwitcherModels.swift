@@ -43,11 +43,17 @@ struct WindowSwitcherItem {
     }
 }
 
+enum WorkspacePreviewStyle {
+    case spatial
+    case applicationIcons
+}
+
 struct WorkspaceSwitcherGroup {
     let id: String
     let displayFrame: CGRect
     let windows: [WindowSwitcherItem]
     let preview: NSImage?
+    let previewStyle: WorkspacePreviewStyle
     let shortcutKey: String?
 
     init(
@@ -55,12 +61,14 @@ struct WorkspaceSwitcherGroup {
         displayFrame: CGRect,
         windows: [WindowSwitcherItem],
         preview: NSImage?,
+        previewStyle: WorkspacePreviewStyle = .spatial,
         shortcutKey: String? = nil
     ) {
         self.id = id
         self.displayFrame = displayFrame
         self.windows = windows
         self.preview = preview
+        self.previewStyle = previewStyle
         self.shortcutKey = shortcutKey
     }
 }

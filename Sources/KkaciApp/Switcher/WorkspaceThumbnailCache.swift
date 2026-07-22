@@ -37,6 +37,13 @@ final class WorkspaceThumbnailCache {
         generations = generations.filter { workspaceIDs.contains($0.key) }
     }
 
+    func invalidate() {
+        thumbnails.removeAll()
+        pendingRenders.removeAll()
+        pendingWorkspaceIDs.removeAll()
+        generations.removeAll()
+    }
+
     func refresh(
         groups: [WorkspaceSwitcherGroup],
         priorityWorkspaceIDs: [String] = []

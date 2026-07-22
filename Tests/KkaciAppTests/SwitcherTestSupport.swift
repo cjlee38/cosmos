@@ -163,12 +163,13 @@ func moveSwitcherTestWindow(
 func makeSwitcherTestPreviewService(
     controller: WorkspaceController,
     captureImage: @escaping (WindowID) -> CGImage? = { _ in nil },
+    canCapture: @escaping () -> Bool = { true },
     renderWorkspace: @escaping (WorkspaceThumbnailRenderGroup) -> CGImage? = WorkspaceThumbnailRenderer.render,
     loadIcon: @escaping (pid_t) -> NSImage? = { _ in nil }
 ) -> SwitcherPreviewService {
     SwitcherPreviewService(
         controller: controller,
-        windowThumbnailCache: WindowThumbnailCache(captureImage: captureImage),
+        windowThumbnailCache: WindowThumbnailCache(captureImage: captureImage, canCapture: canCapture),
         workspaceThumbnailCache: WorkspaceThumbnailCache(render: renderWorkspace),
         applicationIconCache: ApplicationIconCache(loadIcon: loadIcon)
     )

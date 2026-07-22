@@ -4,6 +4,7 @@ import KkaciCore
 
 final class WindowThumbnailCache {
     private let captureImage: (WindowID) -> CGImage?
+    private let canCapture: () -> Bool
     private let captureQueue = DispatchQueue(label: "kkaci.window-thumbnails", qos: .userInitiated)
     private var thumbnails: [WindowID: NSImage] = [:]
     private var queuedWindowIDs: [WindowID] = []
@@ -11,8 +12,15 @@ final class WindowThumbnailCache {
     private var liveWindowIDs: Set<WindowID> = []
     private var onThumbnailUpdated: ((WindowID) -> Void)?
 
-    init(captureImage: @escaping (WindowID) -> CGImage? = WindowThumbnailCapture.capture) {
+    private(set) var isCaptureAvailable: Bool
+
+    init(
+        captureImage: @escaping (WindowID) -> CGImage? = WindowThumbnailCapture.capture,
+        canCapture: @escaping () -> Bool = CGPreflightScreenCaptureAccess
+    ) {
         self.captureImage = captureImage
+        self.canCapture = canCapture
+        isCaptureAvailable = canCapture()
     }
 
     func setUpdateHandler(_ handler: @escaping (WindowID) -> Void) {
@@ -20,7 +28,7 @@ final class WindowThumbnailCache {
     }
 
     func thumbnail(for id: WindowID) -> NSImage? {
-        thumbnails[id]
+        isCaptureAvailable ? thumbnails[id] : nil
     }
 
     func removeStaleThumbnails(keeping liveIDs: Set<WindowID>) {
@@ -30,11 +38,24 @@ final class WindowThumbnailCache {
     }
 
     func refresh(windowIDs: [WindowID]) {
+        guard refreshCaptureAvailability() else {
+            return
+        }
         for windowID in windowIDs
             where liveWindowIDs.contains(windowID) && !queuedWindowIDs.contains(windowID) {
             queuedWindowIDs.append(windowID)
         }
         startNextCaptureBatch()
+    }
+
+    @discardableResult
+    func refreshCaptureAvailability() -> Bool {
+        isCaptureAvailable = canCapture()
+        if !isCaptureAvailable {
+            thumbnails.removeAll()
+            queuedWindowIDs.removeAll()
+        }
+        return isCaptureAvailable
     }
 
     private func startNextCaptureBatch() {
@@ -58,7 +79,7 @@ final class WindowThumbnailCache {
 
     private func completeCapture(windowID: WindowID, image: CGImage?) {
         capturingWindowIDs.remove(windowID)
-        if liveWindowIDs.contains(windowID) {
+        if liveWindowIDs.contains(windowID), isCaptureAvailable {
             if let image {
                 thumbnails[windowID] = NSImage(
                     cgImage: image,
