@@ -83,6 +83,19 @@ final class WorkspaceActionController {
         }
     }
 
+    func centerFocusedWindow() {
+        cancelSwitcher()
+        do {
+            let windowID = try controller.centerFocusedWindow()
+            let workspaceIDs = controller.membership(for: windowID).map { Set([$0]) } ?? []
+            previewService.refresh(windowIDs: [windowID], workspaceIDs: workspaceIDs)
+            refreshStatusSurfaces()
+            log.info("Centered window \(windowID)")
+        } catch {
+            log.error("Center focused window failed: \(String(describing: error))")
+        }
+    }
+
     func restoreAllHiddenWindows() {
         do {
             let result = try controller.restoreAllHiddenWindows()

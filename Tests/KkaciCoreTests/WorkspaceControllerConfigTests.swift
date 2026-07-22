@@ -154,6 +154,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         XCTAssertEqual(controller.currentWorkspace, "1")
         XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertEqual(controller.currentConfig.configuredShortcuts, [
+            ConfiguredShortcut(key: "option+command+c", target: .centerWindow),
             ConfiguredShortcut(key: "option+d", target: .switchWorkspace("3"))
         ])
     }

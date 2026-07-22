@@ -36,6 +36,7 @@ final class NoopShortcutActions: KeyboardShortcutActionHandling {
     func cancelSwitcher() {}
     func switchWorkspace(to _: WorkspaceID) {}
     func moveFocusedWindow(to _: WorkspaceID) {}
+    func centerFocusedWindow() {}
 }
 
 func makeRuntime(

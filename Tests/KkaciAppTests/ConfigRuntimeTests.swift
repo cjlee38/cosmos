@@ -42,7 +42,11 @@ final class ConfigRuntimeTests: XCTestCase {
         XCTAssertThrowsError(try runtime.reload(actions: NoopShortcutActions())) { error in
             XCTAssertEqual(error as? ConfigRuntimeTestError, .configApply)
         }
-        XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+1"], ["option+2"], ["option+1"]])
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [
+            previousConfig.configuredShortcuts.map(\.key),
+            loadedConfig.configuredShortcuts.map(\.key),
+            previousConfig.configuredShortcuts.map(\.key)
+        ])
         XCTAssertEqual(controller.currentConfig, previousConfig)
     }
 
@@ -82,7 +86,7 @@ final class ConfigRuntimeTests: XCTestCase {
 
         try runtime.reload(actions: NoopShortcutActions())
 
-        XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+2"]])
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [loadedConfig.configuredShortcuts.map(\.key)])
         XCTAssertEqual(controller.appliedConfigs, [loadedConfig])
         XCTAssertEqual(controller.currentConfig, loadedConfig)
         XCTAssertEqual(runtime.status, .valid)
@@ -134,7 +138,7 @@ final class ConfigRuntimeTests: XCTestCase {
         }
         XCTAssertEqual(runtime.desiredConfig, previousConfig)
         XCTAssertEqual(controller.currentConfig, previousConfig)
-        XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+1"]])
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [previousConfig.configuredShortcuts.map(\.key)])
     }
 
     func testSettingsConfigUpdateRestoresPreviousShortcutsWhenCoreUpdateFails() throws {
@@ -175,7 +179,11 @@ final class ConfigRuntimeTests: XCTestCase {
         try runtime.beginShortcutRecording()
         try runtime.cancelShortcutRecording()
 
-        XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+1"], [], ["option+1"]])
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [
+            config.configuredShortcuts.map(\.key),
+            [],
+            config.configuredShortcuts.map(\.key)
+        ])
     }
 
     func testShortcutRecordingCanRetryCancelAfterRestoreFails() throws {
@@ -201,10 +209,10 @@ final class ConfigRuntimeTests: XCTestCase {
         try runtime.cancelShortcutRecording()
 
         XCTAssertEqual(shortcutInstaller.replacedKeys, [
-            ["option+1"],
+            config.configuredShortcuts.map(\.key),
             [],
-            ["option+1"],
-            ["option+1"]
+            config.configuredShortcuts.map(\.key),
+            config.configuredShortcuts.map(\.key)
         ])
     }
 
@@ -224,7 +232,11 @@ final class ConfigRuntimeTests: XCTestCase {
         try runtime.updateConfig(updatedConfig, actions: NoopShortcutActions())
         try runtime.cancelShortcutRecording()
 
-        XCTAssertEqual(shortcutInstaller.replacedKeys, [["option+1"], [], ["option+2"]])
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [
+            previousConfig.configuredShortcuts.map(\.key),
+            [],
+            updatedConfig.configuredShortcuts.map(\.key)
+        ])
         XCTAssertEqual(controller.currentConfig, updatedConfig)
     }
 }

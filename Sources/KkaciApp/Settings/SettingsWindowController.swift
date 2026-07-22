@@ -9,16 +9,19 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     private let generalViewController: GeneralSettingsViewController
     private let switcherViewController: SwitcherSettingsViewController
+    private let windowViewController: WindowSettingsViewController
     private let workspaceViewController: WorkspaceSettingsViewController
     private let shortcutRecordingController: ShortcutRecordingController
     init(
         generalViewController: GeneralSettingsViewController,
         switcherViewController: SwitcherSettingsViewController,
+        windowViewController: WindowSettingsViewController,
         workspaceViewController: WorkspaceSettingsViewController,
         shortcutRecordingController: ShortcutRecordingController
     ) {
         self.generalViewController = generalViewController
         self.switcherViewController = switcherViewController
+        self.windowViewController = windowViewController
         self.workspaceViewController = workspaceViewController
         self.shortcutRecordingController = shortcutRecordingController
 
@@ -27,6 +30,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let viewControllers: [SettingsSection: NSViewController] = [
             .general: generalViewController,
             .switcher: switcherViewController,
+            .window: windowViewController,
             .workspaces: workspaceViewController
         ]
         sidebar.onSelectionChanged = { section in
@@ -68,6 +72,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
         generalViewController.refresh()
         switcherViewController.refresh()
+        windowViewController.refresh()
         workspaceViewController.refresh()
     }
 

@@ -30,6 +30,7 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertEqual(KkaciConfig.default.configuredShortcuts, [
             ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcher),
             ConfiguredShortcut(key: "option+tab", target: .windowSwitcher),
+            ConfiguredShortcut(key: "option+command+c", target: .centerWindow),
             ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
             ConfiguredShortcut(key: "option+shift+1", target: .moveWindow("1")),
             ConfiguredShortcut(key: "option+2", target: .switchWorkspace("2")),
@@ -110,6 +111,16 @@ final class KkaciConfigTests: XCTestCase {
         ))
         XCTAssertEqual(window.switcher.shortcuts.window, "command+shift+tab")
         XCTAssertEqual(window.switcher.shortcuts.workspace, config.switcher.shortcuts.workspace)
+    }
+
+    func testUpdatingCenterWindowShortcutPreservesOtherConfig() throws {
+        let config = KkaciConfig.default
+
+        let updated = try XCTUnwrap(config.updatingShortcut("control+option+c", for: .centerWindow))
+
+        XCTAssertEqual(updated.window.shortcuts.center, "control+option+c")
+        XCTAssertEqual(updated.switcher, config.switcher)
+        XCTAssertEqual(updated.workspaces, config.workspaces)
     }
 
     func testUpdatingWorkspaceShortcutsPreservesTheOtherWorkspaceFields() throws {
@@ -231,6 +242,7 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertTrue(yaml.contains("version: 1"))
         XCTAssertTrue(yaml.contains("switcher:"))
         XCTAssertTrue(yaml.contains("workspace: option+shift+tab"))
+        XCTAssertTrue(yaml.contains("center: option+command+c"))
         XCTAssertTrue(yaml.contains("workspaces:"))
         XCTAssertFalse(yaml.contains("bindings:"))
         XCTAssertEqual(try store.load(), .default)

@@ -3,6 +3,7 @@ import Foundation
 public enum ShortcutTarget: Hashable {
     case workspaceSwitcher
     case windowSwitcher
+    case centerWindow
     case switchWorkspace(WorkspaceID)
     case moveWindow(WorkspaceID)
 }
@@ -111,6 +112,8 @@ public extension KkaciConfig {
                 workspace: switcher.shortcuts.workspace,
                 window: shortcut
             ))
+        case .centerWindow:
+            return replacingWindowShortcuts(WindowShortcutConfig(center: shortcut))
         case let .switchWorkspace(id):
             return updatingWorkspaceShortcut(id, shortcut: shortcut, moveWindow: false)
         case let .moveWindow(id):
@@ -124,7 +127,17 @@ private extension KkaciConfig {
         KkaciConfig(
             version: version,
             workspaces: workspaces,
-            switcher: SwitcherConfig(shortcuts: shortcuts)
+            switcher: SwitcherConfig(shortcuts: shortcuts),
+            window: window
+        )
+    }
+
+    func replacingWindowShortcuts(_ shortcuts: WindowShortcutConfig) -> KkaciConfig {
+        KkaciConfig(
+            version: version,
+            workspaces: workspaces,
+            switcher: switcher,
+            window: WindowConfig(shortcuts: shortcuts)
         )
     }
 
@@ -152,7 +165,8 @@ private extension KkaciConfig {
                     shortcuts: shortcuts
                 )
             },
-            switcher: switcher
+            switcher: switcher,
+            window: window
         )
     }
 

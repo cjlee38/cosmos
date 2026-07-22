@@ -8,6 +8,7 @@ protocol KeyboardShortcutActionHandling: AnyObject {
     func cancelSwitcher()
     func switchWorkspace(to workspace: WorkspaceID)
     func moveFocusedWindow(to workspace: WorkspaceID)
+    func centerFocusedWindow()
 }
 
 final class KeyboardBindingMapper {
@@ -37,6 +38,8 @@ final class KeyboardBindingMapper {
                 name: "Cycle Window",
                 actions: actions
             )
+        case .centerWindow:
+            centerWindowRegistration(shortcut, actions: actions)
         case let .switchWorkspace(workspace):
             switchWorkspaceRegistration(shortcut, workspace: workspace, actions: actions)
         case let .moveWindow(workspace):
@@ -121,6 +124,20 @@ final class KeyboardBindingMapper {
             target: shortcut.target,
             onPress: { [weak actions] in
                 actions?.moveFocusedWindow(to: workspace)
+            }
+        )
+    }
+
+    private func centerWindowRegistration(
+        _ shortcut: ConfiguredShortcut,
+        actions: any KeyboardShortcutActionHandling
+    ) -> KeyboardShortcutRegistration {
+        .press(
+            key: shortcut.key,
+            name: "Center Window",
+            target: shortcut.target,
+            onPress: { [weak actions] in
+                actions?.centerFocusedWindow()
             }
         )
     }

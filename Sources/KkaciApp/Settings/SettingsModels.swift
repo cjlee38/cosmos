@@ -5,6 +5,7 @@ enum SettingsSection: CaseIterable, Hashable {
     case general
     case switcher
     case workspaces
+    case window
 
     var title: String {
         switch self {
@@ -12,6 +13,8 @@ enum SettingsSection: CaseIterable, Hashable {
             "General"
         case .switcher:
             "Switcher"
+        case .window:
+            "Window"
         case .workspaces:
             "Workspaces"
         }
@@ -23,6 +26,8 @@ enum SettingsSection: CaseIterable, Hashable {
             "gearshape"
         case .switcher:
             "rectangle.on.rectangle"
+        case .window:
+            "macwindow"
         case .workspaces:
             "rectangle.3.group"
         }
@@ -91,6 +96,7 @@ struct WorkspaceSettingsSnapshot: Equatable {
     let disconnectedMonitorSlots: [MonitorSlot]
     let workspaceSwitcher: String?
     let windowSwitcher: String?
+    let centerWindow: String?
     let workspaces: [WorkspaceSettingsItem]
     let isEditable: Bool
     let shortcutValidationMessages: [ShortcutTarget: String]
@@ -140,6 +146,7 @@ struct WorkspaceSettingsSnapshot: Equatable {
             .sorted()
         workspaceSwitcher = config.switcher.shortcuts.workspace
         windowSwitcher = config.switcher.shortcuts.window
+        centerWindow = config.window.shortcuts.center
         workspaces = workspaceItems
         self.isEditable = isEditable
         self.shortcutValidationMessages = shortcutValidationMessages

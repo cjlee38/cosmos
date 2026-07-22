@@ -41,6 +41,26 @@ class WorkspaceControllerTestCase: XCTestCase {
         )
     }
 
+    func centerTestDisplayProvider() -> FakeDisplayProvider {
+        FakeDisplayProvider(
+            point: hidePoint,
+            snapshots: [
+                DisplaySnapshot(
+                    id: 1,
+                    frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+                    visibleFrame: CGRect(x: 0, y: 40, width: 1000, height: 960),
+                    role: .main
+                ),
+                DisplaySnapshot(
+                    id: 2,
+                    frame: CGRect(x: 1000, y: 0, width: 1200, height: 900),
+                    visibleFrame: CGRect(x: 1000, y: 30, width: 1200, height: 870),
+                    role: .extended
+                )
+            ]
+        )
+    }
+
     @discardableResult
     func moveWindow(
         _ id: WindowID,
@@ -70,6 +90,25 @@ class WorkspaceControllerTestCase: XCTestCase {
 }
 
 final class WorkspaceControllerTests: WorkspaceControllerTestCase {
+    func testCenterFocusedWindowMovesOnlyItsOriginWithinTheCurrentVisibleDisplay() throws {
+        let initialFrame = WindowFrame.frame(x: 1200, y: 200, width: 400, height: 300)
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", frame: initialFrame)
+        ])
+        windowSystem.focusedWindow = 100
+        let controller = makeController(windowSystem, displayProvider: centerTestDisplayProvider())
+
+        let windowID = try controller.centerFocusedWindow()
+
+        XCTAssertEqual(windowID, 100)
+        XCTAssertEqual(windowSystem.positions[100], CGPoint(x: 1400, y: 315))
+        XCTAssertEqual(windowSystem.frames[100]?.size, initialFrame.size)
+        XCTAssertFalse(windowSystem.operations.contains { operation in
+            if case .setFrame = operation { return true }
+            return false
+        })
+    }
+
     func testSwitchHidesOtherWorkspacesAndRestoresTargetWorkspace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),

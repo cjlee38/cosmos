@@ -252,6 +252,36 @@ public extension WorkspaceController {
     }
 
     @discardableResult
+    func centerFocusedWindow() throws -> WindowID {
+        _ = try syncWindows(reconcileVisibleWindowMonitorMembership: false)
+        guard let id = windowSystem.focusedWindowID(), windowSystem.contains(id) else {
+            throw WorkspaceError.noFocusedWindow
+        }
+        guard let frame = windowSystem.frame(for: id) else {
+            throw WorkspaceError.frameUnavailable(id)
+        }
+        let displays = windowCache.displayTopology.displays
+        guard let displayIndex = DisplayGeometry.index(
+            containingOrNearest: frame.center,
+            among: displays.map(\.frame)
+        ) else {
+            throw WorkspaceError.noDisplayAvailable
+        }
+
+        let visibleFrame = displays[displayIndex].visibleFrame
+        let centeredFrame = WindowFrame(
+            origin: CGPoint(
+                x: visibleFrame.midX - frame.size.width / 2,
+                y: visibleFrame.midY - frame.size.height / 2
+            ),
+            size: frame.size
+        )
+        try windowSystem.setPosition(centeredFrame.origin, for: id)
+        windowCache.updateFrame(centeredFrame, for: id)
+        return id
+    }
+
+    @discardableResult
     func applyConfig(_ config: KkaciConfig) throws -> WorkspaceSyncSummary {
         try applyConfigTransaction(config)
     }

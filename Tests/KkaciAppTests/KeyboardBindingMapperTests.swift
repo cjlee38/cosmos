@@ -59,6 +59,21 @@ final class KeyboardBindingMapperTests: XCTestCase {
         XCTAssertEqual(actions.movedWorkspaces, ["O"])
     }
 
+    func testCenterWindowShortcutMapsPressToCenterAction() throws {
+        let actions = KeyboardShortcutActionSpy()
+        let registration = try XCTUnwrap(
+            KeyboardBindingMapper().registrations(
+                for: [ConfiguredShortcut(key: "option+command+c", target: .centerWindow)],
+                actions: actions
+            ).first
+        )
+
+        registration.onPress()
+
+        XCTAssertEqual(registration.target, .centerWindow)
+        XCTAssertEqual(actions.centerWindowCount, 1)
+    }
+
     func testWorkspaceSwitchShortcutsCannotShareTheSameTerminalKey() {
         let actions = KeyboardShortcutActionSpy()
         let registrations = KeyboardBindingMapper().registrations(
@@ -162,6 +177,7 @@ private final class KeyboardShortcutActionSpy: KeyboardShortcutActionHandling {
     var windowCommitCount = 0
     var switchedWorkspaces: [WorkspaceID] = []
     var movedWorkspaces: [WorkspaceID] = []
+    var centerWindowCount = 0
 
     func stepWorkspaceSwitcher(direction: SwitcherDirection) {
         workspaceSteps.append(direction)
@@ -187,5 +203,9 @@ private final class KeyboardShortcutActionSpy: KeyboardShortcutActionHandling {
 
     func moveFocusedWindow(to workspace: WorkspaceID) {
         movedWorkspaces.append(workspace)
+    }
+
+    func centerFocusedWindow() {
+        centerWindowCount += 1
     }
 }

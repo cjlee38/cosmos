@@ -6,6 +6,7 @@ enum WorkspaceError: Error, Equatable, CustomStringConvertible {
     case windowNotInCurrentWorkspace(WindowID, String)
     case windowNotInVisibleWorkspace(WindowID, String)
     case noFocusedWindow
+    case noDisplayAvailable
     case frameUnavailable(WindowID)
 
     var description: String {
@@ -20,6 +21,8 @@ enum WorkspaceError: Error, Equatable, CustomStringConvertible {
             "Window \(id) belongs to workspace \(workspace), which is not visible."
         case .noFocusedWindow:
             "No focused window."
+        case .noDisplayAvailable:
+            "No display is available."
         case let .frameUnavailable(id):
             "Window frame is unavailable: \(id)"
         }

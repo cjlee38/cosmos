@@ -48,10 +48,15 @@ final class SettingsCoordinator {
             service: workspaceSettingsService,
             shortcutRecordingController: shortcutRecordingController
         )
+        let windowViewController = WindowSettingsViewController(
+            settingsService: workspaceSettingsService,
+            shortcutRecordingController: shortcutRecordingController
+        )
 
         windowController = SettingsWindowController(
             generalViewController: generalViewController,
             switcherViewController: switcherViewController,
+            windowViewController: windowViewController,
             workspaceViewController: workspaceViewController,
             shortcutRecordingController: shortcutRecordingController
         )
