@@ -44,6 +44,32 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(buffer.takeDelivery(), [event])
     }
 
+    func testEventBufferDiscardsPendingAndIncomingEventsWhileSessionIsInactive() {
+        let pending = WindowRuntimeEvent(kind: .focusChanged, windowID: 100)
+        let inactive = WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.append(pending)
+        XCTAssertTrue(buffer.reserveDelivery())
+        buffer.suspend()
+        buffer.append(inactive)
+
+        XCTAssertNil(buffer.takeDelivery())
+        XCTAssertTrue(buffer.events.isEmpty)
+    }
+
+    func testEventBufferDeliversFreshSyncAfterSessionBecomesActive() {
+        let freshSync = WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.suspend()
+        buffer.resume()
+        buffer.append(freshSync)
+
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [freshSync])
+    }
+
     func testResizeRequiresLayoutSyncAndThumbnailCapture() {
         let kinds = WindowRuntimeEventKind.kinds(
             forAXNotification: kAXWindowResizedNotification as String
@@ -81,6 +107,20 @@ final class WindowRuntimeEventTests: XCTestCase {
         )
     }
 
+    func testApplicationActivationAndAXFocusChangeRemainDistinct() {
+        let activation = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .applicationActivated, windowID: nil)
+        ])
+        let axFocus = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .focusChanged, windowID: 100)
+        ])
+
+        XCTAssertTrue(activation.containsApplicationActivation)
+        XCTAssertTrue(activation.containsFocusChange)
+        XCTAssertFalse(axFocus.containsApplicationActivation)
+        XCTAssertTrue(axFocus.containsFocusChange)
+    }
+
     func testSuccessfulWindowEventAlwaysRefreshesSwitcherContent() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "Window")
@@ -106,7 +146,7 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(surfaceRefreshCount, 1)
     }
 
-    func testFocusEventSwitchesToTheFocusedWindowsWorkspace() throws {
+    func testApplicationActivationSwitchesToTheFocusedWindowsWorkspace() throws {
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "One"),
             makeSwitcherTestWindow(id: 200, title: "Two")
@@ -116,11 +156,29 @@ final class WindowRuntimeEventTests: XCTestCase {
         let handler = makeHandler(controller: controller)
 
         handler.handle(WindowRuntimeEventBatch(events: [
-            WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
+            WindowRuntimeEvent(kind: .applicationActivated, windowID: nil)
         ]))
 
         XCTAssertEqual(controller.currentWorkspace, "2")
         XCTAssertFalse(controller.isHiddenByWorkspace(200))
+    }
+
+    func testAXFocusEventForHiddenWindowDoesNotRollBackWorkspace() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "One"),
+            makeSwitcherTestWindow(id: 200, title: "Two")
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        _ = try controller.switchWorkspace(to: "2")
+        windowSystem.focusedWindowIDValue = 100
+        let handler = makeHandler(controller: controller)
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .focusChanged, windowID: 100)
+        ]))
+
+        XCTAssertEqual(controller.currentWorkspace, "2")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
     }
 
     func testDisplayAndFocusEventsInOneBatchBothApply() throws {
@@ -134,7 +192,7 @@ final class WindowRuntimeEventTests: XCTestCase {
 
         handler.handle(WindowRuntimeEventBatch(events: [
             WindowRuntimeEvent(kind: .displayChanged, windowID: nil),
-            WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
+            WindowRuntimeEvent(kind: .applicationActivated, windowID: nil)
         ]))
 
         XCTAssertEqual(controller.currentWorkspace, "2")
@@ -202,7 +260,7 @@ final class WindowRuntimeEventTests: XCTestCase {
         )
 
         handler.handle(WindowRuntimeEventBatch(events: [
-            WindowRuntimeEvent(kind: .focusChanged, windowID: 200)
+            WindowRuntimeEvent(kind: .applicationActivated, windowID: nil)
         ]))
 
         XCTAssertEqual(controller.currentWorkspace, "1")

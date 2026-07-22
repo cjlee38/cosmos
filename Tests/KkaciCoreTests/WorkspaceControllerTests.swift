@@ -160,6 +160,25 @@ final class WorkspaceControllerTests: WorkspaceControllerTestCase {
         XCTAssertTrue(controller.isHiddenByWorkspace(200))
     }
 
+    func testSwitchUsesFreshlyCachedFrameWhenDirectFrameReadIsUnavailable() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Source"),
+            .window(id: 200, title: "Target")
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.unavailableFrameReads.insert(100)
+
+        _ = try controller.switchWorkspace(to: "2")
+
+        XCTAssertEqual(controller.currentWorkspace, "2")
+        XCTAssertTrue(controller.isHiddenByWorkspace(100))
+        XCTAssertFalse(controller.isHiddenByWorkspace(200))
+    }
+
     func testFailedSwitchRestoresSourceWindowsHiddenBeforeTheFailure() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Focused source"),

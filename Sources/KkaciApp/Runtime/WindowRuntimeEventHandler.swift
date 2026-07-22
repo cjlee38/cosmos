@@ -33,9 +33,9 @@ final class WindowRuntimeEventHandler {
 
     func handle(_ events: WindowRuntimeEventBatch) {
         do {
-            let focusPolicy: ExternalWindowFocusPolicy = if events.shouldFollowFocusedWindow {
+            let focusPolicy: ExternalWindowFocusPolicy = if events.containsApplicationActivation {
                 .always
-            } else if events.containsLayoutChange {
+            } else if events.containsFocusChange || events.containsLayoutChange {
                 .visibleFocusedWindow
             } else {
                 .never
@@ -65,7 +65,7 @@ final class WindowRuntimeEventHandler {
         var affectedWindowIDs = events.windowIDs
             .union(result.sync.affectedWindowIDs)
         let focusedWindowID = controller.cachedFocusedWindowID()
-        if events.shouldFollowFocusedWindow, let focusedWindowID {
+        if events.containsFocusChange, let focusedWindowID {
             affectedWindowIDs.insert(focusedWindowID)
         }
 

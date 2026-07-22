@@ -5,6 +5,7 @@ import Foundation
 import KkaciCore
 
 enum WindowRuntimeEventKind: Hashable {
+    case applicationActivated
     case focusChanged
     case thumbnailChanged
     case layoutChanged
@@ -53,8 +54,14 @@ struct WindowRuntimeEventBatch {
         })
     }
 
-    var shouldFollowFocusedWindow: Bool {
-        events.contains { $0.kind == .focusChanged }
+    var containsApplicationActivation: Bool {
+        events.contains { $0.kind == .applicationActivated }
+    }
+
+    var containsFocusChange: Bool {
+        events.contains { event in
+            event.kind == .applicationActivated || event.kind == .focusChanged
+        }
     }
 
     var containsLayoutChange: Bool {
@@ -74,9 +81,23 @@ struct WindowRuntimeEventBuffer {
     private(set) var events: Set<WindowRuntimeEvent> = []
     private(set) var isWindowDragActive = false
     private var isDeliveryScheduled = false
+    private var isSuspended = false
 
     mutating func append(_ event: WindowRuntimeEvent) {
+        guard !isSuspended else {
+            return
+        }
         events.insert(event)
+    }
+
+    mutating func suspend() {
+        isSuspended = true
+        isWindowDragActive = false
+        events.removeAll()
+    }
+
+    mutating func resume() {
+        isSuspended = false
     }
 
     mutating func beginWindowDrag() {
@@ -88,7 +109,7 @@ struct WindowRuntimeEventBuffer {
     }
 
     mutating func reserveDelivery() -> Bool {
-        guard !isWindowDragActive, !isDeliveryScheduled, !events.isEmpty else {
+        guard !isSuspended, !isWindowDragActive, !isDeliveryScheduled, !events.isEmpty else {
             return false
         }
         isDeliveryScheduled = true
@@ -97,7 +118,7 @@ struct WindowRuntimeEventBuffer {
 
     mutating func takeDelivery() -> Set<WindowRuntimeEvent>? {
         isDeliveryScheduled = false
-        guard !isWindowDragActive, !events.isEmpty else {
+        guard !isSuspended, !isWindowDragActive, !events.isEmpty else {
             return nil
         }
 
@@ -203,6 +224,32 @@ final class WindowEventMonitor {
             self?.axObserverRegistry.removeObserver(for: app.processIdentifier)
             self?.schedule(.init(kind: .windowSetChanged, windowID: nil))
         })
+
+        workspaceObserverTokens.append(notificationCenter.addObserver(
+            forName: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.suspendForInactiveSession()
+        })
+
+        workspaceObserverTokens.append(notificationCenter.addObserver(
+            forName: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resumeAfterInactiveSession()
+        })
+    }
+
+    private func suspendForInactiveSession() {
+        eventBuffer.suspend()
+        stopMouseUpMonitor()
+    }
+
+    private func resumeAfterInactiveSession() {
+        eventBuffer.resume()
+        schedule(.init(kind: .windowSetChanged, windowID: nil))
     }
 
     private func observeDisplayChanges() {
@@ -217,11 +264,11 @@ final class WindowEventMonitor {
 
     private func scheduleFocusSyncIfObservable(_ app: NSRunningApplication) {
         if app.processIdentifier == getpid(), app.activationPolicy == .regular {
-            schedule(.init(kind: .focusChanged, windowID: nil))
+            schedule(.init(kind: .applicationActivated, windowID: nil))
             return
         }
         if axObserverRegistry.canObserve(app) {
-            schedule(.init(kind: .focusChanged, windowID: nil))
+            schedule(.init(kind: .applicationActivated, windowID: nil))
         }
     }
 

@@ -138,7 +138,7 @@ final class HiddenWindowOperator {
         if let hiddenFrame = state.hiddenFrame(for: id) {
             return hiddenFrame
         }
-        guard let frame = windowSystem.frame(for: id) else {
+        guard let frame = windowCache.snapshot(for: id)?.frame ?? windowSystem.frame(for: id) else {
             throw WorkspaceError.frameUnavailable(id)
         }
         return frame

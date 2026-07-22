@@ -20,6 +20,7 @@ final class FakeWindowSystem: WindowSystem {
     var focusedIDs: [WindowID] = []
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
+    var unavailableFrameReads: Set<WindowID> = []
     var operations: [Operation] = []
     var frameWriteFailures: Set<WindowID> = []
     var operationFailure: ((Operation) -> Error?)?
@@ -60,7 +61,10 @@ final class FakeWindowSystem: WindowSystem {
     }
 
     func frame(for id: WindowID) -> WindowFrame? {
-        frames[id]
+        guard !unavailableFrameReads.contains(id) else {
+            return nil
+        }
+        return frames[id]
     }
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
