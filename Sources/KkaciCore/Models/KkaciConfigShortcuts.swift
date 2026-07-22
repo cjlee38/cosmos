@@ -1,10 +1,8 @@
 import Foundation
 
 public enum ShortcutTarget: Hashable {
-    case workspaceSwitcherNext
-    case workspaceSwitcherPrevious
-    case windowSwitcherNext
-    case windowSwitcherPrevious
+    case workspaceSwitcher
+    case windowSwitcher
     case switchWorkspace(WorkspaceID)
     case moveWindow(WorkspaceID)
 }
@@ -103,37 +101,15 @@ public extension KkaciConfig {
     func updatingShortcut(_ shortcut: String?, for target: ShortcutTarget) -> KkaciConfig? {
         let shortcut = normalizedShortcut(shortcut)
         switch target {
-        case .workspaceSwitcherNext:
-            return replacingShortcuts(ShortcutConfig(
-                workspaceSwitcher: SwitcherShortcutConfig(
-                    next: shortcut,
-                    previous: shortcuts.workspaceSwitcher.previous
-                ),
-                windowSwitcher: shortcuts.windowSwitcher
+        case .workspaceSwitcher:
+            return replacingSwitcherShortcuts(SwitcherShortcutConfig(
+                workspace: shortcut,
+                window: switcher.shortcuts.window
             ))
-        case .workspaceSwitcherPrevious:
-            return replacingShortcuts(ShortcutConfig(
-                workspaceSwitcher: SwitcherShortcutConfig(
-                    next: shortcuts.workspaceSwitcher.next,
-                    previous: shortcut
-                ),
-                windowSwitcher: shortcuts.windowSwitcher
-            ))
-        case .windowSwitcherNext:
-            return replacingShortcuts(ShortcutConfig(
-                workspaceSwitcher: shortcuts.workspaceSwitcher,
-                windowSwitcher: SwitcherShortcutConfig(
-                    next: shortcut,
-                    previous: shortcuts.windowSwitcher.previous
-                )
-            ))
-        case .windowSwitcherPrevious:
-            return replacingShortcuts(ShortcutConfig(
-                workspaceSwitcher: shortcuts.workspaceSwitcher,
-                windowSwitcher: SwitcherShortcutConfig(
-                    next: shortcuts.windowSwitcher.next,
-                    previous: shortcut
-                )
+        case .windowSwitcher:
+            return replacingSwitcherShortcuts(SwitcherShortcutConfig(
+                workspace: switcher.shortcuts.workspace,
+                window: shortcut
             ))
         case let .switchWorkspace(id):
             return updatingWorkspaceShortcut(id, shortcut: shortcut, moveWindow: false)
@@ -144,8 +120,12 @@ public extension KkaciConfig {
 }
 
 private extension KkaciConfig {
-    func replacingShortcuts(_ shortcuts: ShortcutConfig) -> KkaciConfig {
-        KkaciConfig(version: version, workspaces: workspaces, shortcuts: shortcuts)
+    func replacingSwitcherShortcuts(_ shortcuts: SwitcherShortcutConfig) -> KkaciConfig {
+        KkaciConfig(
+            version: version,
+            workspaces: workspaces,
+            switcher: SwitcherConfig(shortcuts: shortcuts)
+        )
     }
 
     func updatingWorkspaceShortcut(
@@ -172,7 +152,7 @@ private extension KkaciConfig {
                     shortcuts: shortcuts
                 )
             },
-            shortcuts: shortcuts
+            switcher: switcher
         )
     }
 

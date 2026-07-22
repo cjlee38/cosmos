@@ -124,10 +124,8 @@ final class WorkspaceSettingsSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.displays[1].workspaceIDs, ["A"])
         XCTAssertTrue(snapshot.displays.allSatisfy(\.hasUnobstructedParkingCorner))
         XCTAssertEqual(snapshot.disconnectedMonitorSlots, [3])
-        XCTAssertEqual(snapshot.workspaceSwitcher.next, "ctrl+tab")
-        XCTAssertEqual(snapshot.workspaceSwitcher.previous, "ctrl+shift+tab")
-        XCTAssertEqual(snapshot.windowSwitcher.next, "option+tab")
-        XCTAssertEqual(snapshot.windowSwitcher.previous, "option+shift+tab")
+        XCTAssertEqual(snapshot.workspaceSwitcher, "option+shift+tab")
+        XCTAssertEqual(snapshot.windowSwitcher, "option+tab")
         XCTAssertEqual(snapshot.workspaces[0].switchShortcut, "option+1")
         XCTAssertEqual(snapshot.workspaces[0].moveShortcut, "option+shift+1")
         XCTAssertNil(snapshot.workspaces[1].switchShortcut)
@@ -368,10 +366,8 @@ final class WorkspaceSettingsViewTests: XCTestCase {
             .map(\.stringValue)
 
         XCTAssertEqual(recorders.map(\.shortcutTarget), [
-            .workspaceSwitcherNext,
-            .workspaceSwitcherPrevious,
-            .windowSwitcherNext,
-            .windowSwitcherPrevious
+            .workspaceSwitcher,
+            .windowSwitcher
         ])
         XCTAssertTrue(labels.contains("Workspace"))
         XCTAssertTrue(labels.contains("Window"))
@@ -547,7 +543,7 @@ final class WorkspaceSettingsViewTests: XCTestCase {
                 )
             },
             shortcutValidationMessages: [
-                .switchWorkspace("1"): "Already assigned to \"Cycle Workspace · Next\"."
+                .switchWorkspace("1"): "Already assigned to \"Cycle Workspace\"."
             ]
         )
         let viewController = WorkspaceSettingsViewController(
@@ -804,14 +800,10 @@ private func snapshotConfig() -> KkaciConfig {
             WorkspaceConfig(id: "A", display: 2),
             WorkspaceConfig(id: "C", display: 3)
         ],
-        shortcuts: ShortcutConfig(
-            workspaceSwitcher: SwitcherShortcutConfig(
-                next: "ctrl+tab",
-                previous: "ctrl+shift+tab"
-            ),
-            windowSwitcher: SwitcherShortcutConfig(
-                next: "option+tab",
-                previous: "option+shift+tab"
+        switcher: SwitcherConfig(
+            shortcuts: SwitcherShortcutConfig(
+                workspace: "option+shift+tab",
+                window: "option+tab"
             )
         )
     )

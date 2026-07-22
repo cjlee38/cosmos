@@ -28,7 +28,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
     func testReassigningHiddenWindowToAnotherMonitorReplacesItsRestoreFrame() throws {
         let initialConfig = KkaciConfig(
             workspaces: workspaceConfigs(["1", "2", "A", "B"], displays: ["A": 2, "B": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         )
         let store = InMemoryWorkspaceConfigStore()
         try store.save(initialConfig)
@@ -95,7 +95,7 @@ final class WorkspaceMonitorMigrationTests: WorkspaceControllerTestCase {
     func testFailedHiddenWindowReassignmentRestoresThePreviousDurableFrame() throws {
         let initialConfig = KkaciConfig(
             workspaces: workspaceConfigs(["1", "2", "B"], displays: ["B": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         )
         let store = InMemoryWorkspaceConfigStore()
         try store.save(initialConfig)

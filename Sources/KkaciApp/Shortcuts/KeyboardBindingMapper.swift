@@ -25,32 +25,16 @@ final class KeyboardBindingMapper {
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         switch shortcut.target {
-        case .workspaceSwitcherNext:
+        case .workspaceSwitcher:
             workspaceSwitcherRegistration(
                 shortcut,
-                name: "Cycle Workspace Forward",
-                direction: .forward,
+                name: "Cycle Workspace",
                 actions: actions
             )
-        case .workspaceSwitcherPrevious:
-            workspaceSwitcherRegistration(
-                shortcut,
-                name: "Cycle Workspace Backward",
-                direction: .backward,
-                actions: actions
-            )
-        case .windowSwitcherNext:
+        case .windowSwitcher:
             windowSwitcherRegistration(
                 shortcut,
-                name: "Cycle Window Forward",
-                direction: .forward,
-                actions: actions
-            )
-        case .windowSwitcherPrevious:
-            windowSwitcherRegistration(
-                shortcut,
-                name: "Cycle Window Backward",
-                direction: .backward,
+                name: "Cycle Window",
                 actions: actions
             )
         case let .switchWorkspace(workspace):
@@ -63,7 +47,6 @@ final class KeyboardBindingMapper {
     private func workspaceSwitcherRegistration(
         _ shortcut: ConfiguredShortcut,
         name: String,
-        direction: SwitcherDirection,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .hold(
@@ -73,7 +56,7 @@ final class KeyboardBindingMapper {
             releaseGroup: "workspace-switcher",
             actions: .init(
                 onPress: { [weak actions] in
-                    actions?.stepWorkspaceSwitcher(direction: direction)
+                    actions?.stepWorkspaceSwitcher(direction: .forward)
                 },
                 onRelease: { [weak actions] in
                     actions?.commitWorkspaceSwitcher()
@@ -88,7 +71,6 @@ final class KeyboardBindingMapper {
     private func windowSwitcherRegistration(
         _ shortcut: ConfiguredShortcut,
         name: String,
-        direction: SwitcherDirection,
         actions: any KeyboardShortcutActionHandling
     ) -> KeyboardShortcutRegistration {
         .hold(
@@ -98,10 +80,10 @@ final class KeyboardBindingMapper {
             releaseGroup: "window-switcher",
             actions: .init(
                 onPress: { [weak actions] in
-                    actions?.stepWindowSwitcher(direction: direction, wraps: true)
+                    actions?.stepWindowSwitcher(direction: .forward, wraps: true)
                 },
                 onRepeat: { [weak actions] in
-                    actions?.stepWindowSwitcher(direction: direction, wraps: false)
+                    actions?.stepWindowSwitcher(direction: .forward, wraps: false)
                 },
                 onRelease: { [weak actions] in
                     actions?.commitWindowSwitcher()

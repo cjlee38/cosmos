@@ -82,7 +82,7 @@ final class WorkspaceWindowFocusTests: WorkspaceControllerTestCase {
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
             workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))
         let controller = makeController(
             windowSystem,
@@ -115,7 +115,7 @@ final class WorkspaceWindowFocusTests: WorkspaceControllerTestCase {
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
             workspaces: workspaceConfigs(["1", "A", "B"], displays: ["A": 2, "B": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))
         let controller = makeController(
             windowSystem,
@@ -146,7 +146,7 @@ final class WorkspaceWindowFocusTests: WorkspaceControllerTestCase {
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
             workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))
         let controller = makeController(
             windowSystem,

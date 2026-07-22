@@ -45,13 +45,10 @@ If the config does not exist, kkaci creates the default workspaces `1`, `2`, and
 ```yaml
 version: 1
 
-shortcuts:
-  workspace_switcher:
-    next: ctrl+tab
-    previous: ctrl+shift+tab
-  window_switcher:
-    next: option+tab
-    previous: option+shift+tab
+switcher:
+  shortcuts:
+    workspace: option+shift+tab
+    window: option+tab
 
 workspaces:
   - id: 1
@@ -69,10 +66,8 @@ workspaces:
 The default config registers these global hotkeys:
 
 ```text
-Ctrl+Tab              next workspace
-Ctrl+Shift+Tab        previous workspace
-Option+Tab            next window
-Option+Shift+Tab      previous window
+Option+Shift+Tab      cycle workspace
+Option+Tab            cycle window
 Option+1/2/3          switch to workspace 1/2/3
 Option+Shift+1/2/3    move focused window to workspace 1/2/3
 ```

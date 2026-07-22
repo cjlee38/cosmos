@@ -155,7 +155,7 @@ final class WorkspaceDisplayTopologyTests: WorkspaceControllerTestCase {
     private func configWithSecondaryWorkspace() -> KkaciConfig {
         KkaciConfig(
             workspaces: workspaceConfigs(["1", "A"], displays: ["A": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         )
     }
 

@@ -28,10 +28,8 @@ final class KkaciConfigTests: XCTestCase {
     func testDefaultConfigProjectsConfiguredShortcutsWithTypedTargets() {
         XCTAssertEqual(KkaciConfig.default.workspaces.map(\.id), ["1", "2", "3"])
         XCTAssertEqual(KkaciConfig.default.configuredShortcuts, [
-            ConfiguredShortcut(key: "ctrl+tab", target: .workspaceSwitcherNext),
-            ConfiguredShortcut(key: "ctrl+shift+tab", target: .workspaceSwitcherPrevious),
-            ConfiguredShortcut(key: "option+tab", target: .windowSwitcherNext),
-            ConfiguredShortcut(key: "option+shift+tab", target: .windowSwitcherPrevious),
+            ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcher),
+            ConfiguredShortcut(key: "option+tab", target: .windowSwitcher),
             ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
             ConfiguredShortcut(key: "option+shift+1", target: .moveWindow("1")),
             ConfiguredShortcut(key: "option+2", target: .switchWorkspace("2")),
@@ -99,21 +97,19 @@ final class KkaciConfigTests: XCTestCase {
     func testUpdatingSwitcherShortcutsChangesOnlyTheSelectedTarget() throws {
         let config = KkaciConfig.default
 
-        let workspaceNext = try XCTUnwrap(config.updatingShortcut(
+        let workspace = try XCTUnwrap(config.updatingShortcut(
             "command+tab",
-            for: .workspaceSwitcherNext
+            for: .workspaceSwitcher
         ))
-        XCTAssertEqual(workspaceNext.shortcuts.workspaceSwitcher.next, "command+tab")
-        XCTAssertEqual(workspaceNext.shortcuts.workspaceSwitcher.previous, "ctrl+shift+tab")
-        XCTAssertEqual(workspaceNext.shortcuts.windowSwitcher, config.shortcuts.windowSwitcher)
+        XCTAssertEqual(workspace.switcher.shortcuts.workspace, "command+tab")
+        XCTAssertEqual(workspace.switcher.shortcuts.window, config.switcher.shortcuts.window)
 
-        let windowPrevious = try XCTUnwrap(config.updatingShortcut(
+        let window = try XCTUnwrap(config.updatingShortcut(
             "command+shift+tab",
-            for: .windowSwitcherPrevious
+            for: .windowSwitcher
         ))
-        XCTAssertEqual(windowPrevious.shortcuts.windowSwitcher.previous, "command+shift+tab")
-        XCTAssertEqual(windowPrevious.shortcuts.windowSwitcher.next, "option+tab")
-        XCTAssertEqual(windowPrevious.shortcuts.workspaceSwitcher, config.shortcuts.workspaceSwitcher)
+        XCTAssertEqual(window.switcher.shortcuts.window, "command+shift+tab")
+        XCTAssertEqual(window.switcher.shortcuts.workspace, config.switcher.shortcuts.workspace)
     }
 
     func testUpdatingWorkspaceShortcutsPreservesTheOtherWorkspaceFields() throws {
@@ -132,10 +128,10 @@ final class KkaciConfigTests: XCTestCase {
     func testUpdatingShortcutClearsBlankValuesAndRejectsUnknownWorkspace() throws {
         let cleared = try XCTUnwrap(KkaciConfig.default.updatingShortcut(
             "  \n ",
-            for: .workspaceSwitcherNext
+            for: .workspaceSwitcher
         ))
 
-        XCTAssertNil(cleared.shortcuts.workspaceSwitcher.next)
+        XCTAssertNil(cleared.switcher.shortcuts.workspace)
         XCTAssertNil(KkaciConfig.default.updatingShortcut("option+a", for: .switchWorkspace("A")))
     }
 
@@ -151,8 +147,8 @@ final class KkaciConfigTests: XCTestCase {
                     shortcuts: WorkspaceShortcutConfig(switchWorkspace: "option+d")
                 )
             ],
-            shortcuts: ShortcutConfig(
-                workspaceSwitcher: SwitcherShortcutConfig(next: "ctrl+tab")
+            switcher: SwitcherConfig(
+                shortcuts: SwitcherShortcutConfig(workspace: "option+shift+tab")
             )
         )
         let store = FileKkaciConfigStore(url: url)
@@ -168,13 +164,10 @@ final class KkaciConfigTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let yaml = """
         version: 1
-        shortcuts:
-          workspace_switcher:
-            next: ctrl+tab
-            previous: ctrl+shift+tab
-          window_switcher:
-            next: option+tab
-            previous: option+shift+tab
+        switcher:
+          shortcuts:
+            workspace: option+shift+tab
+            window: option+tab
         workspaces:
           - id: 1
             display: 1
@@ -193,7 +186,7 @@ final class KkaciConfigTests: XCTestCase {
 
         XCTAssertEqual(config.workspaces.map(\.id), ["1", "D"])
         XCTAssertEqual(config.workspaces[1].display, 2)
-        XCTAssertEqual(config.shortcuts.workspaceSwitcher.next, "ctrl+tab")
+        XCTAssertEqual(config.switcher.shortcuts.workspace, "option+shift+tab")
         XCTAssertEqual(config.workspaces[1].shortcuts.moveWindow, "option+shift+d")
     }
 
@@ -236,7 +229,8 @@ final class KkaciConfigTests: XCTestCase {
         XCTAssertEqual(config, .default)
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         XCTAssertTrue(yaml.contains("version: 1"))
-        XCTAssertTrue(yaml.contains("workspace_switcher:"))
+        XCTAssertTrue(yaml.contains("switcher:"))
+        XCTAssertTrue(yaml.contains("workspace: option+shift+tab"))
         XCTAssertTrue(yaml.contains("workspaces:"))
         XCTAssertFalse(yaml.contains("bindings:"))
         XCTAssertEqual(try store.load(), .default)

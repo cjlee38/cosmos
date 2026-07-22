@@ -89,8 +89,8 @@ struct AppSettingsSnapshot: Equatable {
 struct WorkspaceSettingsSnapshot: Equatable {
     let displays: [WorkspaceSettingsDisplay]
     let disconnectedMonitorSlots: [MonitorSlot]
-    let workspaceSwitcher: SwitcherSettingsShortcuts
-    let windowSwitcher: SwitcherSettingsShortcuts
+    let workspaceSwitcher: String?
+    let windowSwitcher: String?
     let workspaces: [WorkspaceSettingsItem]
     let isEditable: Bool
     let shortcutValidationMessages: [ShortcutTarget: String]
@@ -138,14 +138,8 @@ struct WorkspaceSettingsSnapshot: Equatable {
         disconnectedMonitorSlots = Set(workspaceItems.map(\.monitorSlot))
             .subtracting(connectedSlots)
             .sorted()
-        workspaceSwitcher = SwitcherSettingsShortcuts(
-            next: config.shortcuts.workspaceSwitcher.next,
-            previous: config.shortcuts.workspaceSwitcher.previous
-        )
-        windowSwitcher = SwitcherSettingsShortcuts(
-            next: config.shortcuts.windowSwitcher.next,
-            previous: config.shortcuts.windowSwitcher.previous
-        )
+        workspaceSwitcher = config.switcher.shortcuts.workspace
+        windowSwitcher = config.switcher.shortcuts.window
         workspaces = workspaceItems
         self.isEditable = isEditable
         self.shortcutValidationMessages = shortcutValidationMessages
@@ -204,11 +198,6 @@ struct WorkspaceDisplayOption: Equatable {
     var title: String {
         "\(monitorSlot) · \(name)"
     }
-}
-
-struct SwitcherSettingsShortcuts: Equatable {
-    let next: String?
-    let previous: String?
 }
 
 struct WorkspaceSettingsItem: Equatable {

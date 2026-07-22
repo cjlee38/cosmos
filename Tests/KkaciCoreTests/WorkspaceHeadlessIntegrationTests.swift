@@ -248,7 +248,7 @@ final class WorkspaceHeadlessRestartIntegrationTests: WorkspaceHeadlessIntegrati
         let configStore = FileKkaciConfigStore(url: directory.appendingPathComponent("config.yaml"))
         try configStore.save(KkaciConfig(
             workspaces: workspaceConfigs(["1", "2", "3", "D"]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))
 
         let firstSystem = FakeWindowSystem(windows: windows())

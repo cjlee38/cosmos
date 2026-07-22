@@ -6,7 +6,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
             workspaces: workspaceConfigs(["A", "B"]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))
         let windowSystem = FakeWindowSystem(windows: [.window(id: 100, title: "Window")])
         let controller = makeController(windowSystem, configStore: store)
@@ -50,7 +50,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
     func testConfigVisibilityFailureRestoresPreviousConfigAndVisibility() throws {
         let initialConfig = KkaciConfig(
             workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         )
         let store = InMemoryWorkspaceConfigStore()
         try store.save(initialConfig)
@@ -111,7 +111,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
 
         XCTAssertThrowsError(try controller.applyConfig(KkaciConfig(
             workspaces: workspaceConfigs(["1", "2"], displays: ["2": 2]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))) { error in
             guard let transactionError = error as? WorkspaceTransactionError else {
                 return XCTFail("Expected WorkspaceTransactionError, got \(error)")
@@ -137,7 +137,7 @@ final class WorkspaceControllerConfigTests: WorkspaceControllerTestCase {
         let store = InMemoryWorkspaceConfigStore()
         try store.save(KkaciConfig(
             workspaces: workspaceConfigs(["1", "2", "A"]),
-            shortcuts: KkaciConfig.default.shortcuts
+            switcher: KkaciConfig.default.switcher
         ))
         let controller = makeController(windowSystem, configStore: store)
 

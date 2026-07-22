@@ -127,8 +127,8 @@ enum WorkspaceSettingsControlFactory {
 
     static func switcherRow(
         title: String,
-        shortcuts: SwitcherSettingsShortcuts,
-        targets: (next: ShortcutTarget, previous: ShortcutTarget),
+        shortcut: String?,
+        shortcutTarget: ShortcutTarget,
         validationMessages: [ShortcutTarget: String],
         action: (target: AnyObject, selector: Selector)
     ) -> NSView {
@@ -136,21 +136,14 @@ enum WorkspaceSettingsControlFactory {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let next = labeledShortcut(
-            title: "Next",
-            shortcutTarget: targets.next,
-            shortcut: shortcuts.next,
-            validationMessage: validationMessages[targets.next],
-            action: action
+        let recorder = shortcutRecorder(
+            shortcutTarget: shortcutTarget,
+            shortcut: shortcut,
+            validationMessage: validationMessages[shortcutTarget],
+            target: action.target,
+            action: action.selector
         )
-        let previous = labeledShortcut(
-            title: "Previous",
-            shortcutTarget: targets.previous,
-            shortcut: shortcuts.previous,
-            validationMessage: validationMessages[targets.previous],
-            action: action
-        )
-        let row = NSStackView(views: [title, spacer, next, previous])
+        let row = NSStackView(views: [title, spacer, recorder])
         row.orientation = .horizontal
         row.alignment = .centerY
         row.spacing = 12

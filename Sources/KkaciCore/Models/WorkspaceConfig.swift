@@ -3,44 +3,25 @@ import Foundation
 public struct SwitcherShortcutConfig: Codable, Equatable {
     public static let empty = SwitcherShortcutConfig()
 
-    public let next: String?
-    public let previous: String?
+    public let workspace: String?
+    public let window: String?
 
-    public init(next: String? = nil, previous: String? = nil) {
-        self.next = next
-        self.previous = previous
+    public init(
+        workspace: String? = nil,
+        window: String? = nil
+    ) {
+        self.workspace = workspace
+        self.window = window
     }
 }
 
-public struct ShortcutConfig: Codable, Equatable {
-    public static let empty = ShortcutConfig()
+public struct SwitcherConfig: Codable, Equatable {
+    public static let empty = SwitcherConfig()
 
-    public let workspaceSwitcher: SwitcherShortcutConfig
-    public let windowSwitcher: SwitcherShortcutConfig
+    public let shortcuts: SwitcherShortcutConfig
 
-    public init(
-        workspaceSwitcher: SwitcherShortcutConfig = .empty,
-        windowSwitcher: SwitcherShortcutConfig = .empty
-    ) {
-        self.workspaceSwitcher = workspaceSwitcher
-        self.windowSwitcher = windowSwitcher
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case workspaceSwitcher = "workspace_switcher"
-        case windowSwitcher = "window_switcher"
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        workspaceSwitcher = try container.decodeIfPresent(
-            SwitcherShortcutConfig.self,
-            forKey: .workspaceSwitcher
-        ) ?? .empty
-        windowSwitcher = try container.decodeIfPresent(
-            SwitcherShortcutConfig.self,
-            forKey: .windowSwitcher
-        ) ?? .empty
+    public init(shortcuts: SwitcherShortcutConfig = .empty) {
+        self.shortcuts = shortcuts
     }
 }
 
@@ -132,38 +113,32 @@ public struct KkaciConfig: Codable, Equatable {
                 )
             )
         ],
-        shortcuts: ShortcutConfig(
-            workspaceSwitcher: SwitcherShortcutConfig(
-                next: "ctrl+tab",
-                previous: "ctrl+shift+tab"
-            ),
-            windowSwitcher: SwitcherShortcutConfig(
-                next: "option+tab",
-                previous: "option+shift+tab"
+        switcher: SwitcherConfig(
+            shortcuts: SwitcherShortcutConfig(
+                workspace: "option+shift+tab",
+                window: "option+tab"
             )
         )
     )
 
     public let version: Int
-    public let shortcuts: ShortcutConfig
+    public let switcher: SwitcherConfig
     public let workspaces: [WorkspaceConfig]
 
     public init(
         version: Int = KkaciConfig.currentVersion,
         workspaces: [WorkspaceConfig],
-        shortcuts: ShortcutConfig = .empty
+        switcher: SwitcherConfig = .empty
     ) {
         self.version = version
-        self.shortcuts = shortcuts
+        self.switcher = switcher
         self.workspaces = Self.normalized(workspaces)
     }
 
     public var configuredShortcuts: [ConfiguredShortcut] {
         var result: [ConfiguredShortcut] = []
-        result.append(shortcuts.workspaceSwitcher.next, target: .workspaceSwitcherNext)
-        result.append(shortcuts.workspaceSwitcher.previous, target: .workspaceSwitcherPrevious)
-        result.append(shortcuts.windowSwitcher.next, target: .windowSwitcherNext)
-        result.append(shortcuts.windowSwitcher.previous, target: .windowSwitcherPrevious)
+        result.append(switcher.shortcuts.workspace, target: .workspaceSwitcher)
+        result.append(switcher.shortcuts.window, target: .windowSwitcher)
         for workspace in workspaces {
             result.append(
                 workspace.shortcuts.switchWorkspace,
@@ -196,7 +171,7 @@ public struct KkaciConfig: Codable, Equatable {
                     shortcuts: configuredWorkspace.shortcuts
                 )
             },
-            shortcuts: shortcuts
+            switcher: switcher
         )
     }
 
@@ -219,7 +194,7 @@ public struct KkaciConfig: Codable, Equatable {
                     shortcuts: WorkspaceConfig.defaultShortcuts(for: id)
                 )
             },
-            shortcuts: shortcuts
+            switcher: switcher
         )
     }
 
@@ -230,13 +205,13 @@ public struct KkaciConfig: Codable, Equatable {
         return KkaciConfig(
             version: version,
             workspaces: workspaces.filter { $0.id != id },
-            shortcuts: shortcuts
+            switcher: switcher
         )
     }
 
     private enum CodingKeys: String, CodingKey {
         case version
-        case shortcuts
+        case switcher
         case workspaces
     }
 
@@ -251,7 +226,7 @@ public struct KkaciConfig: Codable, Equatable {
             )
         }
 
-        let shortcuts = try container.decodeIfPresent(ShortcutConfig.self, forKey: .shortcuts) ?? .empty
+        let switcher = try container.decodeIfPresent(SwitcherConfig.self, forKey: .switcher) ?? .empty
         let workspaces = try container.decode([WorkspaceConfig].self, forKey: .workspaces)
         guard !workspaces.isEmpty else {
             throw DecodingError.dataCorruptedError(
@@ -267,7 +242,7 @@ public struct KkaciConfig: Codable, Equatable {
                 debugDescription: "Workspace IDs must be unique"
             )
         }
-        self.init(version: version, workspaces: workspaces, shortcuts: shortcuts)
+        self.init(version: version, workspaces: workspaces, switcher: switcher)
     }
 
     private static func normalized(_ workspaces: [WorkspaceConfig]) -> [WorkspaceConfig] {

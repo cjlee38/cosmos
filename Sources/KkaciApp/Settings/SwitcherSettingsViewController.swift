@@ -150,8 +150,8 @@ private extension SwitcherSettingsViewController {
         let workspaceRow = SettingsControlFactory.padded(
             WorkspaceSettingsControlFactory.switcherRow(
                 title: "Cycle Keybinding",
-                shortcuts: snapshot.workspaceSwitcher,
-                targets: (.workspaceSwitcherNext, .workspaceSwitcherPrevious),
+                shortcut: snapshot.workspaceSwitcher,
+                shortcutTarget: .workspaceSwitcher,
                 validationMessages: snapshot.shortcutValidationMessages,
                 action: (self, #selector(beginShortcutRecording(_:)))
             ),
@@ -165,8 +165,8 @@ private extension SwitcherSettingsViewController {
         let windowRow = SettingsControlFactory.padded(
             WorkspaceSettingsControlFactory.switcherRow(
                 title: "Cycle Keybinding",
-                shortcuts: snapshot.windowSwitcher,
-                targets: (.windowSwitcherNext, .windowSwitcherPrevious),
+                shortcut: snapshot.windowSwitcher,
+                shortcutTarget: .windowSwitcher,
                 validationMessages: snapshot.shortcutValidationMessages,
                 action: (self, #selector(beginShortcutRecording(_:)))
             ),

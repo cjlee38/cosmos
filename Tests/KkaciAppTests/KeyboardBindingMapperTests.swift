@@ -7,7 +7,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         let actions = KeyboardShortcutActionSpy()
         let registration = try XCTUnwrap(
             KeyboardBindingMapper().registrations(
-                for: [ConfiguredShortcut(key: "option+tab", target: .windowSwitcherNext)],
+                for: [ConfiguredShortcut(key: "option+tab", target: .windowSwitcher)],
                 actions: actions
             ).first
         )
@@ -16,7 +16,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         registration.onRepeat?()
         registration.onRelease?()
 
-        XCTAssertEqual(registration.target, .windowSwitcherNext)
+        XCTAssertEqual(registration.target, .windowSwitcher)
         XCTAssertEqual(actions.windowSteps.count, 2)
         XCTAssertEqual(actions.windowSteps[0].direction, .forward)
         XCTAssertTrue(actions.windowSteps[0].wraps)
@@ -25,11 +25,11 @@ final class KeyboardBindingMapperTests: XCTestCase {
         XCTAssertEqual(actions.windowCommitCount, 1)
     }
 
-    func testWorkspaceSwitcherMapsDirectionAndReleaseToActions() throws {
+    func testWorkspaceSwitcherMapsForwardStepAndReleaseToActions() throws {
         let actions = KeyboardShortcutActionSpy()
         let registration = try XCTUnwrap(
             KeyboardBindingMapper().registrations(
-                for: [ConfiguredShortcut(key: "ctrl+shift+tab", target: .workspaceSwitcherPrevious)],
+                for: [ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcher)],
                 actions: actions
             ).first
         )
@@ -37,8 +37,8 @@ final class KeyboardBindingMapperTests: XCTestCase {
         registration.onPress()
         registration.onRelease?()
 
-        XCTAssertEqual(registration.target, .workspaceSwitcherPrevious)
-        XCTAssertEqual(actions.workspaceSteps, [.backward])
+        XCTAssertEqual(registration.target, .workspaceSwitcher)
+        XCTAssertEqual(actions.workspaceSteps, [.forward])
         XCTAssertEqual(actions.workspaceCommitCount, 1)
     }
 
@@ -102,7 +102,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         let actions = KeyboardShortcutActionSpy()
         let registrations = KeyboardBindingMapper().registrations(
             for: [
-                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
+                ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcher),
                 ConfiguredShortcut(key: "option+b", target: .switchWorkspace("B")),
                 ConfiguredShortcut(key: "control+b", target: .moveWindow("C"))
             ],
@@ -116,7 +116,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
         let actions = KeyboardShortcutActionSpy()
         let registrations = KeyboardBindingMapper().registrations(
             for: [
-                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
+                ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcher),
                 ConfiguredShortcut(key: "option+b", target: .switchWorkspace("B")),
                 ConfiguredShortcut(key: "option+shift+b", target: .moveWindow("C"))
             ],
@@ -126,23 +126,10 @@ final class KeyboardBindingMapperTests: XCTestCase {
         XCTAssertEqual(try KeyboardShortcutResolver().resolve(registrations).count, 3)
     }
 
-    func testSwitcherDirectionsMayUseDifferentHoldModifiers() throws {
-        let registrations = KeyboardBindingMapper().registrations(
-            for: [
-                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
-                ConfiguredShortcut(key: "option+shift+tab", target: .workspaceSwitcherPrevious)
-            ],
-            actions: KeyboardShortcutActionSpy()
-        )
-
-        XCTAssertEqual(try KeyboardShortcutResolver().resolve(registrations).count, 2)
-    }
-
     func testCycleShortcutConflictMarksOnlyTheExactDuplicateActions() {
         let registrations = KeyboardBindingMapper().registrations(
             for: [
-                ConfiguredShortcut(key: "control+tab", target: .workspaceSwitcherNext),
-                ConfiguredShortcut(key: "option+1", target: .workspaceSwitcherPrevious),
+                ConfiguredShortcut(key: "option+1", target: .workspaceSwitcher),
                 ConfiguredShortcut(key: "option+1", target: .switchWorkspace("1")),
                 ConfiguredShortcut(key: "option+shift+1", target: .moveWindow("1")),
                 ConfiguredShortcut(key: "option+2", target: .switchWorkspace("2")),
@@ -157,7 +144,7 @@ final class KeyboardBindingMapperTests: XCTestCase {
             }
             XCTAssertEqual(
                 Set(validationError.issues.compactMap(\.target)),
-                Set([ShortcutTarget.workspaceSwitcherPrevious, .switchWorkspace("1")])
+                Set([ShortcutTarget.workspaceSwitcher, .switchWorkspace("1")])
             )
         }
     }
