@@ -1,0 +1,46 @@
+import CosmosCore
+
+struct AppCompositionRoot {
+    func build() -> AppRuntime {
+        let profile = AppProfile.current
+        let axClient = AXClient(
+            includedOwnWindowIdentifiers: [SettingsWindowController.accessibilityIdentifier]
+        )
+        let registry = WindowRegistry(axClient: axClient)
+        let configStore = FileCosmosConfigStore(url: profile.configURL)
+        let recordStore = FileHiddenWindowRecordStore(url: profile.hiddenWindowRecordsURL)
+        let controller = SpaceController(
+            windowSystem: registry,
+            displayProvider: DisplayProvider(),
+            configStore: configStore,
+            recordStore: recordStore
+        )
+        let previewService = SwitcherPreviewService(
+            controller: controller,
+            windowThumbnailCache: WindowThumbnailCache(),
+            spaceThumbnailCache: SpaceThumbnailCache(),
+            applicationIconCache: ApplicationIconCache()
+        )
+        let keyboardShortcutManager = KeyboardShortcutManager()
+        let appSettingsStore = AppSettingsStore()
+        let onboardingStateStore = OnboardingStateStore()
+
+        return AppRuntime(
+            controller: controller,
+            configRuntime: ConfigRuntime(
+                configStore: configStore,
+                configURL: configStore.url,
+                controller: controller,
+                keyboardShortcutManager: keyboardShortcutManager,
+                keyboardBindingMapper: KeyboardBindingMapper(),
+                initialLoadError: controller.startupConfigLoadError
+            ),
+            permissionController: AccessibilityPermissionController(axClient: axClient),
+            generalSettingsService: GeneralSettingsService(axClient: axClient),
+            appSettingsStore: appSettingsStore,
+            onboardingStateStore: onboardingStateStore,
+            keyboardShortcutManager: keyboardShortcutManager,
+            previewService: previewService
+        )
+    }
+}

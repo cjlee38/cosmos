@@ -3,14 +3,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "kkaci",
+    name: "cosmos",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .library(name: "KkaciCore", targets: ["KkaciCore"]),
-        .executable(name: "kkaci", targets: ["KkaciCli"]),
-        .executable(name: "kkaci-fixture-app", targets: ["KkaciFixtureApp"])
+        .library(name: "CosmosCore", targets: ["CosmosCore"]),
+        .executable(name: "cosmos", targets: ["CosmosCli"]),
+        .executable(name: "cosmos-fixture-app", targets: ["CosmosFixtureApp"])
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2")
@@ -22,37 +22,37 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
-            name: "KkaciCore",
+            name: "CosmosCore",
             dependencies: [
                 "PrivateApi",
                 .product(name: "Yams", package: "Yams")
             ],
-            path: "Sources/KkaciCore"
+            path: "Sources/CosmosCore"
         ),
         .executableTarget(
-            name: "KkaciCli",
+            name: "CosmosCli",
             dependencies: [
-                "KkaciCore"
+                "CosmosCore"
             ],
-            path: "Sources/KkaciCli"
+            path: "Sources/CosmosCli"
         ),
         .executableTarget(
-            name: "KkaciFixtureApp",
-            path: "Sources/KkaciFixtureApp"
+            name: "CosmosFixtureApp",
+            path: "Sources/CosmosFixtureApp"
         ),
         .testTarget(
-            name: "KkaciCoreTests",
+            name: "CosmosCoreTests",
             dependencies: [
-                "KkaciCore"
+                "CosmosCore"
             ],
-            path: "Tests/KkaciCoreTests"
+            path: "Tests/CosmosCoreTests"
         ),
         .testTarget(
-            name: "KkaciCliTests",
+            name: "CosmosCliTests",
             dependencies: [
-                "KkaciCli"
+                "CosmosCli"
             ],
-            path: "Tests/KkaciCliTests"
+            path: "Tests/CosmosCliTests"
         )
     ]
 )

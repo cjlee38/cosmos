@@ -1,0 +1,1 @@
+CosmosApplication.run()

@@ -1,5 +1,5 @@
-#ifndef kkaci_private_h
-#define kkaci_private_h
+#ifndef cosmos_private_h
+#define cosmos_private_h
 
 #import <ApplicationServices/ApplicationServices.h>
 
