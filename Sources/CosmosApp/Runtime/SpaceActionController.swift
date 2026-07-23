@@ -1,5 +1,6 @@
-import Foundation
+import CoreGraphics
 import CosmosCore
+import Foundation
 
 final class SpaceActionController {
     private let log = Log(category: "space")
@@ -8,9 +9,11 @@ final class SpaceActionController {
     private let previewService: SwitcherPreviewService
     private let appSettingsStore: AppSettingsStore
     private let refreshStatusSurfaces: () -> Void
+    private let spaceSwitchCommand: SpaceSwitchCommand
     private lazy var switcherCoordinator = SwitcherCoordinator(
         controller: controller,
         previewService: previewService,
+        spaceSwitchCommand: spaceSwitchCommand,
         refreshStatus: { [weak self] in
             self?.refreshStatusSurfaces()
         },
@@ -22,11 +25,16 @@ final class SpaceActionController {
         controller: SpaceController,
         previewService: SwitcherPreviewService,
         appSettingsStore: AppSettingsStore,
+        warpCursor: @escaping (CGPoint) -> CGError = CGWarpMouseCursorPosition,
         refreshStatusSurfaces: @escaping () -> Void
     ) {
         self.controller = controller
         self.previewService = previewService
         self.appSettingsStore = appSettingsStore
+        spaceSwitchCommand = SpaceSwitchCommand(
+            controller: controller,
+            warpCursor: warpCursor
+        )
         self.refreshStatusSurfaces = refreshStatusSurfaces
     }
 
@@ -57,7 +65,7 @@ final class SpaceActionController {
     func switchSpace(to space: SpaceID) {
         cancelSwitcher()
         perform("Switched to space \(space.rawValue)") {
-            try controller.switchSpace(to: space.rawValue) != nil
+            try spaceSwitchCommand.execute(to: space.rawValue)
         }
     }
 

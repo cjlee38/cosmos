@@ -6,6 +6,7 @@ final class SwitcherCoordinator {
 
     private let controller: SpaceController
     private let previewService: SwitcherPreviewService
+    private let spaceSwitchCommand: SpaceSwitchCommand
     private let makeOverlay: () -> any SwitcherOverlayPresenting
     private let refreshStatus: () -> Void
     private var overlay: (any SwitcherOverlayPresenting)?
@@ -16,12 +17,14 @@ final class SwitcherCoordinator {
     init(
         controller: SpaceController,
         previewService: SwitcherPreviewService,
+        spaceSwitchCommand: SpaceSwitchCommand,
         refreshStatus: @escaping () -> Void,
         overlay: (any SwitcherOverlayPresenting)? = nil,
         makeOverlay: @escaping () -> any SwitcherOverlayPresenting
     ) {
         self.controller = controller
         self.previewService = previewService
+        self.spaceSwitchCommand = spaceSwitchCommand
         self.refreshStatus = refreshStatus
         self.overlay = overlay
         self.makeOverlay = makeOverlay
@@ -158,7 +161,7 @@ private extension SwitcherCoordinator {
 
         log.trace("commit space=\(id)")
         do {
-            guard try controller.switchSpace(to: id) != nil else { return }
+            guard try spaceSwitchCommand.execute(to: id) else { return }
             log.info("Switched to space \(id)")
             refreshStatus()
         } catch {

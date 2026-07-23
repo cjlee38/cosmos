@@ -130,6 +130,51 @@ final class SwitcherCoordinatorTests: XCTestCase {
         XCTAssertEqual(controller.spacesByRecency, ["2", "1", "3"])
     }
 
+    func testSpaceSwitcherCommitMovesCursorWhenTargetIsOnAnotherDisplay() throws {
+        let displays = [
+            DisplaySnapshot(
+                id: 1,
+                frame: CGRect(x: 0, y: 0, width: 1000, height: 800),
+                role: .main
+            ),
+            DisplaySnapshot(
+                id: 2,
+                frame: CGRect(x: 1000, y: 0, width: 1200, height: 800),
+                role: .extended
+            )
+        ]
+        let controller = SpaceController(
+            windowSystem: SwitcherTestWindowSystem(windows: []),
+            displayProvider: SwitcherTestDisplayProvider(snapshots: displays),
+            configStore: ConfigStoreSpy(loadedConfig: CosmosConfig(spaces: [
+                SpaceConfig(id: "1", display: 1),
+                SpaceConfig(id: "A", display: 2)
+            ]))
+        )
+        try controller.bootstrapWindowState()
+        var cursorPositions: [CGPoint] = []
+        let coordinator = SwitcherCoordinator(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            spaceSwitchCommand: SpaceSwitchCommand(
+                controller: controller,
+                warpCursor: {
+                    cursorPositions.append($0)
+                    return .success
+                }
+            ),
+            refreshStatus: {},
+            overlay: SwitcherOverlaySpy(),
+            makeOverlay: SwitcherOverlaySpy.init
+        )
+
+        coordinator.stepSpace(direction: .forward)
+        coordinator.commitSpaceSelection()
+
+        XCTAssertEqual(controller.currentSpace, "A")
+        XCTAssertEqual(cursorPositions, [CGPoint(x: 1600, y: 400)])
+    }
+
     func testPreviewCompletionUpdatesOnlyTheAffectedTileAndPreservesSelection() throws {
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 10, title: "One"),
@@ -154,6 +199,7 @@ final class SwitcherCoordinatorTests: XCTestCase {
         let coordinator = SwitcherCoordinator(
             controller: controller,
             previewService: previewService,
+            spaceSwitchCommand: SpaceSwitchCommand(controller: controller, warpCursor: { _ in .success }),
             refreshStatus: {},
             overlay: overlay,
             makeOverlay: { overlay }
@@ -188,6 +234,7 @@ final class SwitcherCoordinatorTests: XCTestCase {
         let coordinator = SwitcherCoordinator(
             controller: controller,
             previewService: previewService,
+            spaceSwitchCommand: SpaceSwitchCommand(controller: controller, warpCursor: { _ in .success }),
             refreshStatus: {},
             makeOverlay: {
                 overlayCreated.fulfill()
@@ -252,6 +299,7 @@ final class SwitcherCoordinatorTests: XCTestCase {
         SwitcherCoordinator(
             controller: controller,
             previewService: makeSwitcherTestPreviewService(controller: controller),
+            spaceSwitchCommand: SpaceSwitchCommand(controller: controller, warpCursor: { _ in .success }),
             refreshStatus: {},
             overlay: overlay,
             makeOverlay: { overlay }
