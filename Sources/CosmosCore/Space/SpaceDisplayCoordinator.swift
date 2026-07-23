@@ -36,6 +36,29 @@ final class SpaceDisplayCoordinator {
         return DisplayConfigurationSyncResult(sync: sync, targetFrames: targetFrames)
     }
 
+    func applyDisplayConfiguration(
+        _ discovery: WindowDiscoverySnapshot,
+        state: inout SpaceState
+    ) throws -> DisplayConfigurationSyncResult? {
+        let previousTopology = windowCache.displayTopology
+        let previousFrames = frames(for: state)
+        let displayTopology = try monitorSlotResolver.topology()
+        guard let sync = runtimeSynchronizer.apply(
+            discovery,
+            displayTopology: displayTopology,
+            state: &state,
+            reconcileVisibleWindowMonitorMembership: false
+        ) else {
+            return nil
+        }
+        let targetFrames = targetFramesForDisplayChange(
+            from: previousTopology,
+            previousFrames: previousFrames,
+            state: state
+        )
+        return DisplayConfigurationSyncResult(sync: sync, targetFrames: targetFrames)
+    }
+
     func targetFramesForConfiguredMonitors(state: SpaceState) -> [WindowID: WindowFrame] {
         let topology = windowCache.displayTopology
         return state.assignedWindowIDs.reduce(into: [:]) { frames, id in

@@ -224,7 +224,7 @@ private extension SwitcherCoordinator {
             )
             previewService.refresh(
                 windowIDs: Set(selection.items),
-                spaceIDs: [controller.currentSpace],
+                spaceIDs: [],
                 priorityIDs: [selection.selectedItem]
             )
         case let .spaces(selection, anchorFrame):
@@ -239,7 +239,8 @@ private extension SwitcherCoordinator {
                     self?.commitSpace(id: id)
                 }
             )
-            previewService.refreshAll(
+            previewService.refresh(
+                windowIDs: Set(controller.currentWindows().map(\.id)), spaceIDs: [],
                 priorityIDs: controller.windows(in: selection.selectedItem).first.map { [$0.id] } ?? []
             )
         case nil:

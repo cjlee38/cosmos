@@ -1,8 +1,8 @@
 import AppKit
 import CoreGraphics
-import Foundation
 @testable import CosmosApp
 import CosmosCore
+import Foundation
 import XCTest
 
 enum SwitcherTestWindowSystemError: Error {
@@ -14,6 +14,9 @@ final class SwitcherTestWindowSystem: WindowSystem {
     var windows: [WindowSnapshot]
     var focusedWindowIDValue: WindowID?
     var frameWriteFailures: Set<WindowID> = []
+    var discoveryApplyResults: [Bool] = []
+    private(set) var refreshCount = 0
+    private(set) var discoveryRequests: [Set<WindowID>?] = []
     private(set) var focusedWindowIDs: [WindowID] = []
     private var framesByID: [WindowID: WindowFrame]
 
@@ -31,8 +34,13 @@ final class SwitcherTestWindowSystem: WindowSystem {
         })
     }
 
+    func resetDiscoveryRequests() {
+        discoveryRequests.removeAll()
+    }
+
     func refresh() throws -> [WindowSnapshot] {
-        windows.map { window in
+        refreshCount += 1
+        return windows.map { window in
             WindowSnapshot(
                 id: window.id,
                 app: window.app,
@@ -41,6 +49,21 @@ final class SwitcherTestWindowSystem: WindowSystem {
                 isMinimized: window.isMinimized
             )
         }
+    }
+
+    func discover(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot {
+        discoveryRequests.append(windowIDs)
+        let windows = try refresh()
+        return WindowDiscoverySnapshot(
+            scope: windowIDs.map(WindowDiscoverySnapshot.Scope.windows) ?? .full,
+            windows: windowIDs.map { ids in windows.filter { ids.contains($0.id) } } ?? windows,
+            focusedWindowID: focusedWindowIDValue,
+            frontToBackWindowIDs: windows.map(\.id)
+        )
+    }
+
+    func apply(_: WindowDiscoverySnapshot) -> Bool {
+        discoveryApplyResults.isEmpty ? true : discoveryApplyResults.removeFirst()
     }
 
     func contains(_ id: WindowID) -> Bool {

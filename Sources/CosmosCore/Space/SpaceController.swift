@@ -85,26 +85,6 @@ public extension SpaceController {
         }
     }
 
-    func handleWindowSetChanged() throws -> ExternalWindowEventResult {
-        try handleExternalWindowChange(ExternalWindowChange())
-    }
-
-    func handleOwnWindowVisibilityChanged() throws -> ExternalWindowEventResult {
-        try handleExternalWindowChange(ExternalWindowChange())
-    }
-
-    func handleFocusedWindowChanged() throws -> ExternalWindowEventResult {
-        try handleExternalWindowChange(ExternalWindowChange(focusPolicy: .always))
-    }
-
-    func handleWindowLayoutChanged() throws -> ExternalWindowEventResult {
-        try handleExternalWindowChange(ExternalWindowChange(focusPolicy: .visibleFocusedWindow))
-    }
-
-    func handleDisplayConfigurationChanged() throws -> ExternalWindowEventResult {
-        try handleExternalWindowChange(ExternalWindowChange(displayConfigurationChanged: true))
-    }
-
     func handleExternalWindowChange(_ change: ExternalWindowChange) throws -> ExternalWindowEventResult {
         let sync: SpaceSyncSummary
         let targetFrames: [WindowID: WindowFrame]
@@ -117,6 +97,56 @@ public extension SpaceController {
             targetFrames = [:]
         }
 
+        return try finishExternalWindowChange(
+            change,
+            sync: sync,
+            targetFrames: targetFrames
+        )
+    }
+
+    func discoverWindows(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot {
+        try windowSystem.discover(windowIDs: windowIDs)
+    }
+
+    func applyExternalWindowChange(
+        _ change: ExternalWindowChange,
+        discovery: WindowDiscoverySnapshot
+    ) throws -> ExternalWindowEventResult? {
+        let sync: SpaceSyncSummary
+        let targetFrames: [WindowID: WindowFrame]
+        if change.displayConfigurationChanged {
+            guard let displaySync = try displayCoordinator.applyDisplayConfiguration(
+                discovery,
+                state: &state
+            ) else {
+                return nil
+            }
+            sync = displaySync.sync
+            targetFrames = displaySync.targetFrames
+        } else {
+            guard let appliedSync = runtimeSynchronizer.apply(
+                discovery,
+                displayTopology: windowCache.displayTopology,
+                state: &state
+            ) else {
+                return nil
+            }
+            sync = appliedSync
+            targetFrames = [:]
+        }
+
+        return try finishExternalWindowChange(
+            change,
+            sync: sync,
+            targetFrames: targetFrames
+        )
+    }
+
+    private func finishExternalWindowChange(
+        _ change: ExternalWindowChange,
+        sync: SpaceSyncSummary,
+        targetFrames: [WindowID: WindowFrame]
+    ) throws -> ExternalWindowEventResult {
         let focusedWindowSync: FocusedWindowSpaceSyncResult?
         if change.focusPolicy.shouldFollow(focusedWindowID: windowCache.focusedWindowID, state: state) {
             let focusResult = try navigationCoordinator.syncSpaceToFocusedWindow(

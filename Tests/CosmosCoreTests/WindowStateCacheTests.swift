@@ -44,4 +44,32 @@ final class WindowStateCacheTests: XCTestCase {
         XCTAssertEqual(cache.windows.map(\.id), [200, 100])
         XCTAssertEqual(cache.focusedWindowID, 100)
     }
+
+    func testPartialDiscoveryUpdatesAffectedWindowsAndCurrentStackOrder() {
+        let cache = WindowStateCache()
+        _ = cache.replace(
+            windows: [
+                .window(id: 100, title: "unchanged"),
+                .window(id: 200, title: "old")
+            ],
+            focusedWindowID: 100,
+            displayTopology: .empty
+        )
+
+        let diff = cache.apply(
+            WindowDiscoverySnapshot(
+                scope: .windows([200]),
+                windows: [.window(id: 200, title: "updated")],
+                focusedWindowID: 200,
+                frontToBackWindowIDs: [200, 100]
+            ),
+            displayTopology: .empty
+        )
+
+        XCTAssertEqual(diff, .empty)
+        XCTAssertEqual(cache.windows.map(\.id), [200, 100])
+        XCTAssertEqual(cache.snapshot(for: 100)?.title, "unchanged")
+        XCTAssertEqual(cache.snapshot(for: 200)?.title, "updated")
+        XCTAssertEqual(cache.focusedWindowID, 200)
+    }
 }

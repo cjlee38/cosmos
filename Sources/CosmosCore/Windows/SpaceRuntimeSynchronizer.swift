@@ -22,14 +22,49 @@ final class SpaceRuntimeSynchronizer {
         state: inout SpaceState,
         reconcileVisibleWindowMonitorMembership: Bool = true
     ) throws -> SpaceSyncSummary {
-        let windows = try windowSystem.refresh()
-        let displayTopology = try monitorSlotResolver.topology()
-        let windowSetDiff = windowCache.replace(
-            windows: windows,
-            focusedWindowID: windowSystem.focusedWindowID(),
+        while true {
+            let discovery = try windowSystem.discover(windowIDs: nil)
+            let displayTopology = try monitorSlotResolver.topology()
+            guard windowSystem.apply(discovery) else {
+                continue
+            }
+            return synchronizeAppliedDiscovery(
+                discovery,
+                displayTopology: displayTopology,
+                reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+                state: &state
+            )
+        }
+    }
+
+    func apply(
+        _ discovery: WindowDiscoverySnapshot,
+        displayTopology: DisplayTopologySnapshot,
+        state: inout SpaceState,
+        reconcileVisibleWindowMonitorMembership: Bool = true
+    ) -> SpaceSyncSummary? {
+        guard windowSystem.apply(discovery) else {
+            return nil
+        }
+        return synchronizeAppliedDiscovery(
+            discovery,
+            displayTopology: displayTopology,
+            reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+            state: &state
+        )
+    }
+
+    private func synchronizeAppliedDiscovery(
+        _ discovery: WindowDiscoverySnapshot,
+        displayTopology: DisplayTopologySnapshot,
+        reconcileVisibleWindowMonitorMembership: Bool,
+        state: inout SpaceState
+    ) -> SpaceSyncSummary {
+        let windowSetDiff = windowCache.apply(
+            discovery,
             displayTopology: displayTopology
         )
-
+        let windows = windowCache.windows
         let sync = synchronizeMemberships(
             windows: windows,
             windowSetDiff: windowSetDiff,

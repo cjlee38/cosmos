@@ -106,6 +106,10 @@ final class SwitcherPreviewService {
         ))
     }
 
+    func markWindowThumbnailsDirty(_ windowIDs: Set<WindowID>) {
+        windowThumbnailCache.markDirty(windowIDs)
+    }
+
     func refreshSpaces(ids: Set<String>, priorityIDs: [String] = []) {
         let liveSpaceIDs = Set(controller.spaces)
         let ids = ids.intersection(liveSpaceIDs)

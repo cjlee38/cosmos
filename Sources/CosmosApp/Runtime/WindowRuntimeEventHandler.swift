@@ -1,5 +1,10 @@
-import Foundation
 import CosmosCore
+import Foundation
+
+private let windowDiscoveryQueue = DispatchQueue(
+    label: "cosmos.window-discovery",
+    qos: .userInitiated
+)
 
 final class WindowRuntimeEventHandler {
     private let log = Log(category: "window-events")
@@ -8,31 +13,74 @@ final class WindowRuntimeEventHandler {
     private let previewService: SwitcherPreviewService
     private let refreshSwitcherContent: () -> Void
     private let refreshStatusSurfaces: () -> Void
+    private let scheduleDiscovery: (@escaping () -> Void) -> Void
+    private let scheduleApply: (@escaping () -> Void) -> Void
+    private var pendingEvents: Set<WindowRuntimeEvent> = []
+    private var isProcessing = false
 
     init(
         controller: SpaceController,
         previewService: SwitcherPreviewService,
         refreshSwitcherContent: @escaping () -> Void,
-        refreshStatusSurfaces: @escaping () -> Void
+        refreshStatusSurfaces: @escaping () -> Void,
+        scheduleDiscovery: @escaping (@escaping () -> Void) -> Void = {
+            windowDiscoveryQueue.async(execute: $0)
+        },
+        scheduleApply: @escaping (@escaping () -> Void) -> Void = {
+            DispatchQueue.main.async(execute: $0)
+        }
     ) {
         self.controller = controller
         self.previewService = previewService
         self.refreshSwitcherContent = refreshSwitcherContent
         self.refreshStatusSurfaces = refreshStatusSurfaces
+        self.scheduleDiscovery = scheduleDiscovery
+        self.scheduleApply = scheduleApply
     }
 
     func handleOwnWindowVisibilityChanged() {
-        do {
-            _ = try controller.handleOwnWindowVisibilityChanged()
-            refreshSwitcherContent()
-            refreshStatusSurfaces()
-        } catch {
-            log.error("Own-window visibility update failed: \(String(describing: error))")
-        }
+        handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        ]))
     }
 
     func handle(_ events: WindowRuntimeEventBatch) {
+        pendingEvents.formUnion(events.events)
+        processNextBatch()
+    }
+
+    private func processNextBatch() {
+        guard !isProcessing, !pendingEvents.isEmpty else {
+            return
+        }
+
+        let batch = WindowRuntimeEventBatch(events: pendingEvents)
+        pendingEvents.removeAll()
+        isProcessing = true
+        scheduleDiscovery { [weak self] in
+            guard let self else {
+                return
+            }
+            let discovery = Result {
+                try self.controller.discoverWindows(windowIDs: batch.discoveryWindowIDs)
+            }
+            scheduleApply { [weak self] in
+                self?.apply(discovery, for: batch)
+            }
+        }
+    }
+
+    private func apply(
+        _ discovery: Result<WindowDiscoverySnapshot, Error>,
+        for events: WindowRuntimeEventBatch
+    ) {
+        defer {
+            isProcessing = false
+            processNextBatch()
+        }
+
         do {
+            let discovery = try discovery.get()
             let focusPolicy: ExternalWindowFocusPolicy = if events.containsApplicationActivation {
                 .always
             } else if events.containsFocusChange || events.containsLayoutChange {
@@ -40,10 +88,16 @@ final class WindowRuntimeEventHandler {
             } else {
                 .never
             }
-            let result = try controller.handleExternalWindowChange(ExternalWindowChange(
-                displayConfigurationChanged: events.containsDisplayChange,
-                focusPolicy: focusPolicy
-            ))
+            guard let result = try controller.applyExternalWindowChange(
+                ExternalWindowChange(
+                    displayConfigurationChanged: events.containsDisplayChange,
+                    focusPolicy: focusPolicy
+                ),
+                discovery: discovery
+            ) else {
+                pendingEvents.formUnion(events.events)
+                return
+            }
             refreshPreviews(for: events, result: result)
             refreshSwitcherContent()
             refreshStatusSurfaces()
@@ -82,6 +136,7 @@ final class WindowRuntimeEventHandler {
                 .union(affectedWindowIDs.compactMap(controller.membership(for:)))
         }
 
+        previewService.markWindowThumbnailsDirty(windowIDs)
         previewService.refresh(
             windowIDs: windowIDs,
             spaceIDs: spaceIDs,

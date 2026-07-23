@@ -92,6 +92,24 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertTrue(batch.needsFullThumbnailRefresh)
     }
 
+    func testCreatedWindowRequiresFullDiscovery() {
+        let batch = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .thumbnailChanged, windowID: 100),
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: 100)
+        ])
+
+        XCTAssertNil(batch.discoveryWindowIDs)
+    }
+
+    func testExistingWindowChangesDiscoverOnlyAffectedWindows() {
+        let batch = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 100),
+            WindowRuntimeEvent(kind: .thumbnailChanged, windowID: 200)
+        ])
+
+        XCTAssertEqual(batch.discoveryWindowIDs, [100, 200])
+    }
+
     func testEventKindsPreserveDistinctFocusLayoutAndThumbnailSemantics() {
         XCTAssertEqual(
             WindowRuntimeEventKind.kinds(forAXNotification: kAXFocusedWindowChangedNotification as String),
@@ -100,6 +118,10 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(
             WindowRuntimeEventKind.kinds(forAXNotification: kAXWindowMovedNotification as String),
             [.layoutChanged]
+        )
+        XCTAssertEqual(
+            WindowRuntimeEventKind.kinds(forAXNotification: kAXUIElementDestroyedNotification as String),
+            [.layoutChanged, .windowSetChanged]
         )
         XCTAssertEqual(
             WindowRuntimeEventKind.kinds(forAXNotification: kAXTitleChangedNotification as String),
@@ -135,7 +157,9 @@ final class WindowRuntimeEventTests: XCTestCase {
             },
             refreshStatusSurfaces: {
                 surfaceRefreshCount += 1
-            }
+            },
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
         )
 
         handler.handle(WindowRuntimeEventBatch(events: [
@@ -242,6 +266,22 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(capturedIDs, [100, 200])
     }
 
+    private func makeHandler(
+        controller: SpaceController,
+        previewService: SwitcherPreviewService? = nil
+    ) -> WindowRuntimeEventHandler {
+        WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: previewService ?? makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+    }
+}
+
+final class WindowRuntimeEventConcurrencyTests: XCTestCase {
     func testFailedWindowSyncDoesNotRefreshSwitcherOrStatusSurfaces() throws {
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "One"),
@@ -256,7 +296,9 @@ final class WindowRuntimeEventTests: XCTestCase {
             controller: controller,
             previewService: makeSwitcherTestPreviewService(controller: controller),
             refreshSwitcherContent: { switcherRefreshCount += 1 },
-            refreshStatusSurfaces: { surfaceRefreshCount += 1 }
+            refreshStatusSurfaces: { surfaceRefreshCount += 1 },
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
         )
 
         handler.handle(WindowRuntimeEventBatch(events: [
@@ -268,15 +310,90 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(surfaceRefreshCount, 0)
     }
 
-    private func makeHandler(
-        controller: SpaceController,
-        previewService: SwitcherPreviewService? = nil
-    ) -> WindowRuntimeEventHandler {
-        WindowRuntimeEventHandler(
+    func testEventsReceivedDuringDiscoveryAreCoalescedIntoOneFollowingDiscovery() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "One"),
+            makeSwitcherTestWindow(id: 200, title: "Two")
+        ])
+        let initialRefreshCount = windowSystem.refreshCount
+        windowSystem.resetDiscoveryRequests()
+        var scheduledDiscovery: [() -> Void] = []
+        let handler = WindowRuntimeEventHandler(
             controller: controller,
-            previewService: previewService ?? makeSwitcherTestPreviewService(controller: controller),
+            previewService: makeSwitcherTestPreviewService(controller: controller),
             refreshSwitcherContent: {},
-            refreshStatusSurfaces: {}
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { scheduledDiscovery.append($0) },
+            scheduleApply: { $0() }
         )
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .thumbnailChanged, windowID: 100)
+        ]))
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 200)
+        ]))
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 200)
+        ]))
+
+        XCTAssertEqual(scheduledDiscovery.count, 1)
+        scheduledDiscovery.removeFirst()()
+        XCTAssertEqual(windowSystem.discoveryRequests, [[100]])
+        XCTAssertEqual(scheduledDiscovery.count, 1)
+        scheduledDiscovery.removeFirst()()
+        XCTAssertTrue(scheduledDiscovery.isEmpty)
+        XCTAssertEqual(windowSystem.discoveryRequests, [[100], [200]])
+        XCTAssertEqual(windowSystem.refreshCount, initialRefreshCount + 2)
+    }
+
+    func testWindowSetEventRequestsFullDiscovery() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "One")
+        ])
+        windowSystem.resetDiscoveryRequests()
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: 100)
+        ]))
+
+        XCTAssertEqual(windowSystem.discoveryRequests.count, 1)
+        XCTAssertNil(windowSystem.discoveryRequests[0])
+    }
+
+    func testStaleDiscoveryIsRetriedBeforeUpdatingSurfaces() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "One")
+        ])
+        let initialRefreshCount = windowSystem.refreshCount
+        windowSystem.resetDiscoveryRequests()
+        windowSystem.discoveryApplyResults = [false, true]
+        var switcherRefreshCount = 0
+        var surfaceRefreshCount = 0
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: { switcherRefreshCount += 1 },
+            refreshStatusSurfaces: { surfaceRefreshCount += 1 },
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .thumbnailChanged, windowID: 100)
+        ]))
+
+        XCTAssertEqual(windowSystem.refreshCount, initialRefreshCount + 2)
+        XCTAssertEqual(windowSystem.discoveryRequests, [[100], [100]])
+        XCTAssertEqual(switcherRefreshCount, 1)
+        XCTAssertEqual(surfaceRefreshCount, 1)
     }
 }

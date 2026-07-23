@@ -1,8 +1,8 @@
 import AppKit
 import ApplicationServices
 import CoreGraphics
-import Foundation
 import CosmosCore
+import Foundation
 
 enum WindowRuntimeEventKind: Hashable {
     case applicationActivated
@@ -22,13 +22,15 @@ enum WindowRuntimeEventKind: Hashable {
             [.focusChanged]
         case kAXWindowResizedNotification:
             [.thumbnailChanged, .layoutChanged]
-        case kAXWindowCreatedNotification,
-             kAXWindowMiniaturizedNotification,
+        case kAXWindowCreatedNotification:
+            [.thumbnailChanged, .windowSetChanged]
+        case kAXWindowMiniaturizedNotification,
              kAXWindowDeminiaturizedNotification,
              kAXTitleChangedNotification:
             [.thumbnailChanged]
-        case kAXUIElementDestroyedNotification,
-             kAXWindowMovedNotification:
+        case kAXUIElementDestroyedNotification:
+            [.layoutChanged, .windowSetChanged]
+        case kAXWindowMovedNotification:
             [.layoutChanged]
         default:
             []
@@ -70,6 +72,14 @@ struct WindowRuntimeEventBatch {
 
     var containsDisplayChange: Bool {
         events.contains { $0.kind == .displayChanged }
+    }
+
+    var containsWindowSetChange: Bool {
+        events.contains { $0.kind == .windowSetChanged }
+    }
+
+    var discoveryWindowIDs: Set<WindowID>? {
+        containsDisplayChange || containsWindowSetChange ? nil : windowIDs
     }
 
     var needsFullThumbnailRefresh: Bool {

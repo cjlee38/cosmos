@@ -122,6 +122,7 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         lock.lock()
         capturedImage = nil
         lock.unlock()
+        service.markWindowThumbnailsDirty([10])
         service.refresh(windowIDs: [10], spaceIDs: [])
         waitUntil { service.windowItems(ids: [10]).first?.preview == nil }
 

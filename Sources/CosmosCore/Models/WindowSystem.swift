@@ -55,12 +55,59 @@ public protocol DisplayProviding {
 public protocol WindowSystem {
     @discardableResult
     func refresh() throws -> [WindowSnapshot]
+    func discover(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot
+    func apply(_ discovery: WindowDiscoverySnapshot) -> Bool
     func contains(_ id: WindowID) -> Bool
     func focusedWindowID() -> WindowID?
     func frame(for id: WindowID) -> WindowFrame?
     func setPosition(_ point: CGPoint, for id: WindowID) throws
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws
     func focus(_ id: WindowID)
+}
+
+public struct WindowDiscoverySnapshot {
+    public enum Scope {
+        case full
+        case windows(Set<WindowID>)
+    }
+
+    public let scope: Scope
+    public let windows: [WindowSnapshot]
+    public let focusedWindowID: WindowID?
+    public let frontToBackWindowIDs: [WindowID]
+
+    let handlesByID: [WindowID: WindowHandle]
+    let baseRevision: UInt64?
+
+    public init(
+        scope: Scope,
+        windows: [WindowSnapshot],
+        focusedWindowID: WindowID?,
+        frontToBackWindowIDs: [WindowID] = []
+    ) {
+        self.scope = scope
+        self.windows = windows
+        self.focusedWindowID = focusedWindowID
+        self.frontToBackWindowIDs = frontToBackWindowIDs
+        handlesByID = [:]
+        baseRevision = nil
+    }
+
+    init(
+        scope: Scope,
+        windows: [WindowSnapshot],
+        focusedWindowID: WindowID?,
+        frontToBackWindowIDs: [WindowID],
+        handlesByID: [WindowID: WindowHandle],
+        baseRevision: UInt64
+    ) {
+        self.scope = scope
+        self.windows = windows
+        self.focusedWindowID = focusedWindowID
+        self.frontToBackWindowIDs = frontToBackWindowIDs
+        self.handlesByID = handlesByID
+        self.baseRevision = baseRevision
+    }
 }
 
 struct WindowFrameTransactionError: Error, CustomStringConvertible {
@@ -72,7 +119,21 @@ struct WindowFrameTransactionError: Error, CustomStringConvertible {
     }
 }
 
-extension WindowSystem {
+public extension WindowSystem {
+    func discover(windowIDs: Set<WindowID>? = nil) throws -> WindowDiscoverySnapshot {
+        let windows = try refresh()
+        return WindowDiscoverySnapshot(
+            scope: windowIDs.map(WindowDiscoverySnapshot.Scope.windows) ?? .full,
+            windows: windowIDs.map { ids in windows.filter { ids.contains($0.id) } } ?? windows,
+            focusedWindowID: focusedWindowID(),
+            frontToBackWindowIDs: windows.map(\.id)
+        )
+    }
+
+    func apply(_: WindowDiscoverySnapshot) -> Bool {
+        true
+    }
+
     @discardableResult
     func setFrameOrMove(_ targetFrame: WindowFrame, for id: WindowID) throws -> WindowFrame {
         let originalFrame = frame(for: id)

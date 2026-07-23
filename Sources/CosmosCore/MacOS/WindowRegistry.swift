@@ -3,7 +3,9 @@ import Foundation
 
 public final class WindowRegistry: WindowSystem {
     private let axClient: AXClient
+    private let lock = NSLock()
     private var handlesByID: [WindowID: WindowHandle] = [:]
+    private var revision: UInt64 = 0
 
     public init(axClient: AXClient) {
         self.axClient = axClient
@@ -11,21 +13,60 @@ public final class WindowRegistry: WindowSystem {
 
     @discardableResult
     public func refresh() throws -> [WindowSnapshot] {
-        let handles = try axClient.enumerateWindows()
+        while true {
+            let discovery = try discover(windowIDs: nil)
+            if apply(discovery) {
+                return discovery.windows
+            }
+        }
+    }
+
+    public func discover(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot {
+        let baseRevision = currentRevision()
+        let handles: [WindowHandle]
+        let scope: WindowDiscoverySnapshot.Scope
+        if let windowIDs {
+            handles = cachedHandles(for: windowIDs)
+            scope = .windows(windowIDs)
+        } else {
+            handles = try axClient.enumerateWindows()
+            scope = .full
+        }
         let frontToBackIndex = CGWindowStackOrder.frontToBackIndexByWindowID()
         let windows = handles.map(axClient.snapshot).sorted {
             Self.sortByFrontToBackOrder($0, $1, frontToBackIndex: frontToBackIndex)
         }
-        handlesByID = Dictionary(uniqueKeysWithValues: handles.map { ($0.id, $0) })
-        return windows
+        let frontToBackWindowIDs = frontToBackIndex.keys.sorted {
+            frontToBackIndex[$0, default: .max] < frontToBackIndex[$1, default: .max]
+        }
+        return WindowDiscoverySnapshot(
+            scope: scope,
+            windows: windows,
+            focusedWindowID: axClient.focusedWindowID(),
+            frontToBackWindowIDs: frontToBackWindowIDs,
+            handlesByID: Dictionary(uniqueKeysWithValues: handles.map { ($0.id, $0) }),
+            baseRevision: baseRevision
+        )
+    }
+
+    public func apply(_ discovery: WindowDiscoverySnapshot) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard discovery.baseRevision == revision else {
+            return false
+        }
+        applyLocked(discovery)
+        return true
     }
 
     func handle(for id: WindowID) -> WindowHandle? {
-        handlesByID[id]
+        lock.lock()
+        defer { lock.unlock() }
+        return handlesByID[id]
     }
 
     public func contains(_ id: WindowID) -> Bool {
-        handlesByID[id] != nil
+        handle(for: id) != nil
     }
 
     public func focusedWindowID() -> WindowID? {
@@ -44,6 +85,7 @@ public final class WindowRegistry: WindowSystem {
             throw SpaceError.windowNotFound(id)
         }
         try axClient.setPosition(point, for: handle.axWindow)
+        advanceRevision()
     }
 
     public func setFrame(_ frame: WindowFrame, for id: WindowID) throws {
@@ -51,6 +93,7 @@ public final class WindowRegistry: WindowSystem {
             throw SpaceError.windowNotFound(id)
         }
         try axClient.setFrame(frame, for: handle.axWindow)
+        advanceRevision()
     }
 
     public func focus(_ id: WindowID) {
@@ -58,6 +101,32 @@ public final class WindowRegistry: WindowSystem {
             return
         }
         axClient.focus(handle)
+        advanceRevision()
+    }
+
+    private func currentRevision() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return revision
+    }
+
+    private func cachedHandles(for windowIDs: Set<WindowID>) -> [WindowHandle] {
+        lock.lock()
+        defer { lock.unlock() }
+        return windowIDs.compactMap { handlesByID[$0] }
+    }
+
+    private func advanceRevision() {
+        lock.lock()
+        defer { lock.unlock() }
+        revision &+= 1
+    }
+
+    private func applyLocked(_ discovery: WindowDiscoverySnapshot) {
+        if case .full = discovery.scope {
+            handlesByID = discovery.handlesByID
+        }
+        revision &+= 1
     }
 
     static func sortByFrontToBackOrder(

@@ -103,7 +103,7 @@ private enum TerminalLogWriter {
     private static let resetColor = "\u{001B}[0m"
     private static let processName = ProcessInfo.processInfo.processName
     private static let pid = getpid()
-    private static let lock = NSLock()
+    private static let queue = DispatchQueue(label: "cosmos.terminal-log", qos: .utility)
 
     static func write(
         level: Log.Level,
@@ -120,10 +120,11 @@ private enum TerminalLogWriter {
             "\(fileName(file)):\(line)"
         ].joined(separator: " ")
         let output = "\(level.colorCode)\(prefix) \(message)\(resetColor)\n"
+        let data = Data(output.utf8)
 
-        lock.lock()
-        defer { lock.unlock() }
-        FileHandle.standardError.write(Data(output.utf8))
+        queue.async {
+            FileHandle.standardError.write(data)
+        }
     }
 
     private static func timestamp() -> String {

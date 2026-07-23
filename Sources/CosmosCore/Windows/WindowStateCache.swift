@@ -30,6 +30,43 @@ final class WindowStateCache {
         return diff
     }
 
+    func apply(
+        _ discovery: WindowDiscoverySnapshot,
+        displayTopology: DisplayTopologySnapshot
+    ) -> WindowSetDiff {
+        switch discovery.scope {
+        case .full:
+            return replace(
+                windows: discovery.windows,
+                focusedWindowID: discovery.focusedWindowID,
+                displayTopology: displayTopology
+            )
+        case .windows:
+            var windowsByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+            for window in discovery.windows {
+                windowsByID[window.id] = window
+            }
+
+            var orderedWindows: [WindowSnapshot] = []
+            var seen: Set<WindowID> = []
+            for id in discovery.frontToBackWindowIDs {
+                guard let window = windowsByID[id] else {
+                    continue
+                }
+                orderedWindows.append(window)
+                seen.insert(id)
+            }
+            orderedWindows.append(contentsOf: windows.filter { !seen.contains($0.id) }.compactMap {
+                windowsByID[$0.id]
+            })
+
+            windows = orderedWindows
+            focusedWindowID = discovery.focusedWindowID
+            self.displayTopology = displayTopology
+            return .empty
+        }
+    }
+
     func snapshot(for id: WindowID) -> WindowSnapshot? {
         windows.first { $0.id == id }
     }
