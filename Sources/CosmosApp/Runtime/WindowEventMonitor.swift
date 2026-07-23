@@ -11,6 +11,7 @@ enum WindowRuntimeEventKind: Hashable {
     case layoutChanged
     case windowSetChanged
     case displayChanged
+    case sessionResumed
 
     var needsThumbnailCapture: Bool {
         self == .thumbnailChanged
@@ -78,8 +79,16 @@ struct WindowRuntimeEventBatch {
         events.contains { $0.kind == .windowSetChanged }
     }
 
+    var containsSessionResume: Bool {
+        events.contains { $0.kind == .sessionResumed }
+    }
+
+    var isSessionResumeRecovery: Bool {
+        containsSessionResume && !containsWindowSetChange && !containsDisplayChange
+    }
+
     var discoveryWindowIDs: Set<WindowID>? {
-        containsDisplayChange || containsWindowSetChange ? nil : windowIDs
+        containsDisplayChange || containsWindowSetChange || containsSessionResume ? nil : windowIDs
     }
 
     var needsFullThumbnailRefresh: Bool {
@@ -140,6 +149,7 @@ struct WindowRuntimeEventBuffer {
 
 final class WindowEventMonitor {
     private let onEvents: (WindowRuntimeEventBatch) -> Void
+    private let onSessionActivityChanged: (Bool) -> Void
     private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] element, notification in
         self?.handleAXNotification(element: element, notification: notification)
     }
@@ -150,7 +160,11 @@ final class WindowEventMonitor {
     private var globalMouseUpMonitor: Any?
     private var localMouseUpMonitor: Any?
 
-    init(onEvents: @escaping (WindowRuntimeEventBatch) -> Void) {
+    init(
+        onSessionActivityChanged: @escaping (Bool) -> Void = { _ in },
+        onEvents: @escaping (WindowRuntimeEventBatch) -> Void
+    ) {
+        self.onSessionActivityChanged = onSessionActivityChanged
         self.onEvents = onEvents
     }
 
@@ -255,11 +269,12 @@ final class WindowEventMonitor {
     private func suspendForInactiveSession() {
         eventBuffer.suspend()
         stopMouseUpMonitor()
+        onSessionActivityChanged(false)
     }
 
     private func resumeAfterInactiveSession() {
         eventBuffer.resume()
-        schedule(.init(kind: .windowSetChanged, windowID: nil))
+        onSessionActivityChanged(true)
     }
 
     private func observeDisplayChanges() {

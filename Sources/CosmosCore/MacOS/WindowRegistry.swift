@@ -14,28 +14,49 @@ public final class WindowRegistry: WindowSystem {
     @discardableResult
     public func refresh() throws -> [WindowSnapshot] {
         while true {
-            let discovery = try discover(windowIDs: nil)
+            let discovery = try discover(windowIDs: nil, mode: .normal)
             if apply(discovery) {
                 return discovery.windows
             }
         }
     }
 
-    public func discover(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot {
-        let baseRevision = currentRevision()
-        let handles: [WindowHandle]
+    public func discover(
+        windowIDs: Set<WindowID>?,
+        mode: WindowDiscoveryMode
+    ) throws -> WindowDiscoverySnapshot {
+        let (baseRevision, cachedHandlesByID) = currentRegistryState()
+        var handles: [WindowHandle]
+        var unresolvedWindowIDs: Set<WindowID> = []
         let scope: WindowDiscoverySnapshot.Scope
         if let windowIDs {
-            handles = cachedHandles(for: windowIDs)
+            handles = windowIDs.compactMap { cachedHandlesByID[$0] }
             scope = .windows(windowIDs)
         } else {
             handles = try axClient.enumerateWindows()
             scope = .full
+            if mode == .sessionRecovery {
+                let discoveredWindowIDs = Set(handles.map(\.id))
+                for handle in cachedHandlesByID.values where !discoveredWindowIDs.contains(handle.id) {
+                    switch axClient.validity(of: handle) {
+                    case .valid:
+                        handles.append(handle)
+                    case .invalid:
+                        break
+                    case .unresolved:
+                        handles.append(handle)
+                        unresolvedWindowIDs.insert(handle.id)
+                    }
+                }
+            }
         }
         let frontToBackIndex = CGWindowStackOrder.frontToBackIndexByWindowID()
-        let windows = handles.map(axClient.snapshot).sorted {
-            Self.sortByFrontToBackOrder($0, $1, frontToBackIndex: frontToBackIndex)
-        }
+        let windows = handles
+            .filter { !unresolvedWindowIDs.contains($0.id) }
+            .map(axClient.snapshot)
+            .sorted {
+                Self.sortByFrontToBackOrder($0, $1, frontToBackIndex: frontToBackIndex)
+            }
         let frontToBackWindowIDs = frontToBackIndex.keys.sorted {
             frontToBackIndex[$0, default: .max] < frontToBackIndex[$1, default: .max]
         }
@@ -44,6 +65,7 @@ public final class WindowRegistry: WindowSystem {
             windows: windows,
             focusedWindowID: axClient.focusedWindowID(),
             frontToBackWindowIDs: frontToBackWindowIDs,
+            unresolvedWindowIDs: unresolvedWindowIDs,
             handlesByID: Dictionary(uniqueKeysWithValues: handles.map { ($0.id, $0) }),
             baseRevision: baseRevision
         )
@@ -104,16 +126,10 @@ public final class WindowRegistry: WindowSystem {
         advanceRevision()
     }
 
-    private func currentRevision() -> UInt64 {
+    private func currentRegistryState() -> (revision: UInt64, handlesByID: [WindowID: WindowHandle]) {
         lock.lock()
         defer { lock.unlock() }
-        return revision
-    }
-
-    private func cachedHandles(for windowIDs: Set<WindowID>) -> [WindowHandle] {
-        lock.lock()
-        defer { lock.unlock() }
-        return windowIDs.compactMap { handlesByID[$0] }
+        return (revision, handlesByID)
     }
 
     private func advanceRevision() {

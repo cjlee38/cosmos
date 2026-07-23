@@ -23,7 +23,7 @@ final class SpaceRuntimeSynchronizer {
         reconcileVisibleWindowMonitorMembership: Bool = true
     ) throws -> SpaceSyncSummary {
         while true {
-            let discovery = try windowSystem.discover(windowIDs: nil)
+            let discovery = try windowSystem.discover(windowIDs: nil, mode: .normal)
             let displayTopology = try monitorSlotResolver.topology()
             guard windowSystem.apply(discovery) else {
                 continue

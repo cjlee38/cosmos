@@ -15,8 +15,10 @@ final class SwitcherTestWindowSystem: WindowSystem {
     var focusedWindowIDValue: WindowID?
     var frameWriteFailures: Set<WindowID> = []
     var discoveryApplyResults: [Bool] = []
+    var unresolvedWindowIDs: Set<WindowID> = []
     private(set) var refreshCount = 0
     private(set) var discoveryRequests: [Set<WindowID>?] = []
+    private(set) var discoveryModes: [WindowDiscoveryMode] = []
     private(set) var focusedWindowIDs: [WindowID] = []
     private var framesByID: [WindowID: WindowFrame]
 
@@ -38,6 +40,10 @@ final class SwitcherTestWindowSystem: WindowSystem {
         discoveryRequests.removeAll()
     }
 
+    func resetDiscoveryModes() {
+        discoveryModes.removeAll()
+    }
+
     func refresh() throws -> [WindowSnapshot] {
         refreshCount += 1
         return windows.map { window in
@@ -51,14 +57,19 @@ final class SwitcherTestWindowSystem: WindowSystem {
         }
     }
 
-    func discover(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot {
+    func discover(
+        windowIDs: Set<WindowID>?,
+        mode: WindowDiscoveryMode
+    ) throws -> WindowDiscoverySnapshot {
         discoveryRequests.append(windowIDs)
+        discoveryModes.append(mode)
         let windows = try refresh()
         return WindowDiscoverySnapshot(
             scope: windowIDs.map(WindowDiscoverySnapshot.Scope.windows) ?? .full,
             windows: windowIDs.map { ids in windows.filter { ids.contains($0.id) } } ?? windows,
             focusedWindowID: focusedWindowIDValue,
-            frontToBackWindowIDs: windows.map(\.id)
+            frontToBackWindowIDs: windows.map(\.id),
+            unresolvedWindowIDs: unresolvedWindowIDs
         )
     }
 

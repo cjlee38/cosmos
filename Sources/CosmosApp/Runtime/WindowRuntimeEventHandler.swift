@@ -17,6 +17,8 @@ final class WindowRuntimeEventHandler {
     private let scheduleApply: (@escaping () -> Void) -> Void
     private var pendingEvents: Set<WindowRuntimeEvent> = []
     private var isProcessing = false
+    private var isSessionActive = true
+    private var sessionGeneration: UInt64 = 0
 
     init(
         controller: SpaceController,
@@ -45,16 +47,35 @@ final class WindowRuntimeEventHandler {
     }
 
     func handle(_ events: WindowRuntimeEventBatch) {
+        guard isSessionActive else {
+            return
+        }
         pendingEvents.formUnion(events.events)
         processNextBatch()
     }
 
+    func sessionActivityChanged(isActive: Bool) {
+        guard isSessionActive != isActive else {
+            return
+        }
+
+        isSessionActive = isActive
+        sessionGeneration &+= 1
+        pendingEvents.removeAll()
+        if isActive {
+            handle(WindowRuntimeEventBatch(events: [
+                WindowRuntimeEvent(kind: .sessionResumed, windowID: nil)
+            ]))
+        }
+    }
+
     private func processNextBatch() {
-        guard !isProcessing, !pendingEvents.isEmpty else {
+        guard isSessionActive, !isProcessing, !pendingEvents.isEmpty else {
             return
         }
 
         let batch = WindowRuntimeEventBatch(events: pendingEvents)
+        let generation = sessionGeneration
         pendingEvents.removeAll()
         isProcessing = true
         scheduleDiscovery { [weak self] in
@@ -62,18 +83,28 @@ final class WindowRuntimeEventHandler {
                 return
             }
             let discovery = Result {
-                try self.controller.discoverWindows(windowIDs: batch.discoveryWindowIDs)
+                try self.controller.discoverWindows(
+                    windowIDs: batch.discoveryWindowIDs,
+                    mode: batch.isSessionResumeRecovery ? .sessionRecovery : .normal
+                )
             }
             scheduleApply { [weak self] in
-                self?.apply(discovery, for: batch)
+                self?.apply(discovery, for: batch, generation: generation)
             }
         }
     }
 
     private func apply(
         _ discovery: Result<WindowDiscoverySnapshot, Error>,
-        for events: WindowRuntimeEventBatch
+        for events: WindowRuntimeEventBatch,
+        generation: UInt64
     ) {
+        guard isSessionActive, generation == sessionGeneration else {
+            isProcessing = false
+            processNextBatch()
+            return
+        }
+
         defer {
             isProcessing = false
             processNextBatch()

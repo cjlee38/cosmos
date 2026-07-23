@@ -39,6 +39,12 @@ enum AXClientError: Error, CustomStringConvertible {
 }
 
 public final class AXClient {
+    enum WindowValidity {
+        case valid
+        case invalid
+        case unresolved
+    }
+
     private let includedOwnWindowIdentifiers: Set<String>
 
     public init(includedOwnWindowIdentifiers: Set<String> = []) {
@@ -93,6 +99,27 @@ public final class AXClient {
             frame: frame(for: handle.axWindow),
             isMinimized: boolAttribute(kAXMinimizedAttribute, from: handle.axWindow) ?? false
         )
+    }
+
+    func validity(of handle: WindowHandle) -> WindowValidity {
+        if handle.runningApp.isTerminated {
+            return .invalid
+        }
+
+        var value: AnyObject?
+        let error = AXUIElementCopyAttributeValue(
+            handle.axWindow,
+            kAXRoleAttribute as CFString,
+            &value
+        )
+        switch error {
+        case .success:
+            return .valid
+        case .invalidUIElement:
+            return .invalid
+        default:
+            return .unresolved
+        }
     }
 
     func frame(for window: AXUIElement) -> WindowFrame? {

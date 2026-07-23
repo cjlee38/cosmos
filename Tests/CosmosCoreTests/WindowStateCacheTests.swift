@@ -72,4 +72,45 @@ final class WindowStateCacheTests: XCTestCase {
         XCTAssertEqual(cache.snapshot(for: 200)?.title, "updated")
         XCTAssertEqual(cache.focusedWindowID, 200)
     }
+
+    func testRecoveryDiscoveryPreservesWindowsMissingFromTheSnapshot() {
+        let cache = WindowStateCache()
+        _ = cache.replace(
+            windows: [
+                .window(id: 100, title: "visible"),
+                .window(id: 200, title: "temporarily missing")
+            ],
+            focusedWindowID: 100,
+            displayTopology: .empty
+        )
+
+        let diff = cache.apply(
+            WindowDiscoverySnapshot(
+                scope: .full,
+                windows: [.window(id: 100, title: "updated")],
+                focusedWindowID: 100,
+                frontToBackWindowIDs: [100],
+                unresolvedWindowIDs: [200]
+            ),
+            displayTopology: .empty
+        )
+
+        XCTAssertEqual(diff, .empty)
+        XCTAssertEqual(cache.windows.map(\.id), [100, 200])
+        XCTAssertEqual(cache.snapshot(for: 100)?.title, "updated")
+        XCTAssertEqual(cache.snapshot(for: 200)?.title, "temporarily missing")
+
+        let authoritativeDiff = cache.apply(
+            WindowDiscoverySnapshot(
+                scope: .full,
+                windows: [.window(id: 100, title: "updated again")],
+                focusedWindowID: 100,
+                frontToBackWindowIDs: [100]
+            ),
+            displayTopology: .empty
+        )
+
+        XCTAssertEqual(authoritativeDiff, WindowSetDiff(removed: [200]))
+        XCTAssertEqual(cache.windows.map(\.id), [100])
+    }
 }

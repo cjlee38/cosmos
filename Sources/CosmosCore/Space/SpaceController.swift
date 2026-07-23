@@ -104,8 +104,11 @@ public extension SpaceController {
         )
     }
 
-    func discoverWindows(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot {
-        try windowSystem.discover(windowIDs: windowIDs)
+    func discoverWindows(
+        windowIDs: Set<WindowID>?,
+        mode: WindowDiscoveryMode = .normal
+    ) throws -> WindowDiscoverySnapshot {
+        try windowSystem.discover(windowIDs: windowIDs, mode: mode)
     }
 
     func applyExternalWindowChange(

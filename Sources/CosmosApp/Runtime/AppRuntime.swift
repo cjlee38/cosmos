@@ -241,9 +241,14 @@ private extension AppRuntime {
             return
         }
 
-        let monitor = WindowEventMonitor { [weak self] events in
-            self?.windowRuntimeEventHandler.handle(events)
-        }
+        let monitor = WindowEventMonitor(
+            onSessionActivityChanged: { [weak self] isActive in
+                self?.windowRuntimeEventHandler.sessionActivityChanged(isActive: isActive)
+            },
+            onEvents: { [weak self] events in
+                self?.windowRuntimeEventHandler.handle(events)
+            }
+        )
         monitor.start()
         windowEventMonitor = monitor
     }

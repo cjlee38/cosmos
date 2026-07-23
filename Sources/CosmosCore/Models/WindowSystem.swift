@@ -52,10 +52,15 @@ public protocol DisplayProviding {
     func displays() throws -> [DisplaySnapshot]
 }
 
+public enum WindowDiscoveryMode: Equatable {
+    case normal
+    case sessionRecovery
+}
+
 public protocol WindowSystem {
     @discardableResult
     func refresh() throws -> [WindowSnapshot]
-    func discover(windowIDs: Set<WindowID>?) throws -> WindowDiscoverySnapshot
+    func discover(windowIDs: Set<WindowID>?, mode: WindowDiscoveryMode) throws -> WindowDiscoverySnapshot
     func apply(_ discovery: WindowDiscoverySnapshot) -> Bool
     func contains(_ id: WindowID) -> Bool
     func focusedWindowID() -> WindowID?
@@ -75,6 +80,7 @@ public struct WindowDiscoverySnapshot {
     public let windows: [WindowSnapshot]
     public let focusedWindowID: WindowID?
     public let frontToBackWindowIDs: [WindowID]
+    public let unresolvedWindowIDs: Set<WindowID>
 
     let handlesByID: [WindowID: WindowHandle]
     let baseRevision: UInt64?
@@ -83,12 +89,14 @@ public struct WindowDiscoverySnapshot {
         scope: Scope,
         windows: [WindowSnapshot],
         focusedWindowID: WindowID?,
-        frontToBackWindowIDs: [WindowID] = []
+        frontToBackWindowIDs: [WindowID] = [],
+        unresolvedWindowIDs: Set<WindowID> = []
     ) {
         self.scope = scope
         self.windows = windows
         self.focusedWindowID = focusedWindowID
         self.frontToBackWindowIDs = frontToBackWindowIDs
+        self.unresolvedWindowIDs = unresolvedWindowIDs
         handlesByID = [:]
         baseRevision = nil
     }
@@ -98,6 +106,7 @@ public struct WindowDiscoverySnapshot {
         windows: [WindowSnapshot],
         focusedWindowID: WindowID?,
         frontToBackWindowIDs: [WindowID],
+        unresolvedWindowIDs: Set<WindowID>,
         handlesByID: [WindowID: WindowHandle],
         baseRevision: UInt64
     ) {
@@ -105,6 +114,7 @@ public struct WindowDiscoverySnapshot {
         self.windows = windows
         self.focusedWindowID = focusedWindowID
         self.frontToBackWindowIDs = frontToBackWindowIDs
+        self.unresolvedWindowIDs = unresolvedWindowIDs
         self.handlesByID = handlesByID
         self.baseRevision = baseRevision
     }
@@ -120,7 +130,10 @@ struct WindowFrameTransactionError: Error, CustomStringConvertible {
 }
 
 public extension WindowSystem {
-    func discover(windowIDs: Set<WindowID>? = nil) throws -> WindowDiscoverySnapshot {
+    func discover(
+        windowIDs: Set<WindowID>? = nil,
+        mode _: WindowDiscoveryMode = .normal
+    ) throws -> WindowDiscoverySnapshot {
         let windows = try refresh()
         return WindowDiscoverySnapshot(
             scope: windowIDs.map(WindowDiscoverySnapshot.Scope.windows) ?? .full,

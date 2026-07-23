@@ -36,8 +36,11 @@ final class WindowStateCache {
     ) -> WindowSetDiff {
         switch discovery.scope {
         case .full:
+            let unresolvedWindows = windows.filter {
+                discovery.unresolvedWindowIDs.contains($0.id)
+            }
             return replace(
-                windows: discovery.windows,
+                windows: discovery.windows + unresolvedWindows,
                 focusedWindowID: discovery.focusedWindowID,
                 displayTopology: displayTopology
             )
