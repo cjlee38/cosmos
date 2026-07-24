@@ -186,6 +186,7 @@ private extension AppRuntime {
             onComplete: { [unowned self] in
                 refreshStatusSurfaces()
                 startManagedRuntime()
+                showSettingsWindow()
             }
         )
     }
@@ -207,7 +208,7 @@ private extension AppRuntime {
     }
 
     func runSetupAgain() {
-        guard settingsCoordinator?.dismiss() == true else {
+        guard settingsCoordinator?.dismissForWindowReplacement() == true else {
             return
         }
         showOnboardingWindow()

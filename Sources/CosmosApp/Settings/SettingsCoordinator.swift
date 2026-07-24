@@ -76,11 +76,11 @@ final class SettingsCoordinator {
         windowController.refresh()
     }
 
-    func dismiss() -> Bool {
+    func dismissForWindowReplacement() -> Bool {
         guard windowController.dismiss() else {
             return false
         }
-        didCloseWindow()
+        ownWindowVisibilityChanged()
         return true
     }
 

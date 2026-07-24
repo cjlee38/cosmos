@@ -45,7 +45,7 @@ final class OnboardingCoordinator {
 
     private func complete() {
         stateStore.markCompleted()
-        windowController.dismiss()
+        windowController.dismissForWindowReplacement()
         onComplete()
     }
 }
@@ -105,9 +105,8 @@ private final class OnboardingWindowController: NSWindowController, NSWindowDele
         onboardingViewController.refresh()
     }
 
-    func dismiss() {
+    func dismissForWindowReplacement() {
         window?.orderOut(nil)
-        NSApp.setActivationPolicy(.accessory)
     }
 
     func windowDidBecomeKey(_: Notification) {
