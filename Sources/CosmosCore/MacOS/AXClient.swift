@@ -205,8 +205,36 @@ public final class AXClient {
     }
 
     private func isManageableWindow(_ window: AXUIElement) -> Bool {
-        stringAttribute(kAXRoleAttribute, from: window) == kAXWindowRole as String
-            && frame(for: window) != nil
+        guard stringAttribute(kAXRoleAttribute, from: window) == kAXWindowRole as String,
+              boolAttribute(kAXModalAttribute, from: window) != true,
+              stringAttribute(kAXSubroleAttribute, from: window) != kAXSystemDialogSubrole as String,
+              isIndependentUserWindow(window)
+        else {
+            return false
+        }
+        return frame(for: window) != nil
+            && isAttributeSettable(kAXPositionAttribute, on: window)
+    }
+
+    private func isIndependentUserWindow(_ window: AXUIElement) -> Bool {
+        if stringAttribute(kAXSubroleAttribute, from: window) == kAXStandardWindowSubrole as String {
+            return true
+        }
+        return [
+            kAXCloseButtonAttribute,
+            kAXMinimizeButtonAttribute,
+            kAXZoomButtonAttribute,
+            kAXFullScreenButtonAttribute,
+        ].contains { copyAttribute($0, from: window) != nil }
+    }
+
+    private func isAttributeSettable(_ name: String, on element: AXUIElement) -> Bool {
+        var settable = DarwinBoolean(false)
+        return AXUIElementIsAttributeSettable(
+            element,
+            name as CFString,
+            &settable
+        ) == .success && settable.boolValue
     }
 
     private func isIncludedOwnWindow(_ handle: WindowHandle) -> Bool {

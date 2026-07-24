@@ -1,5 +1,11 @@
 import AppKit
 
+private final class FocusableTransientWindow: NSWindow {
+    override var canBecomeKey: Bool {
+        true
+    }
+}
+
 final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let secureInputControl = SecureInputFixtureControl()
     private var controlWindow: NSWindow?
@@ -94,6 +100,7 @@ private extension FixtureAppDelegate {
             ("Open Fixed-Size Window", #selector(openFixedSizeWindow)),
             ("Open Utility Panel", #selector(openUtilityPanel)),
             ("Open Floating Panel", #selector(openFloatingPanel)),
+            ("Open Transient Popup", #selector(openTransientPopup)),
             ("Open Untitled Window", #selector(openUntitledWindow)),
             ("Open Minimized Window", #selector(openMinimizedWindow)),
             ("Open Sheet", #selector(openSheet)),
@@ -152,6 +159,22 @@ private extension FixtureAppDelegate {
         )
         panel.level = .floating
         showFixtureWindow(panel)
+    }
+
+    @objc private func openTransientPopup() {
+        let window = FocusableTransientWindow(
+            contentRect: NSRect(origin: nextOrigin(), size: NSSize(width: 320, height: 140)),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.hasShadow = true
+        window.isReleasedWhenClosed = false
+        window.contentView = makeContentView(
+            title: "Transient Popup",
+            subtitle: "Focusable window without title-bar controls"
+        )
+        showFixtureWindow(window)
     }
 
     @objc private func openUntitledWindow() {
