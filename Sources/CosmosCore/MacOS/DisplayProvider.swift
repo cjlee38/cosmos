@@ -39,11 +39,44 @@ public struct WindowParkingPointProvider: HidePointProviding {
         return point
     }
 
+    public func isHidePosition(_ frame: WindowFrame, displays: [DisplaySnapshot]) -> Bool {
+        return displays.contains { display in
+            let visibleFrame = display.visibleFrame
+            let windowFrame = CGRect(origin: frame.origin, size: frame.size)
+            let intersection = windowFrame.intersection(visibleFrame)
+            let assessment = Self.assessment(for: display.frame, among: displays.map(\.frame))
+            guard assessment.hasUnobstructedCorner,
+                  !intersection.isNull,
+                  intersection.width == 1,
+                  intersection.maxY == visibleFrame.maxY,
+                  windowFrame.maxY > visibleFrame.maxY
+            else {
+                return false
+            }
+
+            switch assessment.corner {
+            case .bottomLeft:
+                return intersection.minX == visibleFrame.minX
+                    && windowFrame.minX < visibleFrame.minX
+            case .bottomRight:
+                return intersection.maxX == visibleFrame.maxX
+                    && windowFrame.maxX > visibleFrame.maxX
+            }
+        }
+    }
+
     func hidePoint(for frame: WindowFrame, displays: [DisplaySnapshot]) -> CGPoint? {
         guard let display = DisplayGeometry.display(containingOrNearest: frame.center, among: displays) else {
             return nil
         }
+        return hidePoint(for: frame, on: display, among: displays)
+    }
 
+    public func hidePoint(
+        for frame: WindowFrame,
+        on display: DisplaySnapshot,
+        among displays: [DisplaySnapshot]
+    ) -> CGPoint {
         let visibleFrame = display.visibleFrame
         switch Self.assessment(for: display.frame, among: displays.map(\.frame)).corner {
         case .bottomLeft:

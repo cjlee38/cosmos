@@ -148,10 +148,21 @@ public extension SpaceController {
     private func finishExternalWindowChange(
         _ change: ExternalWindowChange,
         sync: SpaceSyncSummary,
-        targetFrames: [WindowID: WindowFrame]
+        targetFrames initialTargetFrames: [WindowID: WindowFrame]
     ) throws -> ExternalWindowEventResult {
+        var targetFrames = initialTargetFrames
+        let shouldFollowFocusedWindow = change.focusPolicy.shouldFollow(
+            focusedWindowID: windowCache.focusedWindowID,
+            state: state
+        )
+        if shouldFollowFocusedWindow,
+           let id = windowCache.focusedWindowID,
+           let targetFrame = targetFrames[id],
+           try recoverFocusedWindowParking(id, referenceFrame: targetFrame) {
+            targetFrames.removeValue(forKey: id)
+        }
         let focusedWindowSync: FocusedWindowSpaceSyncResult?
-        if change.focusPolicy.shouldFollow(focusedWindowID: windowCache.focusedWindowID, state: state) {
+        if shouldFollowFocusedWindow {
             let focusResult = try navigationCoordinator.syncSpaceToFocusedWindow(
                 frontToBackWindowIDs: windowCache.windows.filter { !$0.isMinimized }.map(\.id),
                 targetFrames: targetFrames,
@@ -173,6 +184,10 @@ public extension SpaceController {
                 state: &state,
                 targetFrames: targetFrames
             )
+        }
+
+        if shouldFollowFocusedWindow, let id = windowCache.focusedWindowID {
+            try restoreFocusedWindow(id)
         }
 
         return ExternalWindowEventResult(
@@ -341,7 +356,7 @@ public extension SpaceController {
             throw SpaceError.windowNotInVisibleSpace(id, space.rawValue)
         }
 
-        _ = try hiddenWindowOperator.restore(id, state: &state)
+        try restoreFocusedWindow(id)
         windowSystem.focus(id)
         windowCache.updateFocusedWindowID(windowSystem.focusedWindowID())
     }
@@ -351,6 +366,53 @@ public extension SpaceController {
         // Recovery must use the last valid handles when a fresh AX snapshot is unavailable.
         _ = try? syncWindows()
         return try emergencyHiddenWindowRestorer.restoreAll(requestedIDs: requestedIDs, state: &state)
+    }
+}
+
+private extension SpaceController {
+    func recoverFocusedWindowParking(
+        _ id: WindowID,
+        referenceFrame: WindowFrame
+    ) throws -> Bool {
+        guard let visibleFrame = visibleFrameForWindowSpace(id) else {
+            return false
+        }
+        return try hiddenWindowOperator.recoverParkingPositionForFocus(
+            id,
+            referenceFrame: referenceFrame,
+            fallbackVisibleFrame: visibleFrame,
+            displays: windowCache.displayTopology.displays,
+            state: state
+        )
+    }
+
+    func restoreFocusedWindow(_ id: WindowID) throws {
+        guard state.membership(for: id) != nil else {
+            return
+        }
+        guard let visibleFrame = visibleFrameForWindowSpace(id) else {
+            throw SpaceError.noDisplayAvailable
+        }
+        try hiddenWindowOperator.restoreForFocus(
+            id,
+            fallbackVisibleFrame: visibleFrame,
+            displays: windowCache.displayTopology.displays,
+            state: &state
+        )
+    }
+
+    func visibleFrameForWindowSpace(_ id: WindowID) -> CGRect? {
+        guard let space = state.membership(for: id) else {
+            return nil
+        }
+        let availableMonitorSlots = windowCache.displayTopology.availableMonitorSlots
+        let monitorSlot = state.monitorSlot(
+            for: space,
+            availableMonitorSlots: availableMonitorSlots
+        )
+        return windowCache.displayTopology.monitorSlots.first(
+            where: { $0.slot == monitorSlot }
+        )?.display.visibleFrame
     }
 }
 

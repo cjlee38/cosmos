@@ -176,7 +176,8 @@ private extension SpaceRuntimeSynchronizerTests {
                 windowSystem: windowSystem,
                 windowCache: windowCache,
                 recordRepository: HiddenWindowRecordRepository(store: nil),
-                monitorSlotResolver: monitorSlotResolver
+                monitorSlotResolver: monitorSlotResolver,
+                hidePointProvider: displayProvider
             )
         )
     }

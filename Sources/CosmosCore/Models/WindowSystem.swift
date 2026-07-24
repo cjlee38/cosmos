@@ -5,6 +5,12 @@ public typealias DisplayID = CGDirectDisplayID
 
 public protocol HidePointProviding {
     func hidePoint(for frame: WindowFrame) throws -> CGPoint
+    func hidePoint(
+        for frame: WindowFrame,
+        on display: DisplaySnapshot,
+        among displays: [DisplaySnapshot]
+    ) -> CGPoint
+    func isHidePosition(_ frame: WindowFrame, displays: [DisplaySnapshot]) -> Bool
 }
 
 public enum DisplayRole: Equatable {

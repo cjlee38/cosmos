@@ -4,15 +4,18 @@ final class SpaceDisplayCoordinator {
     private let windowCache: WindowStateCache
     private let runtimeSynchronizer: SpaceRuntimeSynchronizer
     private let monitorSlotResolver: MonitorSlotResolver
+    private let hidePointProvider: any HidePointProviding
 
     init(
         windowCache: WindowStateCache,
         runtimeSynchronizer: SpaceRuntimeSynchronizer,
-        monitorSlotResolver: MonitorSlotResolver
+        monitorSlotResolver: MonitorSlotResolver,
+        hidePointProvider: any HidePointProviding
     ) {
         self.windowCache = windowCache
         self.runtimeSynchronizer = runtimeSynchronizer
         self.monitorSlotResolver = monitorSlotResolver
+        self.hidePointProvider = hidePointProvider
     }
 
     func refreshDisplayTopology() throws {
@@ -120,6 +123,17 @@ final class SpaceDisplayCoordinator {
                     among: currentTopology.monitorSlots
                 )
             else {
+                return
+            }
+            if hidePointProvider.isHidePosition(frame, displays: previousTopology.displays) {
+                frames[id] = WindowFrame(
+                    origin: hidePointProvider.hidePoint(
+                        for: frame,
+                        on: targetDisplay,
+                        among: currentTopology.displays
+                    ),
+                    size: frame.size
+                )
                 return
             }
             guard let translatedFrame = monitorSlotResolver.translatedFrame(

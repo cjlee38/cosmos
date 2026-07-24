@@ -59,6 +59,90 @@ final class DisplayProviderTests: XCTestCase {
         XCTAssertEqual(point, CGPoint(x: 999, y: 923))
     }
 
+    func testRecognizesExactParkingPositionsOnEitherDisplay() throws {
+        let displays = [
+            display(id: 1, x: 0, y: 0),
+            display(id: 2, x: 1000, y: 0)
+        ]
+        let provider = WindowParkingPointProvider(
+            displayProvider: FakeDisplayProvider(snapshots: displays)
+        )
+
+        XCTAssertTrue(provider.isHidePosition(
+            .frame(x: -299, y: 999, width: 300, height: 200),
+            displays: displays
+        ))
+        XCTAssertTrue(provider.isHidePosition(
+            .frame(x: 1999, y: 999, width: 300, height: 200),
+            displays: displays
+        ))
+    }
+
+    func testRecognizesParkingStripsWithDifferentVisibleTitleBarHeights() {
+        let displays = [
+            display(id: 1, x: 0, y: 0),
+            display(id: 2, x: 1000, y: 0)
+        ]
+        let provider = WindowParkingPointProvider(
+            displayProvider: FakeDisplayProvider(snapshots: displays)
+        )
+
+        XCTAssertTrue(provider.isHidePosition(
+            .frame(x: -299, y: 972, width: 300, height: 200),
+            displays: displays
+        ))
+        XCTAssertTrue(provider.isHidePosition(
+            .frame(x: 1999, y: 968, width: 300, height: 200),
+            displays: displays
+        ))
+    }
+
+    func testDoesNotTreatPositionNearParkingPointAsHidden() throws {
+        let displays = [
+            display(id: 1, x: 0, y: 0),
+            display(id: 2, x: 1000, y: 0)
+        ]
+        let provider = WindowParkingPointProvider(
+            displayProvider: FakeDisplayProvider(snapshots: displays)
+        )
+
+        XCTAssertFalse(provider.isHidePosition(
+            .frame(x: 1998, y: 999, width: 300, height: 200),
+            displays: displays
+        ))
+    }
+
+    func testDoesNotTreatOnePixelCrossDisplayOverlapAsParking() {
+        let displays = [
+            display(id: 1, x: 0, y: 0),
+            display(id: 2, x: 1000, y: 0)
+        ]
+        let provider = WindowParkingPointProvider(
+            displayProvider: FakeDisplayProvider(snapshots: displays)
+        )
+
+        XCTAssertFalse(provider.isHidePosition(
+            .frame(x: 999, y: 800, width: 300, height: 300),
+            displays: displays
+        ))
+    }
+
+    func testDoesNotTreatOnePixelOverlapAtObstructedParkingCornerAsParking() {
+        let displays = [
+            display(id: 1, x: 0, y: 0),
+            display(id: 2, x: -1000, y: 0),
+            display(id: 3, x: 1000, y: 0)
+        ]
+        let provider = WindowParkingPointProvider(
+            displayProvider: FakeDisplayProvider(snapshots: displays)
+        )
+
+        XCTAssertFalse(provider.isHidePosition(
+            .frame(x: 999, y: 800, width: 300, height: 300),
+            displays: displays
+        ))
+    }
+
     func testParkingAssessmentIsSafeWhenEitherBottomCornerIsOpen() {
         let displays = [
             display(id: 1, x: 0, y: 0).frame,

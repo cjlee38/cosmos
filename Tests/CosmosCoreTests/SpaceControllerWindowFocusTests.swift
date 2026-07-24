@@ -190,6 +190,66 @@ final class SpaceWindowFocusTests: SpaceControllerTestCase {
 }
 
 final class SpaceExternalFocusTests: SpaceControllerTestCase {
+    func testFocusWindowRecoversUntrackedParkingPositionToSpaceDisplayCenter() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", frame: .frame(x: 100, y: 100, width: 300, height: 200))
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.handleWindowSetChanged()
+        windowSystem.frames[100] = .frame(x: -1, y: -1, width: 300, height: 200)
+
+        try controller.focusWindow(100)
+
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertFalse(controller.isHiddenBySpace(100))
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: 350, y: 400, width: 300, height: 200))
+        XCTAssertEqual(windowSystem.focusedIDs, [100])
+    }
+
+    func testExternalFocusPreservesMembershipAndRecoversOnAssignedDisplay() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", frame: .frame(x: 1100, y: 100, width: 300, height: 200))
+        ])
+        let store = InMemorySpaceConfigStore()
+        try store.save(CosmosConfig(
+            spaces: spaceConfigs(["1", "A"], displays: ["A": 2]),
+            switcher: CosmosConfig.default.switcher
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        _ = try controller.handleWindowSetChanged()
+        XCTAssertEqual(controller.membership(for: 100), "A")
+        windowSystem.frames[100] = .frame(x: -1, y: -1, width: 300, height: 200)
+        windowSystem.focusedWindow = 100
+
+        let result = try controller.handleFocusedWindowChanged().focusedWindowSync
+
+        XCTAssertEqual(result, .alreadyActive(windowID: 100, space: "A"))
+        XCTAssertEqual(controller.membership(for: 100), "A")
+        XCTAssertEqual(controller.currentSpace, "A")
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: 1350, y: 400, width: 300, height: 200))
+    }
+
+    func testFocusDoesNotMoveWindowNearParkingPosition() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", frame: .frame(x: 100, y: 100, width: 300, height: 200))
+        ])
+        let controller = makeController(windowSystem)
+
+        _ = try controller.handleWindowSetChanged()
+        windowSystem.frames[100] = .frame(x: -2, y: -1, width: 300, height: 200)
+
+        try controller.focusWindow(100)
+
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: -2, y: -1, width: 300, height: 200))
+        XCTAssertEqual(windowSystem.focusedIDs, [100])
+    }
+
     func testLayoutChangeDoesNotFollowASpaceHiddenFocusedWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One"),

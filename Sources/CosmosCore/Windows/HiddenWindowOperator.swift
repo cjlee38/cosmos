@@ -101,6 +101,49 @@ final class HiddenWindowOperator {
         return .restored
     }
 
+    func restoreForFocus(
+        _ id: WindowID,
+        fallbackVisibleFrame: CGRect,
+        displays: [DisplaySnapshot],
+        state: inout SpaceState
+    ) throws {
+        guard try restore(id, state: &state) == .alreadyVisible else {
+            return
+        }
+        _ = try recoverParkingPositionForFocus(
+            id,
+            referenceFrame: nil,
+            fallbackVisibleFrame: fallbackVisibleFrame,
+            displays: displays,
+            state: state
+        )
+    }
+
+    func recoverParkingPositionForFocus(
+        _ id: WindowID,
+        referenceFrame: WindowFrame?,
+        fallbackVisibleFrame: CGRect,
+        displays: [DisplaySnapshot],
+        state: SpaceState
+    ) throws -> Bool {
+        guard !state.isHidden(id),
+              let frame = windowSystem.frame(for: id) ?? windowCache.snapshot(for: id)?.frame,
+              hidePointProvider.isHidePosition(referenceFrame ?? frame, displays: displays)
+        else {
+            return false
+        }
+        let centeredFrame = WindowFrame(
+            origin: CGPoint(
+                x: fallbackVisibleFrame.midX - frame.size.width / 2,
+                y: fallbackVisibleFrame.midY - frame.size.height / 2
+            ),
+            size: frame.size
+        )
+        try windowSystem.setPosition(centeredFrame.origin, for: id)
+        windowCache.updateFrame(centeredFrame, for: id)
+        return true
+    }
+
     func restoreForShutdown(state: SpaceState) throws {
         var failedWindowIDs: [WindowID] = []
         for id in state.hiddenWindowIDs {

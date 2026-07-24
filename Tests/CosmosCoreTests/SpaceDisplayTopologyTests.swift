@@ -152,6 +152,41 @@ final class SpaceDisplayTopologyTests: SpaceControllerTestCase {
         XCTAssertFalse(controller.isHiddenBySpace(200))
     }
 
+    func testCombinedDisplayAndFocusChangeRecoversCachedParkingFrame() throws {
+        let displayProvider = twoDisplayProvider()
+        let store = InMemorySpaceConfigStore()
+        try store.save(configWithSecondarySpace())
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 200, title: "Secondary", frame: .frame(x: 1100, y: 100, width: 300, height: 200))
+        ])
+        let parkingPointProvider = WindowParkingPointProvider(displayProvider: displayProvider)
+        let controller = SpaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider,
+            hidePointProvider: parkingPointProvider,
+            configStore: store
+        )
+        _ = try controller.handleWindowSetChanged()
+        let frame = try XCTUnwrap(windowSystem.frames[200])
+        windowSystem.frames[200] = WindowFrame(
+            origin: try parkingPointProvider.hidePoint(for: frame),
+            size: frame.size
+        )
+        _ = try controller.handleWindowSetChanged()
+        windowSystem.focusedWindow = 200
+        displayProvider.snapshots = [mainDisplay()]
+
+        _ = try controller.handleExternalWindowChange(ExternalWindowChange(
+            displayConfigurationChanged: true,
+            focusPolicy: .always
+        ))
+
+        XCTAssertEqual(controller.membership(for: 200), "A")
+        XCTAssertEqual(controller.currentSpace, "A")
+        XCTAssertEqual(windowSystem.frames[200], .frame(x: 350, y: 400, width: 300, height: 200))
+        XCTAssertFalse(controller.isHiddenBySpace(200))
+    }
+
     private func configWithSecondarySpace() -> CosmosConfig {
         CosmosConfig(
             spaces: spaceConfigs(["1", "A"], displays: ["A": 2]),

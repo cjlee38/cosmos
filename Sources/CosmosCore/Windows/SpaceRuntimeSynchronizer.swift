@@ -5,17 +5,20 @@ final class SpaceRuntimeSynchronizer {
     private let windowCache: WindowStateCache
     private let recordRepository: HiddenWindowRecordRepository
     private let monitorSlotResolver: MonitorSlotResolver
+    private let hidePointProvider: any HidePointProviding
 
     init(
         windowSystem: any WindowSystem,
         windowCache: WindowStateCache,
         recordRepository: HiddenWindowRecordRepository,
-        monitorSlotResolver: MonitorSlotResolver
+        monitorSlotResolver: MonitorSlotResolver,
+        hidePointProvider: any HidePointProviding
     ) {
         self.windowSystem = windowSystem
         self.windowCache = windowCache
         self.recordRepository = recordRepository
         self.monitorSlotResolver = monitorSlotResolver
+        self.hidePointProvider = hidePointProvider
     }
 
     func synchronize(
@@ -140,7 +143,11 @@ final class SpaceRuntimeSynchronizer {
     ) {
         for window in windows where !window.isMinimized && !state.isHidden(window.id) {
             guard let space = state.membership(for: window.id),
-                  let frame = window.frame
+                  let frame = window.frame,
+                  !hidePointProvider.isHidePosition(
+                      frame,
+                      displays: displayTopology.displays
+                  )
             else {
                 continue
             }

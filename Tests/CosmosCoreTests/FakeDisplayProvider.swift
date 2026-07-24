@@ -21,6 +21,18 @@ final class FakeDisplayProvider: DisplayProviding, HidePointProviding {
         point
     }
 
+    func hidePoint(
+        for _: WindowFrame,
+        on _: DisplaySnapshot,
+        among _: [DisplaySnapshot]
+    ) -> CGPoint {
+        point
+    }
+
+    func isHidePosition(_ frame: WindowFrame, displays _: [DisplaySnapshot]) -> Bool {
+        frame.origin == point
+    }
+
     func displays() throws -> [DisplaySnapshot] {
         displayQueryCount += 1
         if let displayError {
