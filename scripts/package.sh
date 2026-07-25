@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+repo_root="${0:A:h:h}"
+cd "$repo_root/macos"
+
 archive=".build/distribution/Cosmos.xcarchive"
 export_dir=".build/distribution/export"
 staging=".build/distribution/dmg"

@@ -1,5 +1,5 @@
-import Foundation
 import CosmosCore
+import Foundation
 
 enum SettingsSection: CaseIterable, Hashable {
     case general
@@ -119,7 +119,7 @@ struct SpaceSettingsSnapshot: Equatable {
         }
         let idsByMonitorSlot = Dictionary(grouping: spaceItems, by: \.monitorSlot)
             .mapValues { $0.map(\.id) }
-        let displayFrames = monitorSlots.map(\.display.frame)
+        let displaySnapshots = monitorSlots.map(\.display)
         displays = monitorSlots.map { monitorSlot in
             SpaceSettingsDisplay(
                 id: monitorSlot.display.id,
@@ -129,8 +129,8 @@ struct SpaceSettingsSnapshot: Equatable {
                 monitorSlot: monitorSlot.slot,
                 spaceIDs: idsByMonitorSlot[monitorSlot.slot] ?? [],
                 hasUnobstructedParkingCorner: WindowParkingPointProvider.assessment(
-                    for: monitorSlot.display.frame,
-                    among: displayFrames
+                    for: monitorSlot.display,
+                    among: displaySnapshots
                 ).hasUnobstructedCorner
             )
         }

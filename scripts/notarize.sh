@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+repo_root="${0:A:h:h}"
+cd "$repo_root/macos"
+
 version="${1:?Usage: $0 <version>}"
 output_dmg="dist/Cosmos-$version.dmg"
 work_dir=".build/distribution/notarization-$$"
@@ -9,7 +12,7 @@ dmg="$work_dir/Cosmos-$version.dmg"
 
 trap 'rm -rf "$work_dir"' EXIT
 
-./scripts/package.sh
+"$repo_root/scripts/package.sh"
 actual_version=$(/usr/libexec/PlistBuddy \
     -c "Print :CFBundleShortVersionString" \
     ".build/distribution/export/Cosmos.app/Contents/Info.plist")

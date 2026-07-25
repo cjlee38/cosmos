@@ -285,6 +285,23 @@ final class SpaceControllerTests: SpaceControllerTestCase {
         XCTAssertTrue(controller.displayTopology.monitorSlots.isEmpty)
     }
 
+    func testSpaceSwitchDoesNotQueryDisplaysAgainForParking() throws {
+        let windowSystem = FakeWindowSystem(windows: [.window(id: 100, title: "One")])
+        let displayProvider = FakeDisplayProvider()
+        let controller = SpaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider,
+            hidePointProvider: WindowParkingPointProvider(displayProvider: displayProvider)
+        )
+
+        _ = try controller.handleWindowSetChanged()
+        let displayQueryCount = displayProvider.displayQueryCount
+
+        _ = try controller.switchSpace(to: "2")
+
+        XCTAssertEqual(displayProvider.displayQueryCount, displayQueryCount + 1)
+    }
+
     func testWindowSetChangedCachesAndAssignsNewWindowsToCurrentSpace() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Baseline")

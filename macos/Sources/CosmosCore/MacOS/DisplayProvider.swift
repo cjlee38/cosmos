@@ -40,11 +40,11 @@ public struct WindowParkingPointProvider: HidePointProviding {
     }
 
     public func isHidePosition(_ frame: WindowFrame, displays: [DisplaySnapshot]) -> Bool {
-        return displays.contains { display in
+        displays.contains { display in
             let visibleFrame = display.visibleFrame
             let windowFrame = CGRect(origin: frame.origin, size: frame.size)
             let intersection = windowFrame.intersection(visibleFrame)
-            let assessment = Self.assessment(for: display.frame, among: displays.map(\.frame))
+            let assessment = Self.assessment(for: display, among: displays)
             guard assessment.hasUnobstructedCorner,
                   !intersection.isNull,
                   intersection.width == 1,
@@ -77,57 +77,58 @@ public struct WindowParkingPointProvider: HidePointProviding {
         on display: DisplaySnapshot,
         among displays: [DisplaySnapshot]
     ) -> CGPoint {
-        let visibleFrame = display.visibleFrame
-        switch Self.assessment(for: display.frame, among: displays.map(\.frame)).corner {
-        case .bottomLeft:
-            return CGPoint(
-                x: visibleFrame.minX - frame.size.width + 1,
-                y: visibleFrame.maxY - 1
-            )
-        case .bottomRight:
-            return bottomRight(of: visibleFrame)
-        }
+        Self.hidePoint(
+            for: frame.size,
+            at: Self.assessment(for: display, among: displays).corner,
+            in: display.visibleFrame
+        )
     }
 
     public static func assessment(
-        for display: CGRect,
-        among displays: [CGRect]
+        for display: DisplaySnapshot,
+        among displays: [DisplaySnapshot]
     ) -> WindowParkingAssessment {
-        // Sample each corner's side, bottom, and diagonal; diagonal overlap is the strongest obstruction.
-        let xOffset = display.width * 0.1
-        let yOffset = display.height * 0.1
-
-        func obstructionScore(side: CGPoint, bottom: CGPoint, diagonal: CGPoint) -> Int {
-            displays.reduce(0) { score, candidate in
-                score
-                    + (candidate.contains(side) ? 1 : 0)
-                    + (candidate.contains(bottom) ? 1 : 0)
-                    + (candidate.contains(diagonal) ? 10 : 0)
+        func obstructionArea(at corner: WindowParkingCorner) -> CGFloat {
+            let parkingFrame = CGRect(
+                origin: hidePoint(
+                    for: display.frame.size,
+                    at: corner,
+                    in: display.visibleFrame
+                ),
+                size: display.frame.size
+            )
+            return displays.reduce(0) { area, candidate in
+                guard candidate.id != display.id else {
+                    return area
+                }
+                let intersection = parkingFrame.intersection(candidate.frame)
+                return area + (intersection.isNull ? 0 : intersection.width * intersection.height)
             }
         }
 
-        let bottomLeft = CGPoint(x: display.minX, y: display.maxY)
-        let leftScore = obstructionScore(
-            side: CGPoint(x: bottomLeft.x - 2, y: bottomLeft.y - yOffset),
-            bottom: CGPoint(x: bottomLeft.x + xOffset, y: bottomLeft.y + 2),
-            diagonal: CGPoint(x: bottomLeft.x - 2, y: bottomLeft.y + 2)
-        )
-
-        let bottomRight = CGPoint(x: display.maxX, y: display.maxY)
-        let rightScore = obstructionScore(
-            side: CGPoint(x: bottomRight.x + 2, y: bottomRight.y - yOffset),
-            bottom: CGPoint(x: bottomRight.x - xOffset, y: bottomRight.y + 2),
-            diagonal: CGPoint(x: bottomRight.x + 2, y: bottomRight.y + 2)
-        )
+        let leftArea = obstructionArea(at: .bottomLeft)
+        let rightArea = obstructionArea(at: .bottomRight)
 
         return WindowParkingAssessment(
-            corner: leftScore < rightScore ? .bottomLeft : .bottomRight,
-            hasUnobstructedCorner: leftScore == 0 || rightScore == 0
+            corner: leftArea < rightArea ? .bottomLeft : .bottomRight,
+            hasUnobstructedCorner: leftArea == 0 || rightArea == 0
         )
     }
 
-    private func bottomRight(of display: CGRect) -> CGPoint {
-        CGPoint(x: display.maxX - 1, y: display.maxY - 1)
+    private static func hidePoint(
+        for size: CGSize,
+        at corner: WindowParkingCorner,
+        in visibleFrame: CGRect
+    ) -> CGPoint {
+        switch corner {
+        case .bottomLeft:
+            CGPoint(
+                x: visibleFrame.minX - size.width + 1,
+                y: visibleFrame.maxY - 1
+            )
+        case .bottomRight:
+            CGPoint(x: visibleFrame.maxX - 1, y: visibleFrame.maxY - 1)
+        }
     }
 }
 

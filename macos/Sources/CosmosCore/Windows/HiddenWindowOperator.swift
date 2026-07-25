@@ -42,7 +42,15 @@ final class HiddenWindowOperator {
             state.replaceHiddenFrame(frame, for: id)
         }
 
-        let point = try hidePointProvider.hidePoint(for: frame)
+        let displays = windowCache.displayTopology.displays
+        guard let display = DisplayGeometry.display(containingOrNearest: frame.center, among: displays) else {
+            throw SpaceError.noDisplayAvailable
+        }
+        let point = hidePointProvider.hidePoint(
+            for: frame,
+            on: display,
+            among: displays
+        )
         recordRepository.upsertRecord(
             HiddenWindowRecordPolicy.makeRecord(
                 window: window,
