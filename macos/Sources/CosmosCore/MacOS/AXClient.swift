@@ -166,7 +166,7 @@ public final class AXClient {
     func focus(_ handle: WindowHandle) {
         AXUIElementSetAttributeValue(handle.axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(handle.axWindow, kAXRaiseAction as CFString)
-        handle.runningApp.activate(options: [.activateIgnoringOtherApps])
+        handle.runningApp.activate()
     }
 
     private func enumerateWindows(for app: NSRunningApplication) throws -> [WindowHandle] {
@@ -224,7 +224,7 @@ public final class AXClient {
             kAXCloseButtonAttribute,
             kAXMinimizeButtonAttribute,
             kAXZoomButtonAttribute,
-            kAXFullScreenButtonAttribute,
+            kAXFullScreenButtonAttribute
         ].contains { copyAttribute($0, from: window) != nil }
     }
 

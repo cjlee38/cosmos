@@ -1,9 +1,15 @@
 import AppKit
 import CoreGraphics
 import CosmosCore
+import ScreenCaptureKit
 
 final class WindowThumbnailCache {
-    private let captureImage: (WindowID) -> CGImage?
+    typealias CaptureImages = (
+        [WindowID],
+        @escaping (WindowID, Result<CGImage?, Error>) -> Void
+    ) -> Void
+
+    private let captureImages: CaptureImages
     private let canCapture: () -> Bool
     private let maximumAge: TimeInterval
     private let currentTime: () -> TimeInterval
@@ -18,13 +24,44 @@ final class WindowThumbnailCache {
 
     private(set) var isCaptureAvailable: Bool
 
-    init(
-        captureImage: @escaping (WindowID) -> CGImage? = WindowThumbnailCapture.capture,
+    convenience init(
         canCapture: @escaping () -> Bool = CGPreflightScreenCaptureAccess,
         maximumAge: TimeInterval = 2,
         currentTime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
-        self.captureImage = captureImage
+        self.init(
+            captureImages: WindowThumbnailCapture.capture,
+            canCapture: canCapture,
+            maximumAge: maximumAge,
+            currentTime: currentTime
+        )
+    }
+
+    convenience init(
+        captureImage: @escaping (WindowID) -> CGImage?,
+        canCapture: @escaping () -> Bool = CGPreflightScreenCaptureAccess,
+        maximumAge: TimeInterval = 2,
+        currentTime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
+        self.init(
+            captureImages: { windowIDs, completion in
+                for windowID in windowIDs {
+                    completion(windowID, .success(captureImage(windowID)))
+                }
+            },
+            canCapture: canCapture,
+            maximumAge: maximumAge,
+            currentTime: currentTime
+        )
+    }
+
+    init(
+        captureImages: @escaping CaptureImages,
+        canCapture: @escaping () -> Bool,
+        maximumAge: TimeInterval,
+        currentTime: @escaping () -> TimeInterval
+    ) {
+        self.captureImages = captureImages
         self.canCapture = canCapture
         self.maximumAge = maximumAge
         self.currentTime = currentTime
@@ -99,29 +136,33 @@ final class WindowThumbnailCache {
         capturingWindowIDs = Set(windowIDs)
         dirtyWindowIDs.subtract(windowIDs)
 
-        captureQueue.async { [weak self, captureImage] in
-            for windowID in windowIDs {
-                let image = captureImage(windowID)
+        captureQueue.async { [weak self, captureImages] in
+            captureImages(windowIDs) { windowID, result in
                 DispatchQueue.main.async { [weak self] in
-                    self?.completeCapture(windowID: windowID, image: image)
+                    self?.completeCapture(windowID: windowID, result: result)
                 }
             }
         }
     }
 
-    private func completeCapture(windowID: WindowID, image: CGImage?) {
+    private func completeCapture(windowID: WindowID, result: Result<CGImage?, Error>) {
         capturingWindowIDs.remove(windowID)
         if liveWindowIDs.contains(windowID), isCaptureAvailable {
-            lastCaptureTimes[windowID] = currentTime()
-            if let image {
-                thumbnails[windowID] = NSImage(
-                    cgImage: image,
-                    size: NSSize(width: image.width, height: image.height)
-                )
-            } else {
-                thumbnails[windowID] = nil
+            switch result {
+            case let .success(image):
+                lastCaptureTimes[windowID] = currentTime()
+                if let image {
+                    thumbnails[windowID] = NSImage(
+                        cgImage: image,
+                        size: NSSize(width: image.width, height: image.height)
+                    )
+                } else {
+                    thumbnails[windowID] = nil
+                }
+                onThumbnailUpdated?(windowID)
+            case .failure:
+                dirtyWindowIDs.insert(windowID)
             }
-            onThumbnailUpdated?(windowID)
         }
 
         guard capturingWindowIDs.isEmpty else {
@@ -134,16 +175,62 @@ final class WindowThumbnailCache {
 }
 
 private enum WindowThumbnailCapture {
-    static func capture(id: WindowID) -> CGImage? {
-        guard let image = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            id,
-            [.boundsIgnoreFraming, .bestResolution]
-        ) else {
-            return nil
-        }
+    static func capture(
+        windowIDs: [WindowID],
+        completion: @escaping (WindowID, Result<CGImage?, Error>) -> Void
+    ) {
+        SCShareableContent.getExcludingDesktopWindows(
+            true,
+            onScreenWindowsOnly: false
+        ) { content, error in
+            guard let content else {
+                let error = error ?? WindowThumbnailCaptureError.contentUnavailable
+                windowIDs.forEach { completion($0, .failure(error)) }
+                return
+            }
 
-        return image
+            let windowsByID = Dictionary(
+                uniqueKeysWithValues: content.windows.map { ($0.windowID, $0) }
+            )
+
+            func capture(at index: Int) {
+                guard index < windowIDs.count else {
+                    return
+                }
+
+                let windowID = windowIDs[index]
+                guard let window = windowsByID[windowID] else {
+                    completion(windowID, .success(nil))
+                    capture(at: index + 1)
+                    return
+                }
+
+                let filter = SCContentFilter(desktopIndependentWindow: window)
+                let configuration = SCStreamConfiguration()
+                let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
+                configuration.width = max(1, Int(window.frame.width * scale))
+                configuration.height = max(1, Int(window.frame.height * scale))
+                configuration.showsCursor = false
+                configuration.ignoreShadowsSingleWindow = true
+
+                SCScreenshotManager.captureImage(
+                    contentFilter: filter,
+                    configuration: configuration
+                ) { image, error in
+                    if let error {
+                        completion(windowID, .failure(error))
+                    } else {
+                        completion(windowID, .success(image))
+                    }
+                    capture(at: index + 1)
+                }
+            }
+
+            capture(at: 0)
+        }
     }
+}
+
+private enum WindowThumbnailCaptureError: Error {
+    case contentUnavailable
 }
