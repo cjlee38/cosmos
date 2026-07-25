@@ -32,6 +32,7 @@ struct SpaceShortcutBindings {
 
 struct WindowSwitcherItem {
     let windowID: WindowID
+    let pid: pid_t
     let appName: String
     let title: String
     let frame: WindowFrame?

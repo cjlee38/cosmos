@@ -208,10 +208,6 @@ public extension SpaceController {
         state.hiddenFrame(for: id) ?? windowCache.snapshot(for: id)?.frame
     }
 
-    func systemFocusedWindowID() -> WindowID? {
-        windowSystem.focusedWindowID()
-    }
-
     func cachedFocusedWindowID() -> WindowID? {
         windowCache.focusedWindowID
     }

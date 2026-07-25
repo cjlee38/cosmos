@@ -35,7 +35,8 @@ final class SpaceIDPickerView: NSView {
     func apply(
         monitorSlotBySpaceID: [SpaceID: MonitorSlot],
         selectedMonitorSlot: MonitorSlot?,
-        isDeleteMode: Bool = false
+        isDeleteMode: Bool = false,
+        isEditable: Bool = true
     ) {
         self.monitorSlotBySpaceID = monitorSlotBySpaceID
         self.selectedMonitorSlot = selectedMonitorSlot
@@ -43,10 +44,11 @@ final class SpaceIDPickerView: NSView {
         for (spaceID, button) in buttonsByID {
             button.apply(
                 assignment: assignment(for: spaceID),
-                isDeleteMode: isDeleteMode
+                isDeleteMode: isDeleteMode,
+                isEditable: isEditable
             )
         }
-        deleteModeButton.apply(isDeleteMode: isDeleteMode)
+        deleteModeButton.apply(isDeleteMode: isDeleteMode, isEditable: isEditable)
     }
 
     private func buildKeyboard() {
@@ -166,7 +168,8 @@ private final class SpaceDeleteModeButton: NSButton {
         true
     }
 
-    func apply(isDeleteMode: Bool) {
+    func apply(isDeleteMode: Bool, isEditable: Bool) {
+        isEnabled = isEditable
         state = isDeleteMode ? .on : .off
         image = NSImage(
             systemSymbolName: isDeleteMode ? "trash.fill" : "trash",
@@ -220,9 +223,18 @@ final class SpaceIDKeyButton: NSButton {
         true
     }
 
-    func apply(assignment: SpaceIDKeyAssignment, isDeleteMode: Bool) {
+    func apply(
+        assignment: SpaceIDKeyAssignment,
+        isDeleteMode: Bool,
+        isEditable: Bool
+    ) {
         self.assignment = assignment
         self.isDeleteMode = isDeleteMode
+        guard isEditable else {
+            isEnabled = false
+            needsDisplay = true
+            return
+        }
         switch assignment {
         case .available:
             isEnabled = !isDeleteMode

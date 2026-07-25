@@ -211,6 +211,7 @@ private extension SwitcherCoordinator {
     }
 
     private func presentCurrentSession() {
+        previewService.prepareForPresentation()
         let overlay = overlayForPresentation()
         switch session {
         case let .windows(selection, anchorFrame):

@@ -106,6 +106,7 @@ final class AppearanceSettingsTests: XCTestCase {
         let items = (1 ... 1).map { index in
             WindowSwitcherItem(
                 windowID: WindowID(index),
+                pid: pid_t(index),
                 appName: "App \(index)",
                 title: "Window \(index)",
                 frame: nil,
@@ -142,6 +143,33 @@ final class AppearanceSettingsTests: XCTestCase {
         XCTAssertLessThan(middle.preview.height, maximum.preview.height)
         XCTAssertGreaterThan(middle.preview.height / minimum.preview.height, 1.2)
         XCTAssertGreaterThan(maximum.preview.height / middle.preview.height, 1.2)
+    }
+
+    func testSpaceIconStripDeduplicatesByPIDInsteadOfApplicationName() {
+        let icon = NSImage(size: NSSize(width: 32, height: 32))
+        let windows = [pid_t(100), pid_t(200)].map { pid in
+            WindowSwitcherItem(
+                windowID: WindowID(pid),
+                pid: pid,
+                appName: "Same Name",
+                title: "Window",
+                frame: nil,
+                preview: nil,
+                icon: icon
+            )
+        }
+        let strip = SpaceApplicationIconStripView(
+            frame: NSRect(x: 0, y: 0, width: 300, height: 200)
+        )
+
+        strip.update(windows: windows, isVisible: true)
+        strip.layoutSubtreeIfNeeded()
+
+        let visibleIconCount = strip.subviews
+            .compactMap { $0 as? NSImageView }
+            .filter { !$0.isHidden && $0.image != nil }
+            .count
+        XCTAssertEqual(visibleIconCount, 2)
     }
 
     private func makeDefaults() throws -> (UserDefaults, String) {

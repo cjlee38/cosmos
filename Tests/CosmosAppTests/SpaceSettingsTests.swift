@@ -130,9 +130,6 @@ final class SpaceSettingsSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.spaces[0].moveShortcut, "option+shift+1")
         XCTAssertNil(snapshot.spaces[1].switchShortcut)
         XCTAssertEqual(snapshot.spaces.map(\.windowCount), [2, 1, 0])
-        XCTAssertFalse(snapshot.availableSpaceIDs.contains("1"))
-        XCTAssertFalse(snapshot.availableSpaceIDs.contains("A"))
-        XCTAssertTrue(snapshot.availableSpaceIDs.contains("B"))
     }
 
     func testShortcutFormatterUsesMacModifierSymbols() {
@@ -430,6 +427,34 @@ final class SpaceSettingsViewTests: XCTestCase {
         )
     }
 
+    func testSpaceEditingRecoversAfterConfigBecomesReadable() throws {
+        let service = SpaceSettingsServiceStub(snapshot: settingsSnapshot(isEditable: false))
+        let viewController = SpaceSettingsViewController(service: service)
+
+        let displayCard = try XCTUnwrap(descendants(of: viewController.view).first {
+            $0.accessibilityIdentifier() == "cosmos.settings.display.1"
+        })
+        displayCard.mouseDown(with: mouseEvent(type: .leftMouseDown))
+        let deleteModeButton = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? NSButton }
+                .first { $0.accessibilityIdentifier() == "cosmos.settings.space.delete-mode" }
+        )
+        let availableSpaceButton = try XCTUnwrap(
+            descendants(of: viewController.view)
+                .compactMap { $0 as? SpaceIDKeyButton }
+                .first { $0.spaceID == "B" }
+        )
+        XCTAssertFalse(deleteModeButton.isEnabled)
+        XCTAssertFalse(availableSpaceButton.isEnabled)
+
+        service.snapshotValue = settingsSnapshot(isEditable: true)
+        viewController.refresh()
+
+        XCTAssertTrue(deleteModeButton.isEnabled)
+        XCTAssertTrue(availableSpaceButton.isEnabled)
+    }
+
     func testRefreshKeepsTheCurrentRecorderWhenShortcutRestoreFails() throws {
         let service = SpaceSettingsServiceStub(snapshot: settingsSnapshot())
         service.cancelShortcutRecordingError = TestError.shortcutRestore
@@ -451,7 +476,9 @@ final class SpaceSettingsViewTests: XCTestCase {
         XCTAssertTrue(recorder.isRecording)
         XCTAssertTrue(descendants(of: viewController.view).contains { $0 === recorder })
     }
+}
 
+final class SpaceIDPickerTests: XCTestCase {
     func testSpaceIDPickerDistinguishesConfiguredAndAvailableSelections() throws {
         let picker = SpaceIDPickerView()
         picker.apply(
@@ -526,7 +553,9 @@ final class SpaceSettingsViewTests: XCTestCase {
         XCTAssertEqual(deleteButton?.frame.maxX, picker.bounds.maxX)
         XCTAssertEqual(deleteButton?.frame.minY, picker.bounds.minY)
     }
+}
 
+extension SpaceSettingsViewTests {
     func testShortcutConflictsStayOnRecorderControlsWithoutASeparateSection() {
         let base = settingsSnapshot()
         let snapshot = SpaceSettingsSnapshot(
@@ -763,7 +792,8 @@ private func mouseEvent(type: NSEvent.EventType) -> NSEvent {
 
 private func settingsSnapshot(
     spaces: [SpaceConfig] = [SpaceConfig(id: "1")],
-    spaceWindowCounts: [SpaceID: Int] = [:]
+    spaceWindowCounts: [SpaceID: Int] = [:],
+    isEditable: Bool = true
 ) -> SpaceSettingsSnapshot {
     let main = DisplaySnapshot(
         id: 1,
@@ -783,7 +813,8 @@ private func settingsSnapshot(
             MonitorSlotSnapshot(slot: 1, display: main),
             MonitorSlotSnapshot(slot: 2, display: extended)
         ],
-        spaceWindowCounts: spaceWindowCounts
+        spaceWindowCounts: spaceWindowCounts,
+        isEditable: isEditable
     )
 }
 
@@ -814,18 +845,18 @@ private func descendants(of view: NSView) -> [NSView] {
 }
 
 private final class SpaceSettingsServiceStub: SpaceSettingsServing {
-    let currentSnapshot: SpaceSettingsSnapshot
+    var snapshotValue: SpaceSettingsSnapshot
     var onUpdateMonitor: (SpaceID, DisplayID) throws -> Void = { _, _ in }
     var onAddSpaces: ([SpaceID], DisplayID) throws -> Void = { _, _ in }
     var onRemoveSpace: (SpaceID) throws -> Void = { _ in }
     var cancelShortcutRecordingError: Error?
 
     init(snapshot: SpaceSettingsSnapshot) {
-        currentSnapshot = snapshot
+        snapshotValue = snapshot
     }
 
     func snapshot() -> SpaceSettingsSnapshot {
-        currentSnapshot
+        snapshotValue
     }
 
     func updateShortcut(_: String?, for _: ShortcutTarget) throws -> Bool {

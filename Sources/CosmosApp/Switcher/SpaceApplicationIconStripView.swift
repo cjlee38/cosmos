@@ -116,8 +116,8 @@ final class SpaceApplicationIconStripView: NSView {
     }
 
     func update(windows: [WindowSwitcherItem], isVisible: Bool) {
-        var seenAppNames: Set<String> = []
-        applications = windows.filter { seenAppNames.insert($0.appName).inserted }
+        var seenPIDs: Set<pid_t> = []
+        applications = windows.filter { seenPIDs.insert($0.pid).inserted }
         isContentVisible = isVisible
         needsLayout = true
     }

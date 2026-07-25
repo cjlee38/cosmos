@@ -28,10 +28,10 @@ final class ConfigRuntimeDesiredStateTests: XCTestCase {
             return XCTFail("Expected rejected config result")
         }
         XCTAssertEqual(shortcutInstaller.replacedKeys, [
-            ["option+1"],
+            previousConfig.configuredShortcuts.map(\.key),
             [],
-            ["option+1", "option+1", "option+shift+a"],
-            ["option+1"]
+            invalidConfig.configuredShortcuts.map(\.key),
+            previousConfig.configuredShortcuts.map(\.key)
         ])
         XCTAssertEqual(configStore.savedConfigs, [invalidConfig])
         XCTAssertEqual(runtime.desiredConfig, invalidConfig)

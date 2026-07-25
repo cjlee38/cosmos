@@ -219,7 +219,8 @@ private extension SpaceSettingsViewController {
             selectedMonitorSlot: snapshot.displays
                 .first(where: { $0.id == selectedDisplayID })?
                 .monitorSlot,
-            isDeleteMode: isDeleteMode
+            isDeleteMode: isDeleteMode,
+            isEditable: snapshot.isEditable
         )
         updateDisplayEditor(snapshot)
         rebuildDisplayStatus(snapshot)
@@ -342,7 +343,6 @@ private extension SpaceSettingsViewController {
             : "Configuration is invalid. Fix config.yaml in General before editing spaces."
         configErrorNotice.isHidden = snapshot.isEditable
         if !snapshot.isEditable {
-            disableControls(in: displayEditorStack)
             disableControls(in: inspectorSection)
         }
     }

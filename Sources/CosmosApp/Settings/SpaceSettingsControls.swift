@@ -202,30 +202,6 @@ enum SpaceSettingsControlFactory {
         return button
     }
 
-    private static func labeledShortcut(
-        title: String,
-        shortcutTarget: ShortcutTarget,
-        shortcut: String?,
-        validationMessage: String?,
-        action: (target: AnyObject, selector: Selector)
-    ) -> NSView {
-        let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 11.5, weight: .semibold)
-        label.textColor = .secondaryLabelColor
-        let control = shortcutRecorder(
-            shortcutTarget: shortcutTarget,
-            shortcut: shortcut,
-            validationMessage: validationMessage,
-            target: action.target,
-            action: action.selector
-        )
-        let stack = NSStackView(views: [label, control])
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 6
-        return stack
-    }
-
     private static func valueLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 13, weight: .medium)

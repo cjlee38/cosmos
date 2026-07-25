@@ -194,7 +194,7 @@ private extension FixtureAppDelegate {
             backing: .buffered,
             defer: false
         )
-        sheet.title = "KKACI Fixture Sheet"
+        sheet.title = "Cosmos Fixture Sheet"
         sheet.isReleasedWhenClosed = false
         sheet.contentView = makeContentView(title: "Sheet", subtitle: "Attached sheet window")
         parent.beginSheet(sheet)
@@ -359,7 +359,7 @@ private extension FixtureAppDelegate {
 
     private func nextTitle(_ kind: String) -> String {
         defer { sequence += 1 }
-        return "KKACI Fixture \(kind) \(sequence)"
+        return "Cosmos Fixture \(kind) \(sequence)"
     }
 
     private func nextOrigin() -> NSPoint {

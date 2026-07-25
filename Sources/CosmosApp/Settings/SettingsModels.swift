@@ -101,11 +101,6 @@ struct SpaceSettingsSnapshot: Equatable {
     let isEditable: Bool
     let shortcutValidationMessages: [ShortcutTarget: String]
 
-    var availableSpaceIDs: [SpaceID] {
-        let configuredIDs = Set(spaces.map(\.id))
-        return SpaceID.allCases.filter { !configuredIDs.contains($0) }
-    }
-
     init(
         config: CosmosConfig,
         monitorSlots: [MonitorSlotSnapshot],
@@ -186,18 +181,10 @@ struct SpaceSettingsDisplay: Equatable {
 }
 
 struct SpaceDisplayOption: Equatable {
-    let displayID: DisplayID
     let monitorSlot: MonitorSlot
     let name: String
 
-    init(displayID: DisplayID, monitorSlot: MonitorSlot, name: String) {
-        self.displayID = displayID
-        self.monitorSlot = monitorSlot
-        self.name = name
-    }
-
     init(display: SpaceSettingsDisplay) {
-        displayID = display.id
         monitorSlot = display.monitorSlot
         name = display.name
     }

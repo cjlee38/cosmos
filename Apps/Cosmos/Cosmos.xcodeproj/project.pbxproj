@@ -29,6 +29,7 @@
 		30EE3B3E8B71E27139685497 /* SwitcherTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */; };
 		334D4C006BCF03901297125C /* ConfigRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C983C270D0A6097DF02120C7 /* ConfigRuntimeTests.swift */; };
 		33A74C0D6B1E4F2A8C5097D3 /* ConfigRuntimeTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D154A0E7B2436F8A0C5D12 /* ConfigRuntimeTestSupport.swift */; };
+		D10000000000000000000002 /* ConfigRuntimeDesiredStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000001 /* ConfigRuntimeDesiredStateTests.swift */; };
 		3493FA7A3E90533D8A3D86C2 /* SwitcherModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA153E480398570D63C3B9A7 /* SwitcherModels.swift */; };
 		3E818739319D8EA745B7E9EE /* AppRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EA481F06B2FE09F3944553 /* AppRuntime.swift */; };
 		3FBB8C9396F8E56C9F176DEC /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85DEB94005203CA045AFDC68 /* Log.swift */; };
@@ -168,6 +169,7 @@
 		C8561E548E557C8E30D6F79D /* ModifierFlagsMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifierFlagsMonitorTests.swift; sourceTree = "<group>"; };
 		C983C270D0A6097DF02120C7 /* ConfigRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigRuntimeTests.swift; sourceTree = "<group>"; };
 		C9D154A0E7B2436F8A0C5D12 /* ConfigRuntimeTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigRuntimeTestSupport.swift; sourceTree = "<group>"; };
+		D10000000000000000000001 /* ConfigRuntimeDesiredStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigRuntimeDesiredStateTests.swift; sourceTree = "<group>"; };
 		D00F18C90C9A49A0944B0E44 /* KeyboardBindingMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBindingMapper.swift; sourceTree = "<group>"; };
 		D136051710ECBADAA14E0522 /* AXApplicationObserverRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXApplicationObserverRegistry.swift; sourceTree = "<group>"; };
 		D7ADAC95348EF0FBF0BEF484 /* GeneralSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsViewController.swift; sourceTree = "<group>"; };
@@ -289,6 +291,7 @@
 				C78A5A1E9273B38D6A3B86FB /* ApplicationIconCacheTests.swift */,
 				FBE868569917C24AF9517952 /* AppProfileTests.swift */,
 				427330055DBD8916856243BF /* ConfigErrorMessageTests.swift */,
+				D10000000000000000000001 /* ConfigRuntimeDesiredStateTests.swift */,
 				C9D154A0E7B2436F8A0C5D12 /* ConfigRuntimeTestSupport.swift */,
 				C983C270D0A6097DF02120C7 /* ConfigRuntimeTests.swift */,
 				486304735CA9CF52837D3D0A /* GeneralSettingsServiceTests.swift */,
@@ -536,6 +539,7 @@
 				01E6F2718D58B5B5E3810A9D /* AppearanceSettingsTests.swift in Sources */,
 				20CD571493F6F5689F219170 /* ApplicationIconCacheTests.swift in Sources */,
 				EAC517820C888BB589E35CAE /* ConfigErrorMessageTests.swift in Sources */,
+				D10000000000000000000002 /* ConfigRuntimeDesiredStateTests.swift in Sources */,
 				33A74C0D6B1E4F2A8C5097D3 /* ConfigRuntimeTestSupport.swift in Sources */,
 				334D4C006BCF03901297125C /* ConfigRuntimeTests.swift in Sources */,
 				CDF7FC65C62326A5D21823B9 /* GeneralSettingsServiceTests.swift in Sources */,
@@ -616,7 +620,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -673,7 +677,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

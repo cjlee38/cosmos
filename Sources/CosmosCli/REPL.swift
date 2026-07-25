@@ -105,10 +105,10 @@ private extension REPL {
           list | ls                  list managed windows
           displays                   show display slot mappings
           focused                    print cached focused window id
-          switch | ws <space>    switch space
-          move <space>           move the focused window to space
+          switch | sp <space>        switch space
+          move <space>               move the focused window to space
           unhide-all                 restore every space-hidden window
-          spaces                 show current in-memory memberships
+          spaces                     show current in-memory memberships
           quit | exit                stop
         """)
     }

@@ -195,6 +195,53 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         XCTAssertNil(service.windowItems(ids: [10]).first?.preview)
     }
 
+    func testSpaceGroupProjectionDoesNotRecheckCapturePermission() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        var permissionCheckCount = 0
+        let service = makeSwitcherTestPreviewService(
+            controller: controller,
+            canCapture: {
+                permissionCheckCount += 1
+                return true
+            }
+        )
+
+        _ = service.spaceGroups(ids: ["1"])
+        _ = service.spaceGroups(ids: ["1"])
+
+        XCTAssertEqual(permissionCheckCount, 1)
+    }
+
+    func testWindowThumbnailCompletionsCoalesceSpaceRendering() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One"),
+            makeSwitcherTestWindow(id: 20, title: "Two")
+        ])
+        let rendered = expectation(description: "space rendered")
+        let lock = NSLock()
+        var renderCount = 0
+        let service = makeSwitcherTestPreviewService(
+            controller: controller,
+            captureImage: { _ in makeSwitcherTestImage() },
+            renderSpace: { _ in
+                lock.lock()
+                renderCount += 1
+                lock.unlock()
+                rendered.fulfill()
+                return makeSwitcherTestImage()
+            }
+        )
+
+        service.refresh(windowIDs: [10, 20], spaceIDs: [])
+
+        wait(for: [rendered], timeout: 1)
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        lock.lock()
+        let finalRenderCount = renderCount
+        lock.unlock()
+        XCTAssertEqual(finalRenderCount, 1)
+    }
+
     func testRevokedScreenCapturePermissionImmediatelyStopsUsingCachedSpacePreview() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 10, title: "One")
@@ -210,6 +257,7 @@ final class SwitcherPreviewServiceTests: XCTestCase {
         waitUntil { service.spaceGroups(ids: ["1"]).first?.preview != nil }
 
         canCapture = false
+        service.prepareForPresentation()
         let group = try XCTUnwrap(service.spaceGroups(ids: ["1"]).first)
 
         XCTAssertEqual(group.previewStyle, .applicationIcons)
@@ -241,6 +289,7 @@ extension SwitcherPreviewServiceTests {
         let displayFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
         let spanningWindow = WindowSwitcherItem(
             windowID: 10,
+            pid: 1,
             appName: "App",
             title: "Window",
             frame: WindowFrame(

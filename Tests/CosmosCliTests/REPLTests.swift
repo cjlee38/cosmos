@@ -35,6 +35,15 @@ final class REPLTests: XCTestCase {
         XCTAssertTrue(output.lines.isEmpty)
     }
 
+    func testHelpUsesAcceptedSpaceAlias() throws {
+        let (repl, output) = makeREPL(windowSystem: CLIWindowSystem())
+
+        XCTAssertTrue(try repl.execute(.help))
+
+        XCTAssertTrue(output.lines.joined().contains("switch | sp <space>"))
+        XCTAssertFalse(output.lines.joined().contains("switch | ws <space>"))
+    }
+
     private func makeREPL(
         windowSystem: CLIWindowSystem
     ) -> (REPL, CLIOutputBuffer) {

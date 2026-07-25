@@ -13,7 +13,10 @@ final class SwitcherPreviewService {
     private let applicationIconCache: ApplicationIconCache
     private var pendingUpdatedWindowIDs: Set<WindowID> = []
     private var pendingUpdatedSpaceIDs: Set<String> = []
+    private var pendingSpaceRefreshIDs: Set<String> = []
+    private var pendingPrioritySpaceIDs: [String] = []
     private var isUpdateNotificationScheduled = false
+    private var isSpaceRefreshScheduled = false
     private var onUpdate: ((SwitcherPreviewUpdate) -> Void)?
 
     init(
@@ -53,10 +56,13 @@ final class SwitcherPreviewService {
 
     func spaceGroups(ids: [String]) -> [SpaceSwitcherGroup] {
         let previewStyle = currentSpacePreviewStyle()
-        if previewStyle == .applicationIcons {
+        return makeSpaceGroups(ids: ids, previewStyle: previewStyle)
+    }
+
+    func prepareForPresentation() {
+        if !windowThumbnailCache.refreshCaptureAvailability() {
             spaceThumbnailCache.invalidate()
         }
-        return makeSpaceGroups(ids: ids, previewStyle: previewStyle)
     }
 
     private func makeSpaceGroups(
@@ -152,6 +158,7 @@ final class SwitcherPreviewService {
     private func makeItem(for window: WindowSnapshot) -> WindowSwitcherItem {
         WindowSwitcherItem(
             windowID: window.id,
+            pid: window.app.pid,
             appName: window.app.name,
             title: window.title,
             frame: controller.spaceFrame(for: window.id),
@@ -172,7 +179,7 @@ final class SwitcherPreviewService {
     }
 
     private func currentSpacePreviewStyle() -> SpacePreviewStyle {
-        windowThumbnailCache.refreshCaptureAvailability() ? .spatial : .applicationIcons
+        windowThumbnailCache.isCaptureAvailable ? .spatial : .applicationIcons
     }
 
     private func handleApplicationIconUpdated(_ pid: pid_t) {
@@ -182,7 +189,7 @@ final class SwitcherPreviewService {
         }
 
         notify(windowIDs: windowIDs)
-        refreshSpaces(ids: Set(windowIDs.compactMap(controller.membership(for:))))
+        scheduleSpaceRefresh(ids: Set(windowIDs.compactMap(controller.membership(for:))))
     }
 
     private func handleWindowThumbnailUpdated(_ windowID: WindowID) {
@@ -190,7 +197,33 @@ final class SwitcherPreviewService {
         guard let spaceID = controller.membership(for: windowID) else {
             return
         }
-        refreshSpaces(ids: [spaceID], priorityIDs: [spaceID])
+        scheduleSpaceRefresh(ids: [spaceID], priorityIDs: [spaceID])
+    }
+
+    private func scheduleSpaceRefresh(
+        ids: Set<String>,
+        priorityIDs: [String] = []
+    ) {
+        pendingSpaceRefreshIDs.formUnion(ids)
+        for id in priorityIDs where !pendingPrioritySpaceIDs.contains(id) {
+            pendingPrioritySpaceIDs.append(id)
+        }
+        guard !isSpaceRefreshScheduled else {
+            return
+        }
+
+        isSpaceRefreshScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            let ids = pendingSpaceRefreshIDs
+            let priorityIDs = pendingPrioritySpaceIDs
+            pendingSpaceRefreshIDs.removeAll()
+            pendingPrioritySpaceIDs.removeAll()
+            isSpaceRefreshScheduled = false
+            refreshSpaces(ids: ids, priorityIDs: priorityIDs)
+        }
     }
 
     private func notify(
