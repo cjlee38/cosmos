@@ -15,8 +15,8 @@ repl:
     swift run cosmos
 
 clear:
-    defaults write dev.cosmos.app.debug onboarding.completedVersion -int 0
-    tccutil reset All dev.cosmos.app.debug
+    defaults write io.cjlee.cosmos.debug onboarding.completedVersion -int 0
+    tccutil reset All io.cjlee.cosmos.debug
 
 run profile: (build profile)
     exec '{{ if profile == "dev" { ".build/xcode/Build/Products/Debug/Cosmos Dev.app/Contents/MacOS/Cosmos Dev" } else if profile == "release" { ".build/xcode/Build/Products/Release/Cosmos.app/Contents/MacOS/Cosmos" } else { error("profile must be dev or release") } }}'
