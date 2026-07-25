@@ -29,3 +29,9 @@ test:
     xcodebuild -quiet -project Apps/Cosmos/Cosmos.xcodeproj -scheme Cosmos -configuration Debug -derivedDataPath .build/xcode test
 
 check: (build "dev") test
+
+package:
+    ./scripts/package.sh
+
+notarize version:
+    ./scripts/notarize.sh {{quote(version)}}
