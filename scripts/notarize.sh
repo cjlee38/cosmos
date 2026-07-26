@@ -5,24 +5,19 @@ set -euo pipefail
 repo_root="${0:A:h:h}"
 cd "$repo_root/macos"
 
-version="${1:?Usage: $0 <version> [--yes]}"
-confirmed="${2:-}"
-output_dmg="dist/Cosmos-$version.dmg"
+confirmed="${1:-}"
 work_dir=".build/distribution/notarization-$$"
-dmg="$work_dir/Cosmos-$version.dmg"
 
 trap 'rm -rf "$work_dir"' EXIT
 
 "$repo_root/scripts/package.sh"
-actual_version=$(/usr/libexec/PlistBuddy \
+version=$(/usr/libexec/PlistBuddy \
     -c "Print :CFBundleShortVersionString" \
     ".build/distribution/export/Cosmos.app/Contents/Info.plist")
-[[ "$actual_version" == "$version" ]] || {
-    print -u2 "Requested version $version does not match packaged version $actual_version."
-    exit 1
-}
+output_dmg="dist/Cosmos-$version.dmg"
+dmg="$work_dir/Cosmos-$version.dmg"
 [[ -f "$output_dmg" ]] || {
-    print -u2 "The packaged version does not match $version."
+    print -u2 "Packaged DMG not found: $output_dmg"
     exit 1
 }
 

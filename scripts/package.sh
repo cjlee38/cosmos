@@ -8,6 +8,11 @@ cd "$repo_root/macos"
 archive=".build/distribution/Cosmos.xcarchive"
 export_dir=".build/distribution/export"
 staging=".build/distribution/dmg"
+build_settings=()
+
+if [[ -n "${COSMOS_BUILD_NUMBER:-}" ]]; then
+    build_settings+=(CURRENT_PROJECT_VERSION="$COSMOS_BUILD_NUMBER")
+fi
 
 rm -rf "$archive" "$export_dir" "$staging"
 mkdir -p "$export_dir" "$staging" dist
@@ -18,6 +23,7 @@ xcodebuild -quiet \
     -configuration Release \
     -destination "generic/platform=macOS" \
     -archivePath "$archive" \
+    "${build_settings[@]}" \
     archive
 
 xcodebuild -quiet \

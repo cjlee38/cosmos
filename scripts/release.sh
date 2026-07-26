@@ -5,16 +5,12 @@ set -euo pipefail
 repo_root="${0:A:h:h}"
 cd "$repo_root"
 
-version="${1:?Usage: $0 <version>}"
+version=$("$repo_root/scripts/version.sh")
 tag="v$version"
 dmg="macos/dist/Cosmos-$version.dmg"
 checksum="$dmg.sha256"
 release_commit=$(git rev-parse HEAD)
 
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-    print -u2 "Version must use the form X.Y.Z."
-    exit 1
-}
 [[ -f "$dmg" ]] || {
     print -u2 "Release artifact not found: $dmg"
     exit 1
