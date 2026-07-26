@@ -32,7 +32,6 @@ params:
     logo:
       path: images/cosmos-icon-light.png
       dark: images/cosmos-icon-dark.png
-      link: /
       width: 32
       height: 32
   theme:
