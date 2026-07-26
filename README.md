@@ -38,7 +38,7 @@ windows to a display corner, but leaves their sizes and positions as they are.
 - [x] First-run setup
 - [x] Preserves window sizes and positions
 - [x] Emergency recovery for hidden windows
-- [ ] Homebrew support
+- [x] Homebrew installation
 - [ ] Rectangle/Spectacle-style window move and resize commands
 - [ ] Search across windows
 - [ ] CLI support
@@ -53,9 +53,15 @@ windows to a display corner, but leaves their sizes and positions as they are.
 
 ## Installation
 
-1. Download the latest DMG from
+1. Homebrew:
+
+   ```sh
+   brew install --cask cjlee38/tap/cosmos
+   ```
+
+2. Download the latest DMG from
    [GitHub Releases](https://github.com/cjlee38/cosmos/releases).
-2. Manual build:
+3. Manual build:
 
    ```sh
    git clone https://github.com/cjlee38/cosmos.git
@@ -65,8 +71,6 @@ windows to a display corner, but leaves their sizes and positions as they are.
 
    The built app is located at
    `macos/.build/xcode/Build/Products/Release/Cosmos.app`.
-
-3. Homebrew support is not available yet.
 
 ## Development
 

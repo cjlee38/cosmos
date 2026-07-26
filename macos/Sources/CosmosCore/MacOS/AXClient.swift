@@ -177,8 +177,13 @@ public final class AXClient {
         // participates in Cmd+Tab and the own-window focus synchronization path. On macOS 14+,
         // direct activation is only a request, activateIgnoringOtherApps is ignored, and Cosmos
         // cannot yield activation when another app is currently frontmost. NSWorkspace supplies
-        // the cooperative activation context when opening an app and reuses its running instance.
-        // AX main/raise above selects the exact window; this call brings that window's app forward.
+        // the cooperative activation context when opening an app. For the normal single-instance
+        // apps managed by Cosmos, Launch Services reuses the running app instead of launching one.
+        // AX main/raise above selects the exact window; this call brings its app forward.
+        //
+        // NSWorkspace targets a bundle URL rather than a PID. If Cosmos ever supports multiple
+        // instances of one app, or allows stale handles to reach this method after termination,
+        // revisit this path: Launch Services may choose another instance or relaunch the app.
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         configuration.addsToRecentItems = false
