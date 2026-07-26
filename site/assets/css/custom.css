@@ -1,0 +1,176 @@
+:root {
+  --cosmos-accent: 286deg 70% 48%;
+  --cosmos-accent-text: 286deg 70% 42%;
+  --cosmos-border: #e4e1dc;
+  --cosmos-muted: #68645f;
+  --primary-hue: 286deg;
+  --primary-saturation: 70%;
+  --primary-lightness: 48%;
+}
+
+html.dark {
+  --cosmos-accent-text: 286deg 85% 72%;
+  --cosmos-border: #343434;
+  --cosmos-muted: #a7a39d;
+}
+
+.hextra-max-content-width:has(.cosmos-landing) {
+  max-width: none;
+  padding: 0;
+}
+
+.hextra-max-content-width:has(.cosmos-landing) > h1 {
+  display: none;
+}
+
+body:has(.cosmos-landing) .hextra-sidebar-container,
+body:has(.cosmos-landing) .hextra-toc {
+  display: none;
+}
+
+body:has(.cosmos-landing) article:has(.cosmos-landing) {
+  padding-right: 0;
+}
+
+.cosmos-landing {
+  width: 100%;
+  max-width: 92rem;
+  margin: 0 auto;
+  padding: 4.5rem 3rem 6rem;
+}
+
+.cosmos-hero {
+  max-width: 70rem;
+}
+
+.cosmos-hero h1 {
+  max-width: 58rem;
+  margin: 0;
+  color: #272522;
+  font-size: clamp(3.25rem, 7vw, 6.75rem);
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 0.95;
+}
+
+html.dark .cosmos-hero h1 {
+  color: #f4f2ee;
+}
+
+.cosmos-lead {
+  max-width: 68rem;
+  margin: 3rem 0 0;
+  color: var(--cosmos-muted);
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  line-height: 1.65;
+}
+
+.cosmos-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+
+.cosmos-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid hsl(var(--cosmos-accent));
+  border-radius: 999px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.cosmos-button-primary {
+  background: hsl(var(--cosmos-accent));
+  color: white;
+}
+
+.cosmos-button-primary:hover {
+  background: hsl(286deg 70% 42%);
+}
+
+.cosmos-button-secondary {
+  border-color: hsl(var(--cosmos-accent-text));
+  color: hsl(var(--cosmos-accent-text));
+}
+
+.cosmos-button-secondary:hover {
+  background: hsl(var(--cosmos-accent) / 0.08);
+}
+
+.cosmos-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-top: 5rem;
+}
+
+.cosmos-feature {
+  min-height: 14rem;
+  padding: 2rem;
+  border: 1px solid var(--cosmos-border);
+  border-radius: 1.5rem;
+}
+
+.cosmos-feature svg {
+  width: 1.65rem;
+  height: 1.65rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.cosmos-feature:first-child svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+.cosmos-feature h2 {
+  margin: 1rem 0 0;
+  padding: 0;
+  border: 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.cosmos-feature p {
+  margin: 0.75rem 0 0;
+  color: var(--cosmos-muted);
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .cosmos-landing {
+    padding: 3.5rem 1.5rem 4rem;
+  }
+
+  .cosmos-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .cosmos-hero h1 {
+    font-size: clamp(2.75rem, 15vw, 4.25rem);
+  }
+
+  .cosmos-lead {
+    margin-top: 2rem;
+  }
+
+  .cosmos-features {
+    grid-template-columns: 1fr;
+  }
+
+  .cosmos-feature {
+    min-height: auto;
+  }
+}
