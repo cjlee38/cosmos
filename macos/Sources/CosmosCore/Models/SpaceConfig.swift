@@ -13,6 +13,20 @@ public struct SwitcherShortcutConfig: Codable, Equatable {
         self.space = space
         self.window = window
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case space
+        case window
+    }
+
+    public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            space: container.decodeIfPresent(String.self, forKey: .space),
+            window: container.decodeIfPresent(String.self, forKey: .window)
+        )
+    }
 }
 
 public struct SwitcherConfig: Codable, Equatable {
@@ -22,6 +36,16 @@ public struct SwitcherConfig: Codable, Equatable {
 
     public init(shortcuts: SwitcherShortcutConfig = .empty) {
         self.shortcuts = shortcuts
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case shortcuts
+    }
+
+    public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(shortcuts: container.decode(SwitcherShortcutConfig.self, forKey: .shortcuts))
     }
 }
 
@@ -33,6 +57,16 @@ public struct WindowShortcutConfig: Codable, Equatable {
     public init(center: String? = nil) {
         self.center = center
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case center
+    }
+
+    public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(center: container.decodeIfPresent(String.self, forKey: .center))
+    }
 }
 
 public struct WindowConfig: Codable, Equatable {
@@ -42,6 +76,16 @@ public struct WindowConfig: Codable, Equatable {
 
     public init(shortcuts: WindowShortcutConfig = .default) {
         self.shortcuts = shortcuts
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case shortcuts
+    }
+
+    public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(shortcuts: container.decode(WindowShortcutConfig.self, forKey: .shortcuts))
     }
 }
 
@@ -56,9 +100,18 @@ public struct SpaceShortcutConfig: Codable, Equatable {
         self.moveWindow = moveWindow
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case switchSpace = "switch"
         case moveWindow = "move_window"
+    }
+
+    public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            switchSpace: container.decodeIfPresent(String.self, forKey: .switchSpace),
+            moveWindow: container.decodeIfPresent(String.self, forKey: .moveWindow)
+        )
     }
 }
 
@@ -84,13 +137,14 @@ public struct SpaceConfig: Codable, Equatable {
         )
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case id
         case display
         case shortcuts
     }
 
     public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             id: container.decode(SpaceID.self, forKey: .id),
@@ -237,7 +291,7 @@ public struct CosmosConfig: Codable, Equatable {
         )
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case version
         case switcher
         case window
@@ -245,6 +299,7 @@ public struct CosmosConfig: Codable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
+        try rejectUnknownConfigKeys(from: decoder, allowed: CodingKeys.self)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let version = try container.decode(Int.self, forKey: .version)
         guard version == Self.currentVersion else {
@@ -280,6 +335,41 @@ public struct CosmosConfig: Codable, Equatable {
         precondition(Set(spaces.map(\.id)).count == spaces.count, "Space IDs must be unique")
         return spaces.sorted { $0.id < $1.id }
     }
+}
+
+private struct ConfigKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
+private func rejectUnknownConfigKeys<Key: CodingKey & CaseIterable>(
+    from decoder: Decoder,
+    allowed _: Key.Type
+) throws {
+    let container = try decoder.container(keyedBy: ConfigKey.self)
+    let allowedKeys = Set(Key.allCases.map(\.stringValue))
+    guard let unknownKey = container.allKeys
+        .filter({ !allowedKeys.contains($0.stringValue) })
+        .sorted(by: { $0.stringValue < $1.stringValue })
+        .first
+    else {
+        return
+    }
+
+    throw DecodingError.dataCorrupted(DecodingError.Context(
+        codingPath: decoder.codingPath + [unknownKey],
+        debugDescription: "Unknown config key: \(unknownKey.stringValue)"
+    ))
 }
 
 private extension [ConfiguredShortcut] {
