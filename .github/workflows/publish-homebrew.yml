@@ -2,7 +2,13 @@ name: Publish Homebrew Cask
 
 on:
   release:
-    types: [published]
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -13,7 +19,6 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event.release.prerelease == false
     runs-on: macos-26
     steps:
       - name: Checkout Homebrew tap
@@ -27,12 +32,14 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
 
           version="${RELEASE_TAG#v}"
           [[ "$RELEASE_TAG" == "v$version" && "$version" != "$RELEASE_TAG" ]]
+          [[ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "false" ]]
+          [[ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" == "false" ]]
 
           mkdir release
           gh release download "$RELEASE_TAG" \
