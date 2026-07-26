@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      APPLE_ID: gptpem38@icloud.com
+      APPLE_TEAM_ID: UKA4NU5898
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      COSMOS_SKIP_CODE_SIGNING: "1"
+      GH_TOKEN: ${{ github.token }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+    steps:
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Releases must run from main." >&2
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        shell: zsh {0}
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            print -u2 "Version must use the form X.Y.Z."
+            exit 1
+          }
+
+      - name: Install lint tools
+        run: brew install swiftlint periphery
+
+      - name: Check
+        run: ./scripts/check.sh
+
+      - name: Lint
+        run: ./scripts/lint.sh
+
+      - name: Import release certificate
+        run: ./scripts/import-release-certificate.sh
+
+      - name: Build and notarize
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: ./scripts/notarize.sh "$RELEASE_VERSION" --yes
+
+      - name: Create draft release
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: ./scripts/release.sh "$RELEASE_VERSION"
+
+      - name: Remove temporary keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/cosmos-release.keychain-db" || true

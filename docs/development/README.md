@@ -138,20 +138,26 @@ macos/
 - `CosmosApp` owns the menu bar UI, runtime wiring, shortcuts, switchers,
   Settings, and debug surfaces.
 
-## Packaging
+## Release
 
-Create a signed Universal DMG:
+Release distribution runs only from the manual GitHub Actions `Release`
+workflow:
 
-```sh
-just package
-```
+1. Commit the release version and push `main`.
+2. Open **Actions > Release > Run workflow**.
+3. Enter the version without the `v` prefix.
+4. Wait for the workflow to create the notarized DMG, annotated tag, checksum,
+   and draft GitHub Release.
+5. Review and publish the draft release.
 
-Create, submit, staple, and verify a notarized DMG:
+Pushing a tag does not trigger distribution. `scripts/package.sh`,
+`scripts/notarize.sh`, and `scripts/release.sh` are internal workflow stages.
 
-```sh
-just notarize <version>
-```
+The repository's `Release` environment requires these GitHub Actions secrets:
 
-These distribution commands require the project's Developer ID certificate and
-notarization credentials. They are intended for maintainers rather than local
-development builds.
+- `MACOS_CERTIFICATE`: base64-encoded Developer ID Application certificate
+- `MACOS_CERTIFICATE_PASSWORD`: password for the certificate archive
+- `APPLE_APP_PASSWORD`: app-specific password used by `notarytool`
+
+The Apple ID and Team ID are account identifiers, not credentials, so they are
+kept in the workflow source.

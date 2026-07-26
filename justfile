@@ -26,9 +26,3 @@ test:
 
 check:
     ./scripts/check.sh
-
-package:
-    ./scripts/package.sh
-
-notarize version:
-    ./scripts/notarize.sh {{quote(version)}}
