@@ -1,0 +1,84 @@
+name: Publish Homebrew Cask
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-cosmos
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.release.prerelease == false
+    runs-on: macos-26
+    steps:
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: cjlee38/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Download and verify release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+          [[ "$RELEASE_TAG" == "v$version" && "$version" != "$RELEASE_TAG" ]]
+
+          mkdir release
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Cosmos-$version.dmg" \
+            --pattern "Cosmos-$version.dmg.sha256" \
+            --dir release
+
+          (
+            cd release
+            shasum --algorithm 256 --check "Cosmos-$version.dmg.sha256"
+          )
+
+          sha256=$(awk 'NR == 1 { print $1 }' "release/Cosmos-$version.dmg.sha256")
+          ./homebrew-tap/scripts/render-cosmos-cask.sh "$version" "$sha256"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Commit Cask
+        id: commit
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add Casks/cosmos.rb
+
+          if git -C homebrew-tap diff --cached --quiet; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            git -C homebrew-tap commit --message "Update Cosmos to $VERSION"
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Audit and install Cask
+        run: |
+          set -euo pipefail
+
+          brew tap cjlee38/tap "file://$GITHUB_WORKSPACE/homebrew-tap"
+          brew audit --strict --cask cjlee38/tap/cosmos
+          brew install --cask \
+            --appdir="$RUNNER_TEMP/Applications" \
+            cjlee38/tap/cosmos
+          brew uninstall --cask cosmos
+
+      - name: Push Cask
+        if: steps.commit.outputs.changed == 'true'
+        run: git -C homebrew-tap push origin HEAD:main
