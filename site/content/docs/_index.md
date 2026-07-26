@@ -2,7 +2,10 @@
 title: Documentation
 ---
 
-This is the initial Cosmos documentation page.
+Cosmos organizes macOS windows into logical spaces. Start with the overview,
+then check the display notes before setting up spaces across multiple displays.
 
-The installation, permissions, configuration, and window-management guides will
-live in this section.
+- [Overview](overview/)
+- [Installation](installation/)
+- [Usage Notes](usage-notes/)
+- [Configuration](configuration/)

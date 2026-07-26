@@ -1,0 +1,9 @@
+{{- with resources.Get "js/sidebar-toc.js" -}}
+  {{- if hugo.IsProduction -}}
+    {{- with . | minify | fingerprint -}}
+      <script defer src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}"></script>
+    {{- end -}}
+  {{- else -}}
+    <script defer src="{{ .RelPermalink }}"></script>
+  {{- end -}}
+{{- end -}}
