@@ -12,8 +12,8 @@ lint:
 repl:
     ./scripts/repl.sh
 
-clear:
-    ./scripts/clear.sh
+clear profile:
+    ./scripts/clear.sh {{quote(profile)}}
 
 run profile:
     ./scripts/run.sh {{quote(profile)}}
