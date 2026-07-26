@@ -1,14 +1,14 @@
 import Foundation
 
 final class HiddenWindowRecordRepository {
-    private let store: (any HiddenWindowRecordStore)?
+    private let store: (any SessionStateStore)?
 
-    init(store: (any HiddenWindowRecordStore)?) {
+    init(store: (any SessionStateStore)?) {
         self.store = store
     }
 
     func loadRecords() throws -> [HiddenWindowRecord] {
-        try store?.loadRecords() ?? []
+        try store?.load()?.hiddenWindows ?? []
     }
 
     func upsertRecord(_ record: HiddenWindowRecord) {

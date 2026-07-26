@@ -76,6 +76,66 @@ final class SpaceStateTests: XCTestCase {
         XCTAssertEqual(state.currentSpace, "1")
     }
 
+    func testSessionStateRestoresCurrentAndVisibleSpaces() {
+        let state = SpaceState(
+            config: CosmosConfig(
+                spaces: spaceConfigs(["1", "2", "A", "B"], displays: ["A": 2, "B": 2])
+            ),
+            sessionState: SessionState(
+                currentSpace: "2",
+                visibleSpaceByMonitorSlot: [1: "2", 2: "B"]
+            )
+        )
+
+        XCTAssertEqual(state.currentSpace, "2")
+        XCTAssertEqual(state.spacesByRecency, ["2", "1", "A", "B"])
+        XCTAssertEqual(state.visibleSpace(on: 1, availableMonitorSlots: [1, 2]), "2")
+        XCTAssertEqual(state.visibleSpace(on: 2, availableMonitorSlots: [1, 2]), "B")
+    }
+
+    func testMissingSavedVisibleSpaceUsesFirstConfiguredSpaceOnThatMonitor() {
+        let state = SpaceState(
+            config: CosmosConfig(
+                spaces: spaceConfigs(["1", "A", "B"], displays: ["A": 2, "B": 2])
+            ),
+            sessionState: SessionState(
+                currentSpace: "1",
+                visibleSpaceByMonitorSlot: [1: "1", 2: "C"]
+            )
+        )
+
+        XCTAssertEqual(state.currentSpace, "1")
+        XCTAssertEqual(state.visibleSpace(on: 2, availableMonitorSlots: [1, 2]), "A")
+    }
+
+    func testMissingSavedCurrentSpaceUsesFirstConfiguredSpaceOnItsMonitor() {
+        let state = SpaceState(
+            config: CosmosConfig(
+                spaces: spaceConfigs(["1", "A", "B"], displays: ["A": 2, "B": 2])
+            ),
+            sessionState: SessionState(
+                currentSpace: "C",
+                visibleSpaceByMonitorSlot: [1: "1", 2: "C"]
+            )
+        )
+
+        XCTAssertEqual(state.currentSpace, "A")
+        XCTAssertEqual(state.visibleSpace(on: 2, availableMonitorSlots: [1, 2]), "A")
+    }
+
+    func testMissingSavedCurrentSpaceUsesGlobalFallbackWhenItsMonitorHasNoSpaces() {
+        let state = SpaceState(
+            config: CosmosConfig(spaces: spaceConfigs(["1", "2"])),
+            sessionState: SessionState(
+                currentSpace: "A",
+                visibleSpaceByMonitorSlot: [2: "A"]
+            )
+        )
+
+        XCTAssertEqual(state.currentSpace, "1")
+        XCTAssertEqual(state.visibleSpace(on: 2, availableMonitorSlots: [1, 2]), "1")
+    }
+
     func testSpaceMembershipTracksAssignedWindowsWithoutOrdering() {
         var state = SpaceState()
         state.assign(300, to: "2")

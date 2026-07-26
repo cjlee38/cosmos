@@ -13,8 +13,11 @@ public final class SpaceController {
     private let displayCoordinator: SpaceDisplayCoordinator
     private let externalWindowChangeCoordinator: SpaceExternalWindowChangeCoordinator
     private let initialConfigLoadError: Error?
+    private let initialSessionStateLoadError: Error?
+    private let sessionStateStore: (any SessionStateStore)?
 
     private var state: SpaceState
+    private var lastPersistedSessionState: SessionState?
 
     public var currentSpace: String {
         state.currentSpace.rawValue
@@ -43,12 +46,16 @@ public final class SpaceController {
         initialConfigLoadError
     }
 
+    public var startupSessionStateLoadError: Error? {
+        initialSessionStateLoadError
+    }
+
     public init(
         windowSystem: any WindowSystem,
         displayProvider: any DisplayProviding,
         hidePointProvider: (any HidePointProviding)? = nil,
         configStore: (any CosmosConfigStore)? = nil,
-        recordStore: (any HiddenWindowRecordStore)? = nil
+        sessionStateStore: (any SessionStateStore)? = nil
     ) {
         self.windowSystem = windowSystem
         let components = SpaceControllerComposition.build(
@@ -56,7 +63,7 @@ public final class SpaceController {
             displayProvider: displayProvider,
             hidePointProvider: hidePointProvider,
             configStore: configStore,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
         windowCache = components.windowCache
         runtimeSynchronizer = components.runtimeSynchronizer
@@ -76,7 +83,10 @@ public final class SpaceController {
             displayCoordinator: components.displayCoordinator
         )
         initialConfigLoadError = components.startupConfigLoadError
+        initialSessionStateLoadError = components.startupSessionStateLoadError
+        self.sessionStateStore = components.sessionStateStore
         state = components.state
+        lastPersistedSessionState = components.loadedSessionState
     }
 }
 
@@ -95,7 +105,9 @@ public extension SpaceController {
     }
 
     func handleExternalWindowChange(_ change: ExternalWindowChange) throws -> ExternalWindowEventResult {
-        try externalWindowChangeCoordinator.handle(change, state: &state)
+        let result = try externalWindowChangeCoordinator.handle(change, state: &state)
+        persistSessionStateIfNeeded()
+        return result
     }
 
     func discoverWindows(
@@ -109,7 +121,9 @@ public extension SpaceController {
         _ change: ExternalWindowChange,
         discovery: WindowDiscoverySnapshot
     ) throws -> ExternalWindowEventResult? {
-        try externalWindowChangeCoordinator.apply(change, discovery: discovery, state: &state)
+        let result = try externalWindowChangeCoordinator.apply(change, discovery: discovery, state: &state)
+        persistSessionStateIfNeeded()
+        return result
     }
 
     func membership(for id: WindowID) -> String? {
@@ -167,6 +181,7 @@ public extension SpaceController {
         let hiddenRecords = try applyHiddenWindowRecordsAtStartup()
         _ = try syncWindows()
         try visibilityCoordinator.applyVisibleSpaces(state: &state)
+        persistSessionStateIfNeeded()
         return hiddenRecords
     }
 
@@ -183,6 +198,7 @@ public extension SpaceController {
     func restoreHiddenWindowsForShutdown() throws {
         // Recovery must use the last valid handles when a fresh AX snapshot is unavailable.
         _ = try? syncWindows()
+        persistSessionStateIfNeeded()
         try hiddenWindowOperator.restoreForShutdown(state: state)
     }
 
@@ -200,6 +216,7 @@ public extension SpaceController {
             frontToBackWindowIDs: windowCache.windows.filter { !$0.isMinimized }.map(\.id),
             state: &state
         )
+        persistSessionStateIfNeeded()
         return sync
     }
 
@@ -208,11 +225,13 @@ public extension SpaceController {
             return nil
         }
         _ = try syncWindows()
-        return try assignmentCoordinator.moveFocusedWindow(
+        let result = try assignmentCoordinator.moveFocusedWindow(
             to: space,
             frontToBackWindowIDs: windows(in: currentSpace).map(\.id),
             state: &state
         )
+        persistSessionStateIfNeeded()
+        return result
     }
 
     @discardableResult
@@ -343,6 +362,22 @@ private extension SpaceController {
             )
             throw applyError
         }
+        persistSessionStateIfNeeded()
         return sync
+    }
+
+    private func persistSessionStateIfNeeded() {
+        let sessionState = state.sessionState
+        guard sessionState != lastPersistedSessionState else {
+            return
+        }
+        guard let currentSpace = sessionState.currentSpace else {
+            return
+        }
+        sessionStateStore?.updateSpaceState(
+            currentSpace: currentSpace,
+            visibleSpaceByMonitorSlot: sessionState.visibleSpaceByMonitorSlot
+        )
+        lastPersistedSessionState = sessionState
     }
 }

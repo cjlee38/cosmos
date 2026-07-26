@@ -7,8 +7,8 @@ final class SpaceEmergencyRestoreTests: SpaceHiddenWindowRecordTestCase {
             .window(id: 100, title: "Visible", pid: 7),
             .window(id: 200, title: "Hidden", pid: 7)
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore()
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         _ = try controller.handleWindowSetChanged()
         try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
@@ -19,15 +19,15 @@ final class SpaceEmergencyRestoreTests: SpaceHiddenWindowRecordTestCase {
 
         XCTAssertEqual(controller.membership(for: 200), "1")
         XCTAssertFalse(controller.isHiddenBySpace(200))
-        XCTAssertTrue(recordStore.records.isEmpty)
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
     }
 
     func testEmergencyUnhideRestoresFromLastValidStateWhenRefreshFails() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Window", pid: 7)
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore()
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
         _ = try controller.handleWindowSetChanged()
         try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
@@ -38,6 +38,6 @@ final class SpaceEmergencyRestoreTests: SpaceHiddenWindowRecordTestCase {
         XCTAssertEqual(result.restored, [100])
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
         XCTAssertFalse(controller.isHiddenBySpace(100))
-        XCTAssertTrue(recordStore.records.isEmpty)
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
     }
 }

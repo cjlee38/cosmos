@@ -9,7 +9,7 @@ class SpaceHeadlessIntegrationTestCase: XCTestCase {
     func makeController(
         _ windowSystem: FakeWindowSystem,
         in directory: URL,
-        recordStore: FileHiddenWindowRecordStore
+        sessionStateStore: FileSessionStateStore
     ) throws -> SpaceController {
         let configStore = FileCosmosConfigStore(url: directory.appendingPathComponent("config.yaml"))
         let displayProvider = FakeDisplayProvider(point: hidePoint)
@@ -18,16 +18,16 @@ class SpaceHeadlessIntegrationTestCase: XCTestCase {
             displayProvider: displayProvider,
             hidePointProvider: displayProvider,
             configStore: configStore,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
     }
 
-    func recordStore(in directory: URL) -> FileHiddenWindowRecordStore {
-        FileHiddenWindowRecordStore(url: recordURL(in: directory))
+    func sessionStateStore(in directory: URL) -> FileSessionStateStore {
+        FileSessionStateStore(url: sessionStateURL(in: directory))
     }
 
-    func recordURL(in directory: URL) -> URL {
-        directory.appendingPathComponent("hidden-window-records.json")
+    func sessionStateURL(in directory: URL) -> URL {
+        directory.appendingPathComponent("session-state.json")
     }
 
     func temporaryDirectory() -> URL {
@@ -74,31 +74,57 @@ class SpaceHeadlessIntegrationTestCase: XCTestCase {
 }
 
 final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
+    func testVisibleSpaceAndWindowMembershipAreRestoredAfterRestart() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let firstSystem = FakeWindowSystem(windows: windows())
+        let firstSessionStateStore = sessionStateStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, sessionStateStore: firstSessionStateStore)
+
+        _ = try firstController.bootstrapWindowState()
+        try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
+        _ = try firstController.switchSpace(to: "2")
+        try firstController.restoreHiddenWindowsForShutdown()
+
+        let secondSystem = FakeWindowSystem(windows: windows())
+        let secondSessionStateStore = sessionStateStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, sessionStateStore: secondSessionStateStore)
+
+        _ = try secondController.bootstrapWindowState()
+
+        XCTAssertEqual(secondController.currentSpace, "2")
+        XCTAssertEqual(secondController.membership(for: 100), "1")
+        XCTAssertEqual(secondController.membership(for: 200), "2")
+        XCTAssertTrue(secondController.isHiddenBySpace(100))
+        XCTAssertFalse(secondController.isHiddenBySpace(200))
+    }
+
     func testShutdownRecordIsAppliedOnRestartAndInactiveSpaceIsHiddenAgain() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstRecordStore = recordStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
+        let firstSessionStateStore = sessionStateStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, sessionStateStore: firstSessionStateStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
-        try firstRecordStore.flushPendingWrites()
-        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
+        try firstSessionStateStore.flushPendingWrites()
+        XCTAssertEqual(try XCTUnwrap(firstSessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
         XCTAssertEqual(firstSystem.positions[200], hidePoint)
 
         try firstController.restoreHiddenWindowsForShutdown()
         XCTAssertEqual(firstSystem.frames[200], window200Frame)
-        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
+        XCTAssertEqual(try XCTUnwrap(firstSessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
-        let secondRecordStore = recordStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
+        let secondSessionStateStore = sessionStateStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, sessionStateStore: secondSessionStateStore)
 
         let startup = try secondController.bootstrapWindowState()
-        try secondRecordStore.flushPendingWrites()
+        try secondSessionStateStore.flushPendingWrites()
 
         XCTAssertTrue(startup.restored.isEmpty)
         assertReassigned(startup.reassigned, [(200, "2")])
@@ -106,7 +132,7 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
         XCTAssertEqual(secondController.membership(for: 200), "2")
         XCTAssertTrue(secondController.isHiddenBySpace(200))
         XCTAssertEqual(secondSystem.positions[200], hidePoint)
-        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.windowID), [200])
+        XCTAssertEqual(try XCTUnwrap(secondSessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
     }
 
     func testEmergencyUnhideClearsRecordBeforeShutdownAndRestart() throws {
@@ -114,14 +140,14 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstRecordStore = recordStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
+        let firstSessionStateStore = sessionStateStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, sessionStateStore: firstSessionStateStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
-        try firstRecordStore.flushPendingWrites()
-        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
+        try firstSessionStateStore.flushPendingWrites()
+        XCTAssertEqual(try XCTUnwrap(firstSessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
 
         let result = try firstController.restoreAllHiddenWindows()
         try firstController.restoreHiddenWindowsForShutdown()
@@ -131,22 +157,22 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
             RestoreAllHiddenWindowsResult(restored: [200], unavailable: [], failed: [])
         )
         XCTAssertEqual(firstSystem.frames[200], window200Frame)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
-        XCTAssertTrue(try firstRecordStore.loadRecords().isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sessionStateURL(in: directory).path))
+        XCTAssertTrue(try XCTUnwrap(firstSessionStateStore.load()).hiddenWindows.isEmpty)
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
-        let secondRecordStore = recordStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
+        let secondSessionStateStore = sessionStateStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, sessionStateStore: secondSessionStateStore)
 
         let startup = try secondController.bootstrapWindowState()
-        try secondRecordStore.flushPendingWrites()
+        try secondSessionStateStore.flushPendingWrites()
 
         XCTAssertTrue(startup.isEmpty)
         XCTAssertEqual(secondController.membership(for: 100), "1")
         XCTAssertEqual(secondController.membership(for: 200), "1")
         XCTAssertFalse(secondController.isHiddenBySpace(200))
         XCTAssertEqual(secondSystem.frames[200], window200Frame)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sessionStateURL(in: directory).path))
     }
 
     func testCrashStyleRestartRestoresCornerWindowBeforeRehidingInactiveSpace() throws {
@@ -154,28 +180,28 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstRecordStore = recordStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
+        let firstSessionStateStore = sessionStateStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, sessionStateStore: firstSessionStateStore)
 
         _ = try firstController.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
-        try firstRecordStore.flushPendingWrites()
+        try firstSessionStateStore.flushPendingWrites()
         XCTAssertEqual(firstSystem.positions[200], hidePoint)
 
         let hiddenFrame = try XCTUnwrap(firstSystem.frames[200])
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: hiddenFrame))
-        let secondRecordStore = recordStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
+        let secondSessionStateStore = sessionStateStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, sessionStateStore: secondSessionStateStore)
 
         let startup = try secondController.bootstrapWindowState()
         XCTAssertEqual(startup.restored, [200])
-        try secondRecordStore.flushPendingWrites()
+        try secondSessionStateStore.flushPendingWrites()
 
         XCTAssertEqual(secondController.membership(for: 100), "1")
         XCTAssertEqual(secondController.membership(for: 200), "2")
         XCTAssertTrue(secondController.isHiddenBySpace(200))
         XCTAssertEqual(secondSystem.positions[200], hidePoint)
-        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.windowID), [200])
+        XCTAssertEqual(try XCTUnwrap(secondSessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
     }
 
     func testExternalFocusSyncMovesToFocusedWindowSpaceAndUpdatesRecords() throws {
@@ -183,25 +209,25 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let windowSystem = FakeWindowSystem(windows: windows())
-        let recordStore = recordStore(in: directory)
-        let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
+        let sessionStateStore = sessionStateStore(in: directory)
+        let controller = try makeController(windowSystem, in: directory, sessionStateStore: sessionStateStore)
 
         _ = try controller.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         _ = try controller.switchSpace(to: "1")
-        try recordStore.flushPendingWrites()
-        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200])
+        try sessionStateStore.flushPendingWrites()
+        XCTAssertEqual(try XCTUnwrap(sessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
 
         windowSystem.focusedWindow = 200
         let result = try controller.handleFocusedWindowChanged().focusedWindowSync
-        try recordStore.flushPendingWrites()
+        try sessionStateStore.flushPendingWrites()
 
         XCTAssertEqual(result, .switched(windowID: 200, space: "2"))
         XCTAssertEqual(controller.currentSpace, "2")
         XCTAssertTrue(controller.isHiddenBySpace(100))
         XCTAssertFalse(controller.isHiddenBySpace(200))
         XCTAssertEqual(windowSystem.focusedIDs.last, 200)
-        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [100])
+        XCTAssertEqual(try XCTUnwrap(sessionStateStore.load()).hiddenWindows.map(\.windowID), [100])
     }
 
     func testNewWindowDiscoveredOnCurrentSpaceThenHiddenWhenSwitchingAway() throws {
@@ -209,8 +235,8 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let windowSystem = FakeWindowSystem(windows: windows())
-        let recordStore = recordStore(in: directory)
-        let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
+        let sessionStateStore = sessionStateStore(in: directory)
+        let controller = try makeController(windowSystem, in: directory, sessionStateStore: sessionStateStore)
 
         _ = try controller.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
@@ -230,13 +256,16 @@ final class SpaceHeadlessIntegrationTests: SpaceHeadlessIntegrationTestCase {
         XCTAssertEqual(controller.membership(for: 300), "2")
 
         _ = try controller.switchSpace(to: "1")
-        try recordStore.flushPendingWrites()
+        try sessionStateStore.flushPendingWrites()
 
         XCTAssertTrue(controller.isHiddenBySpace(200))
         XCTAssertTrue(controller.isHiddenBySpace(300))
         XCTAssertEqual(windowSystem.positions[200], hidePoint)
         XCTAssertEqual(windowSystem.positions[300], hidePoint)
-        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200, 300])
+        XCTAssertEqual(
+            try XCTUnwrap(sessionStateStore.load()).hiddenWindows.map(\.windowID),
+            [200, 300]
+        )
     }
 }
 
@@ -252,31 +281,31 @@ final class SpaceHeadlessRestartIntegrationTests: SpaceHeadlessIntegrationTestCa
         ))
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstRecordStore = recordStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
+        let firstSessionStateStore = sessionStateStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, sessionStateStore: firstSessionStateStore)
         let window200Frame = try XCTUnwrap(firstSystem.frames[200])
 
         _ = try firstController.bootstrapWindowState()
         try moveWindow(200, to: "D", controller: firstController, windowSystem: firstSystem)
-        try firstRecordStore.flushPendingWrites()
+        try firstSessionStateStore.flushPendingWrites()
         try firstController.restoreHiddenWindowsForShutdown()
 
         let persistedConfig = try configStore.load()
         XCTAssertEqual(persistedConfig.spaces.map(\.id), ["1", "2", "3", "D"])
-        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.space), ["D"])
+        XCTAssertEqual(try XCTUnwrap(firstSessionStateStore.load()).hiddenWindows.map(\.space), ["D"])
 
         let secondSystem = FakeWindowSystem(windows: windows(window200Frame: window200Frame))
-        let secondRecordStore = recordStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
+        let secondSessionStateStore = sessionStateStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, sessionStateStore: secondSessionStateStore)
 
         let startup = try secondController.bootstrapWindowState()
-        try secondRecordStore.flushPendingWrites()
+        try secondSessionStateStore.flushPendingWrites()
 
         XCTAssertEqual(secondController.spaces, ["1", "2", "3", "D"])
         assertReassigned(startup.reassigned, [(200, "D")])
         XCTAssertEqual(secondController.membership(for: 200), "D")
         XCTAssertTrue(secondController.isHiddenBySpace(200))
-        XCTAssertEqual(try secondRecordStore.loadRecords().map(\.space), ["D"])
+        XCTAssertEqual(try XCTUnwrap(secondSessionStateStore.load()).hiddenWindows.map(\.space), ["D"])
     }
 
     func testClosedHiddenWindowPrunesRecordBeforeRestart() throws {
@@ -284,31 +313,31 @@ final class SpaceHeadlessRestartIntegrationTests: SpaceHeadlessIntegrationTestCa
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let firstSystem = FakeWindowSystem(windows: windows())
-        let firstRecordStore = recordStore(in: directory)
-        let firstController = try makeController(firstSystem, in: directory, recordStore: firstRecordStore)
+        let firstSessionStateStore = sessionStateStore(in: directory)
+        let firstController = try makeController(firstSystem, in: directory, sessionStateStore: firstSessionStateStore)
 
         _ = try firstController.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: firstController, windowSystem: firstSystem)
-        try firstRecordStore.flushPendingWrites()
-        XCTAssertEqual(try firstRecordStore.loadRecords().map(\.windowID), [200])
+        try firstSessionStateStore.flushPendingWrites()
+        XCTAssertEqual(try XCTUnwrap(firstSessionStateStore.load()).hiddenWindows.map(\.windowID), [200])
 
         firstSystem.windows.removeAll { $0.id == 200 }
         _ = try firstController.handleWindowSetChanged()
-        try firstRecordStore.flushPendingWrites()
+        try firstSessionStateStore.flushPendingWrites()
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sessionStateURL(in: directory).path))
 
         let secondSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, appName: "Notes")
         ])
-        let secondRecordStore = recordStore(in: directory)
-        let secondController = try makeController(secondSystem, in: directory, recordStore: secondRecordStore)
+        let secondSessionStateStore = sessionStateStore(in: directory)
+        let secondController = try makeController(secondSystem, in: directory, sessionStateStore: secondSessionStateStore)
 
         let startup = try secondController.bootstrapWindowState()
 
         XCTAssertTrue(startup.isEmpty)
         XCTAssertEqual(secondController.membership(for: 100), "1")
-        XCTAssertTrue(try secondRecordStore.loadRecords().isEmpty)
+        XCTAssertTrue(try XCTUnwrap(secondSessionStateStore.load()).hiddenWindows.isEmpty)
     }
 
     func testEmergencyUnhideRestoresMultipleHiddenSpacesWithFileRecords() throws {
@@ -322,16 +351,19 @@ final class SpaceHeadlessRestartIntegrationTests: SpaceHeadlessIntegrationTestCa
             appName: "Finder"
         )
         let windowSystem = FakeWindowSystem(windows: windows() + [window300])
-        let recordStore = recordStore(in: directory)
-        let controller = try makeController(windowSystem, in: directory, recordStore: recordStore)
+        let sessionStateStore = sessionStateStore(in: directory)
+        let controller = try makeController(windowSystem, in: directory, sessionStateStore: sessionStateStore)
         let window200Frame = try XCTUnwrap(windowSystem.frames[200])
         let window300Frame = try XCTUnwrap(windowSystem.frames[300])
 
         _ = try controller.bootstrapWindowState()
         try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
         try moveWindow(300, to: "3", controller: controller, windowSystem: windowSystem)
-        try recordStore.flushPendingWrites()
-        XCTAssertEqual(try recordStore.loadRecords().map(\.windowID), [200, 300])
+        try sessionStateStore.flushPendingWrites()
+        XCTAssertEqual(
+            try XCTUnwrap(sessionStateStore.load()).hiddenWindows.map(\.windowID),
+            [200, 300]
+        )
 
         let result = try controller.restoreAllHiddenWindows()
         try controller.restoreHiddenWindowsForShutdown()
@@ -344,6 +376,6 @@ final class SpaceHeadlessRestartIntegrationTests: SpaceHeadlessIntegrationTestCa
         XCTAssertFalse(controller.isHiddenBySpace(300))
         XCTAssertEqual(windowSystem.frames[200], window200Frame)
         XCTAssertEqual(windowSystem.frames[300], window300Frame)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: recordURL(in: directory).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sessionStateURL(in: directory).path))
     }
 }

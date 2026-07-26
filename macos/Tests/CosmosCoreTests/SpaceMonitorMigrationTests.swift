@@ -32,7 +32,7 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
         )
         let store = InMemorySpaceConfigStore()
         try store.save(initialConfig)
-        let recordStore = InMemoryHiddenWindowRecordStore()
+        let sessionStateStore = InMemorySessionStateStore()
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Window", pid: 7, frame: .frame(x: 100, y: 100, width: 300, height: 200))
         ])
@@ -40,7 +40,7 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
             windowSystem,
             displayProvider: twoDisplayProvider(),
             configStore: store,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
 
         _ = try controller.handleWindowSetChanged()
@@ -48,7 +48,7 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
         try moveWindow(100, to: "B", controller: controller, windowSystem: windowSystem)
 
         XCTAssertEqual(
-            recordStore.records.first?.originalFrame,
+            sessionStateStore.records.first?.originalFrame,
             .frame(x: 1100, y: 100, width: 300, height: 200)
         )
 
@@ -99,7 +99,7 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
         )
         let store = InMemorySpaceConfigStore()
         try store.save(initialConfig)
-        let recordStore = InMemoryHiddenWindowRecordStore()
+        let sessionStateStore = InMemorySessionStateStore()
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "Window", pid: 7, frame: .frame(x: 100, y: 100, width: 300, height: 200))
         ])
@@ -107,7 +107,7 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
             windowSystem,
             displayProvider: twoDisplayProvider(),
             configStore: store,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
         let originalFrame = try XCTUnwrap(windowSystem.frames[100])
 
@@ -126,7 +126,7 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
 
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertEqual(controller.spaceFrame(for: 100), originalFrame)
-        XCTAssertEqual(recordStore.records.first?.space, "2")
-        XCTAssertEqual(recordStore.records.first?.originalFrame, originalFrame)
+        XCTAssertEqual(sessionStateStore.records.first?.space, "2")
+        XCTAssertEqual(sessionStateStore.records.first?.originalFrame, originalFrame)
     }
 }

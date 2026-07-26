@@ -18,8 +18,8 @@ struct AppProfile: Equatable {
         configURL(homeDirectory: FileManager.default.homeDirectoryForCurrentUser)
     }
 
-    var hiddenWindowRecordsURL: URL {
-        hiddenWindowRecordsURL(
+    var sessionStateURL: URL {
+        sessionStateURL(
             applicationSupportDirectory: FileManager.default.urls(
                 for: .applicationSupportDirectory,
                 in: .userDomainMask
@@ -34,9 +34,9 @@ struct AppProfile: Equatable {
             .appendingPathComponent("config.yaml")
     }
 
-    func hiddenWindowRecordsURL(applicationSupportDirectory: URL) -> URL {
+    func sessionStateURL(applicationSupportDirectory: URL) -> URL {
         applicationSupportDirectory
             .appendingPathComponent(dataDirectoryName, isDirectory: true)
-            .appendingPathComponent("hidden-window-records.json")
+            .appendingPathComponent("session-state.json")
     }
 }

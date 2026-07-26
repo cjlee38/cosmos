@@ -42,11 +42,11 @@ final class SpaceShutdownRestoreTests: SpaceControllerTestCase {
             .window(id: 200, title: "Two", pid: 7)
         ])
         let displayProvider = FakeDisplayProvider(point: hidePoint)
-        let recordStore = InMemoryHiddenWindowRecordStore()
+        let sessionStateStore = InMemorySessionStateStore()
         let controller = makeController(
             windowSystem,
             displayProvider: displayProvider,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
         _ = try controller.handleWindowSetChanged()
         try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
@@ -56,6 +56,6 @@ final class SpaceShutdownRestoreTests: SpaceControllerTestCase {
         XCTAssertThrowsError(try controller.restoreHiddenWindowsForShutdown()) { error in
             XCTAssertEqual((error as? ShutdownRestoreError)?.failedWindowIDs, [100, 200])
         }
-        XCTAssertEqual(recordStore.flushCallCount, 1)
+        XCTAssertEqual(sessionStateStore.flushCallCount, 1)
     }
 }

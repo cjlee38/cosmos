@@ -11,6 +11,9 @@ struct SpaceControllerComponents {
     let emergencyHiddenWindowRestorer: EmergencyHiddenWindowRestorer
     let displayCoordinator: SpaceDisplayCoordinator
     let startupConfigLoadError: Error?
+    let startupSessionStateLoadError: Error?
+    let sessionStateStore: (any SessionStateStore)?
+    let loadedSessionState: SessionState?
     let state: SpaceState
 }
 
@@ -20,15 +23,16 @@ enum SpaceControllerComposition {
         displayProvider: any DisplayProviding,
         hidePointProvider: (any HidePointProviding)?,
         configStore: (any CosmosConfigStore)?,
-        recordStore: (any HiddenWindowRecordStore)?
+        sessionStateStore: (any SessionStateStore)?
     ) -> SpaceControllerComponents {
         let windows = buildWindowComponents(
             windowSystem: windowSystem,
             displayProvider: displayProvider,
             hidePointProvider: hidePointProvider,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
         let startup = loadConfig(from: configStore)
+        let sessionStartup = loadSessionState(from: sessionStateStore)
 
         return SpaceControllerComponents(
             windowCache: windows.cache,
@@ -62,8 +66,24 @@ enum SpaceControllerComposition {
                 hidePointProvider: windows.hidePointProvider
             ),
             startupConfigLoadError: startup.error,
-            state: SpaceState(config: startup.config)
+            startupSessionStateLoadError: sessionStartup.error,
+            sessionStateStore: sessionStateStore,
+            loadedSessionState: sessionStartup.state,
+            state: SpaceState(config: startup.config, sessionState: sessionStartup.state)
         )
+    }
+
+    private static func loadSessionState(
+        from store: (any SessionStateStore)?
+    ) -> (state: SessionState?, error: Error?) {
+        guard let store else {
+            return (nil, nil)
+        }
+        do {
+            return try (store.load(), nil)
+        } catch {
+            return (nil, error)
+        }
     }
 
     private static func loadConfig(
@@ -83,10 +103,10 @@ enum SpaceControllerComposition {
         windowSystem: any WindowSystem,
         displayProvider: any DisplayProviding,
         hidePointProvider: (any HidePointProviding)?,
-        recordStore: (any HiddenWindowRecordStore)?
+        sessionStateStore: (any SessionStateStore)?
     ) -> SpaceControllerWindowComponents {
         let cache = WindowStateCache()
-        let recordRepository = HiddenWindowRecordRepository(store: recordStore)
+        let recordRepository = HiddenWindowRecordRepository(store: sessionStateStore)
         let monitorSlotResolver = MonitorSlotResolver(displayProvider: displayProvider)
         let hidePointProvider =
             hidePointProvider ?? WindowParkingPointProvider(displayProvider: displayProvider)

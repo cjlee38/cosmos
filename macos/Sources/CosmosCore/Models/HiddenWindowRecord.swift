@@ -22,10 +22,3 @@ public struct HiddenWindowRecord: Codable, Equatable {
         self.hiddenPosition = hiddenPosition
     }
 }
-
-public protocol HiddenWindowRecordStore: AnyObject {
-    func loadRecords() throws -> [HiddenWindowRecord]
-    func upsertRecord(_ record: HiddenWindowRecord)
-    func removeRecord(windowID: WindowID, pid: pid_t?)
-    func flushPendingWrites() throws
-}

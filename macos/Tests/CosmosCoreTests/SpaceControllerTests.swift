@@ -9,7 +9,7 @@ class SpaceControllerTestCase: XCTestCase {
         _ windowSystem: FakeWindowSystem,
         displayProvider: FakeDisplayProvider? = nil,
         configStore: (any CosmosConfigStore)? = nil,
-        recordStore: (any HiddenWindowRecordStore)? = nil
+        sessionStateStore: (any SessionStateStore)? = nil
     ) -> SpaceController {
         let displayProvider = displayProvider ?? FakeDisplayProvider(point: hidePoint)
         return SpaceController(
@@ -17,7 +17,7 @@ class SpaceControllerTestCase: XCTestCase {
             displayProvider: displayProvider,
             hidePointProvider: displayProvider,
             configStore: configStore,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
     }
 

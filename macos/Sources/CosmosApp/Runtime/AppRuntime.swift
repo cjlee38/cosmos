@@ -115,6 +115,11 @@ final class AppRuntime {
             let errorMessage = String(describing: startupConfigLoadError)
             log.error("Config load failed; using defaults until reload: \(errorMessage)")
         }
+        if let startupSessionStateLoadError = controller.startupSessionStateLoadError,
+           bootstrapSucceeded {
+            let errorMessage = String(describing: startupSessionStateLoadError)
+            log.error("Space session state load failed; using defaults: \(errorMessage)")
+        }
     }
 
     private func startKeyboardShortcuts() {

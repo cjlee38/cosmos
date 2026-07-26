@@ -5,8 +5,8 @@ struct SpaceState {
     private var memberships = SpaceMemberships()
     private var hiddenFrames = HiddenWindowFrameStore()
 
-    init(config: CosmosConfig = .default) {
-        catalog = SpaceCatalog(config: config)
+    init(config: CosmosConfig = .default, sessionState: SessionState? = nil) {
+        catalog = SpaceCatalog(config: config, sessionState: sessionState)
     }
 
     var currentSpace: SpaceID {
@@ -15,6 +15,10 @@ struct SpaceState {
 
     var currentConfig: CosmosConfig {
         catalog.config
+    }
+
+    var sessionState: SessionState {
+        catalog.sessionState
     }
 
     var assignedWindowIDs: [WindowID] {

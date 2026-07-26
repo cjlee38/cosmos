@@ -15,16 +15,16 @@ final class AppProfileTests: XCTestCase {
             "/Users/test/.config/cosmos/config.yaml"
         )
         XCTAssertEqual(
-            AppProfile.debug.hiddenWindowRecordsURL(
+            AppProfile.debug.sessionStateURL(
                 applicationSupportDirectory: applicationSupportDirectory
             ).path,
-            "/Users/test/Library/Application Support/cosmos-dev/hidden-window-records.json"
+            "/Users/test/Library/Application Support/cosmos-dev/session-state.json"
         )
         XCTAssertEqual(
-            AppProfile.release.hiddenWindowRecordsURL(
+            AppProfile.release.sessionStateURL(
                 applicationSupportDirectory: applicationSupportDirectory
             ).path,
-            "/Users/test/Library/Application Support/cosmos/hidden-window-records.json"
+            "/Users/test/Library/Application Support/cosmos/session-state.json"
         )
     }
 

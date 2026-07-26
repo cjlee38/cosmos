@@ -9,8 +9,8 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
@@ -19,7 +19,7 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         XCTAssertTrue(result.ignored.isEmpty)
         XCTAssertEqual(controller.membership(for: 100), "2")
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
-        XCTAssertTrue(recordStore.records.isEmpty)
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
     }
 
     func testStartupRecordsRestoreOffscreenOriginalFrameInsideCurrentDisplay() throws {
@@ -33,8 +33,8 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
                 frame: .frame(x: hidePoint.x, y: hidePoint.y, width: 300, height: 240)
             )
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
@@ -43,7 +43,7 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
             windowSystem.frames[100],
             .frame(x: 700, y: 120, width: 300, height: 240)
         )
-        XCTAssertTrue(recordStore.records.isEmpty)
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
     }
 
     func testStartupRecordsReassignOriginalFrameWindowWithoutRestoring() throws {
@@ -52,8 +52,8 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: originalFrame)
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
@@ -61,7 +61,7 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         assertReassigned(result.reassigned, [(100, "2")])
         XCTAssertTrue(result.ignored.isEmpty)
         XCTAssertEqual(controller.membership(for: 100), "2")
-        XCTAssertTrue(recordStore.records.isEmpty)
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
         XCTAssertFalse(windowSystem.operations.contains(.setPosition(100, originalFrame.origin)))
     }
 
@@ -70,8 +70,8 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 8, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
@@ -79,7 +79,7 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         XCTAssertTrue(result.reassigned.isEmpty)
         XCTAssertEqual(result.ignored, [record])
         XCTAssertEqual(controller.membership(for: 100), "1")
-        XCTAssertEqual(recordStore.records, [record])
+        XCTAssertEqual(sessionStateStore.records, [record])
     }
 
     func testStartupRecordsIgnoreWindowMovedAwayFromHiddenAndOriginalPosition() throws {
@@ -87,8 +87,8 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: .frame(x: 900, y: 900))
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
@@ -96,7 +96,7 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         XCTAssertTrue(result.reassigned.isEmpty)
         XCTAssertEqual(result.ignored, [record])
         XCTAssertEqual(controller.membership(for: 100), "1")
-        XCTAssertEqual(recordStore.records, [record])
+        XCTAssertEqual(sessionStateStore.records, [record])
     }
 
     func testStartupRecordsRestoreMissingSpaceWindowIntoCurrentSpace() throws {
@@ -104,8 +104,8 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [record])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
@@ -114,7 +114,7 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         XCTAssertEqual(controller.spaces, ["1", "2", "3"])
         XCTAssertEqual(controller.membership(for: 100), "1")
         XCTAssertEqual(windowSystem.frames[100], record.originalFrame)
-        XCTAssertTrue(recordStore.records.isEmpty)
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
     }
 
     func testStartupRestoreFailureDoesNotBlockLaterRecords() throws {
@@ -133,15 +133,15 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
             .window(id: 200, title: "Two", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
         ])
         windowSystem.frameWriteFailures.insert(100)
-        let recordStore = InMemoryHiddenWindowRecordStore(records: [first, second])
-        let controller = makeController(windowSystem, recordStore: recordStore)
+        let sessionStateStore = InMemorySessionStateStore(records: [first, second])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         let result = try controller.applyHiddenWindowRecordsAtStartup()
 
         XCTAssertEqual(result.failed, [100])
         XCTAssertEqual(result.restored, [200])
         assertReassigned(result.reassigned, [(200, "2")])
-        XCTAssertEqual(recordStore.records.map(\.windowID), [100])
+        XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
         XCTAssertEqual(controller.membership(for: 200), "2")
     }
 }

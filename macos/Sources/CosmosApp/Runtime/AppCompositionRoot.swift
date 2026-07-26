@@ -8,12 +8,12 @@ struct AppCompositionRoot {
         )
         let registry = WindowRegistry(axClient: axClient)
         let configStore = FileCosmosConfigStore(url: profile.configURL)
-        let recordStore = FileHiddenWindowRecordStore(url: profile.hiddenWindowRecordsURL)
+        let sessionStateStore = FileSessionStateStore(url: profile.sessionStateURL)
         let controller = SpaceController(
             windowSystem: registry,
             displayProvider: DisplayProvider(),
             configStore: configStore,
-            recordStore: recordStore
+            sessionStateStore: sessionStateStore
         )
         let previewService = SwitcherPreviewService(
             controller: controller,

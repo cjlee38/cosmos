@@ -6,16 +6,19 @@ private func runREPL() {
     let registry = WindowRegistry(axClient: axClient)
     let displayProvider = DisplayProvider()
     let configStore = FileCosmosConfigStore.default
-    let recordStore = FileHiddenWindowRecordStore.default
+    let sessionStateStore = FileSessionStateStore.default
     let controller = SpaceController(
         windowSystem: registry,
         displayProvider: displayProvider,
         configStore: configStore,
-        recordStore: recordStore
+        sessionStateStore: sessionStateStore
     )
 
     if let configLoadError = controller.startupConfigLoadError {
         print("warning: failed to load config.yaml; using defaults: \(configLoadError)")
+    }
+    if let sessionStateLoadError = controller.startupSessionStateLoadError {
+        print("warning: failed to load space session state; using defaults: \(sessionStateLoadError)")
     }
 
     defer {

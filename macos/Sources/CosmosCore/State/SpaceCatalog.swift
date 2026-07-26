@@ -6,18 +6,44 @@ struct SpaceCatalog {
     private var visibleSpaceByMonitorSlot: [MonitorSlot: SpaceID]
     private(set) var spacesByRecency: [SpaceID]
 
-    init(config: CosmosConfig) {
+    init(config: CosmosConfig, sessionState: SessionState? = nil) {
         self.config = config
-        currentSpace = config.spaces[0].id
+        let configuredSpaces = Set(config.spaces.map(\.id))
+        let savedCurrentSlot = sessionState?.visibleSpaceByMonitorSlot.first {
+            $0.value == sessionState?.currentSpace
+        }?.key
+        if let savedCurrent = sessionState?.currentSpace,
+           configuredSpaces.contains(savedCurrent) {
+            currentSpace = savedCurrent
+        } else if let savedCurrentSlot,
+                  let replacement = config.spaces.first(where: { $0.display == savedCurrentSlot }) {
+            currentSpace = replacement.id
+        } else {
+            currentSpace = config.spaces[0].id
+        }
         spacesByRecency = config.spaces.map(\.id)
-        visibleSpaceByMonitorSlot = [
-            config.spaces[0].display: config.spaces[0].id
-        ]
+        visibleSpaceByMonitorSlot = sessionState?.visibleSpaceByMonitorSlot.reduce(into: [:]) {
+            result,
+            entry in
+            if configuredSpaces.contains(entry.value),
+               config.spaces.first(where: { $0.id == entry.value })?.display == entry.key {
+                result[entry.key] = entry.value
+            }
+        } ?? [:]
+        visibleSpaceByMonitorSlot[monitorSlot(for: currentSpace)] = currentSpace
         seedVisibleSpaces()
+        recordActivation(of: currentSpace)
     }
 
     var spaces: [SpaceID] {
         config.spaces.map(\.id)
+    }
+
+    var sessionState: SessionState {
+        SessionState(
+            currentSpace: currentSpace,
+            visibleSpaceByMonitorSlot: visibleSpaceByMonitorSlot
+        )
     }
 
     func contains(_ space: SpaceID) -> Bool {
