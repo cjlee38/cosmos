@@ -79,7 +79,6 @@ final class WindowRuntimeEventTests: XCTestCase {
         }))
 
         XCTAssertEqual(kinds, [.layoutChanged, .thumbnailChanged])
-        XCTAssertTrue(batch.containsLayoutChange)
         XCTAssertEqual(batch.windowIDsNeedingCapture, [100])
     }
 
@@ -151,7 +150,7 @@ final class WindowRuntimeEventTests: XCTestCase {
         )
         XCTAssertEqual(
             WindowRuntimeEventKind.kinds(forAXNotification: kAXUIElementDestroyedNotification as String),
-            [.layoutChanged, .windowSetChanged]
+            [.windowDestroyed]
         )
         XCTAssertEqual(
             WindowRuntimeEventKind.kinds(forAXNotification: kAXTitleChangedNotification as String),
@@ -171,6 +170,76 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertTrue(activation.containsFocusChange)
         XCTAssertFalse(axFocus.containsApplicationActivation)
         XCTAssertTrue(axFocus.containsFocusChange)
+    }
+
+    func testAXFocusChangeIsAcceptedOnlyForTheFrontmostApplication() {
+        XCTAssertTrue(AXFocusChangeFilter.acceptsFocusChange(
+            sourcePID: 100,
+            frontmostPID: 100
+        ))
+        XCTAssertFalse(AXFocusChangeFilter.acceptsFocusChange(
+            sourcePID: 100,
+            frontmostPID: 200
+        ))
+        XCTAssertFalse(AXFocusChangeFilter.acceptsFocusChange(
+            sourcePID: 100,
+            frontmostPID: nil
+        ))
+    }
+
+    func testLayoutChangeFollowsFocusOnlyWhenItChangedTheFocusedWindow() {
+        let focusedWindowLayout = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
+        ])
+        let otherWindowLayout = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 200)
+        ])
+        let destroyedWindow = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowDestroyed, windowID: 200)
+        ])
+        let destroyedUnknownWindow = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowDestroyed, windowID: nil)
+        ])
+        let unrelatedWindowSetChange = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 200),
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: 300)
+        ])
+
+        XCTAssertTrue(focusedWindowLayout.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 100,
+            liveWindowIDs: [100, 200]
+        ))
+        XCTAssertFalse(otherWindowLayout.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 100,
+            liveWindowIDs: [100, 200]
+        ))
+        XCTAssertTrue(destroyedWindow.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 200,
+            liveWindowIDs: [100]
+        ))
+        XCTAssertFalse(destroyedWindow.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 300,
+            liveWindowIDs: [100, 300]
+        ))
+        XCTAssertTrue(destroyedUnknownWindow.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 200,
+            liveWindowIDs: [100]
+        ))
+        XCTAssertFalse(destroyedUnknownWindow.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 200,
+            liveWindowIDs: [100, 200]
+        ))
+        XCTAssertFalse(unrelatedWindowSetChange.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: 100,
+            previouslyFocusedWindowID: 100,
+            liveWindowIDs: [100, 200, 300]
+        ))
     }
 
     func testSuccessfulWindowEventAlwaysRefreshesSwitcherContent() throws {
@@ -268,6 +337,72 @@ final class WindowRuntimeEventTests: XCTestCase {
 
         XCTAssertEqual(controller.currentSpace, "1")
         XCTAssertTrue(controller.isHiddenBySpace(200))
+    }
+
+    func testUnrelatedWindowEventsDoNotUndoExplicitSpaceSwitch() throws {
+        let displays = [
+            DisplaySnapshot(
+                id: 1,
+                frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+                role: .main
+            ),
+            DisplaySnapshot(
+                id: 2,
+                frame: CGRect(x: 1000, y: 0, width: 1000, height: 1000),
+                role: .extended
+            )
+        ]
+        let (controller, windowSystem) = try makeSwitcherTestController(
+            windows: [
+                makeSwitcherTestWindow(id: 100, title: "Main"),
+                makeSwitcherTestWindow(
+                    id: 200,
+                    title: "Secondary",
+                    frame: WindowFrame(
+                        origin: CGPoint(x: 1100, y: 100),
+                        size: CGSize(width: 200, height: 120)
+                    )
+                ),
+                makeSwitcherTestWindow(id: 300, title: "Closing")
+            ],
+            displays: displays
+        )
+        try controller.applyConfig(CosmosConfig(
+            spaces: [
+                SpaceConfig(id: "A", display: 1),
+                SpaceConfig(id: "B", display: 2)
+            ]
+        ))
+        _ = try controller.switchSpace(to: "B")
+        windowSystem.focusedWindowIDValue = 100
+        let handler = makeHandler(controller: controller)
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 200)
+        ]))
+
+        XCTAssertEqual(controller.currentSpace, "B")
+        XCTAssertEqual(Set(controller.visibleSpaces), ["A", "B"])
+
+        windowSystem.replaceWindows([
+            makeSwitcherTestWindow(id: 100, title: "Main"),
+            makeSwitcherTestWindow(
+                id: 200,
+                title: "Secondary",
+                frame: WindowFrame(
+                    origin: CGPoint(x: 1100, y: 100),
+                    size: CGSize(width: 200, height: 120)
+                )
+            )
+        ])
+        windowSystem.focusedWindowIDValue = 100
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowDestroyed, windowID: 300)
+        ]))
+
+        XCTAssertEqual(controller.currentSpace, "B")
+        XCTAssertEqual(Set(controller.visibleSpaces), ["A", "B"])
     }
 
     func testDisplayEventRefreshesEveryLiveWindowThumbnail() throws {

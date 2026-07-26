@@ -10,6 +10,7 @@ enum WindowRuntimeEventKind: Hashable {
     case thumbnailChanged
     case layoutChanged
     case windowSetChanged
+    case windowDestroyed
     case displayChanged
     case sessionResumed
 
@@ -30,7 +31,7 @@ enum WindowRuntimeEventKind: Hashable {
              kAXTitleChangedNotification:
             [.thumbnailChanged]
         case kAXUIElementDestroyedNotification:
-            [.layoutChanged, .windowSetChanged]
+            [.windowDestroyed]
         case kAXWindowMovedNotification:
             [.layoutChanged]
         default:
@@ -42,6 +43,12 @@ enum WindowRuntimeEventKind: Hashable {
 struct WindowRuntimeEvent: Hashable {
     let kind: WindowRuntimeEventKind
     let windowID: WindowID?
+}
+
+enum AXFocusChangeFilter {
+    static func acceptsFocusChange(sourcePID: pid_t, frontmostPID: pid_t?) -> Bool {
+        sourcePID == frontmostPID
+    }
 }
 
 struct WindowRuntimeEventBatch {
@@ -67,16 +74,43 @@ struct WindowRuntimeEventBatch {
         }
     }
 
-    var containsLayoutChange: Bool {
-        events.contains { $0.kind == .layoutChanged }
-    }
-
     var containsDisplayChange: Bool {
         events.contains { $0.kind == .displayChanged }
     }
 
     var containsWindowSetChange: Bool {
-        events.contains { $0.kind == .windowSetChanged }
+        events.contains { event in
+            event.kind == .windowSetChanged || event.kind == .windowDestroyed
+        }
+    }
+
+    func shouldFollowVisibleFocusedWindow(
+        focusedWindowID: WindowID?,
+        previouslyFocusedWindowID: WindowID?,
+        liveWindowIDs: Set<WindowID>
+    ) -> Bool {
+        if containsFocusChange {
+            return true
+        }
+        if let previouslyFocusedWindowID,
+           events.contains(where: {
+               $0.kind == .windowDestroyed && $0.windowID == previouslyFocusedWindowID
+           }) {
+            return true
+        }
+        if let previouslyFocusedWindowID,
+           events.contains(where: {
+               $0.kind == .windowDestroyed && $0.windowID == nil
+           }),
+           !liveWindowIDs.contains(previouslyFocusedWindowID) {
+            return true
+        }
+        guard let focusedWindowID else {
+            return false
+        }
+        return events.contains {
+            $0.kind == .layoutChanged && $0.windowID == focusedWindowID
+        }
     }
 
     var containsSessionResume: Bool {
@@ -298,9 +332,21 @@ final class WindowEventMonitor {
     }
 
     private func handleAXNotification(element: AXUIElement, notification: CFString) {
-        let kinds = WindowRuntimeEventKind.kinds(forAXNotification: notification as String)
+        let notificationName = notification as String
+        let kinds = WindowRuntimeEventKind.kinds(forAXNotification: notificationName)
         guard !kinds.isEmpty else {
             return
+        }
+        if notificationName == kAXFocusedWindowChangedNotification {
+            var sourcePID: pid_t = 0
+            AXUIElementGetPid(element, &sourcePID)
+            let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+            guard AXFocusChangeFilter.acceptsFocusChange(
+                sourcePID: sourcePID,
+                frontmostPID: frontmostPID
+            ) else {
+                return
+            }
         }
         if isMouseDrivenLayoutNotification(notification), isLeftMouseButtonDown {
             startExternalWindowDragIfNeeded()

@@ -51,8 +51,7 @@ final class WindowRuntimeFocusEventTests: XCTestCase {
         )
 
         handler.handle(WindowRuntimeEventBatch(events: [
-            WindowRuntimeEvent(kind: .layoutChanged, windowID: 200),
-            WindowRuntimeEvent(kind: .windowSetChanged, windowID: 200)
+            WindowRuntimeEvent(kind: .windowDestroyed, windowID: nil)
         ]))
 
         XCTAssertEqual(controller.currentSpace, "1")

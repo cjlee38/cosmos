@@ -114,7 +114,11 @@ final class WindowRuntimeEventHandler {
             let discovery = try discovery.get()
             let focusPolicy: ExternalWindowFocusPolicy = if events.containsApplicationActivation {
                 .always
-            } else if events.containsFocusChange || events.containsLayoutChange {
+            } else if events.shouldFollowVisibleFocusedWindow(
+                focusedWindowID: discovery.focusedWindowID,
+                previouslyFocusedWindowID: controller.cachedFocusedWindowID(),
+                liveWindowIDs: Set(discovery.windows.map(\.id))
+            ) {
                 .visibleFocusedWindow
             } else {
                 .never
