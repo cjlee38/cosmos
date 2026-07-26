@@ -7,14 +7,14 @@
 
 <h1 align="center">Cosmos</h1>
 
-<p align="center">A non-tiling virtual workspace manager for macOS.</p>
+<p align="center">A window and space manager for macOS.</p>
 
 > [!WARNING]
 > This project is under development.
 
 ## Why Cosmos?
 
-Cosmos is a macOS space manager built around virtual workspaces.
+Cosmos organizes windows into virtual spaces.
 
 The project is inspired by
 [AeroSpace](https://github.com/nikitabobko/AeroSpace), a tiling window manager
@@ -26,36 +26,35 @@ instead of providing a GUI. Its tiling layout also manages window sizes by
 default. You can work around that, but I ended up maintaining extra shell
 scripts to get the behavior I wanted.
 
-Cosmos uses the same basic approach to virtual workspaces by moving inactive
-windows to a display corner.
+Cosmos adopted the same basic approach to virtual workspaces by moving inactive
+windows to a display corner, but leaves their sizes and positions as they are.
 
 ## Features and Roadmap
 
-- [x] Logical spaces for each display
-- [x] Keyboard shortcuts for switching spaces
-- [x] Move the focused window between spaces
+- [x] Logical spaces across multiple displays
+- [x] Keyboard shortcuts for switching spaces and moving windows
 - [x] Space and window switchers with thumbnail previews
-- [x] Native Settings and first-run setup
-- [x] YAML configuration
-- [x] Multi-display support
-- [x] Preservation of user-created window frames
+- [x] GUI and YAML configuration
+- [x] First-run setup
+- [x] Preserves window sizes and positions
 - [x] Emergency recovery for hidden windows
-- [ ] Homebrew installation
+- [ ] Homebrew support
 - [ ] Rectangle/Spectacle-style window move and resize commands
-- [ ] Search across all managed windows
-- [ ] First-class CLI
-- [ ] Runtime event hooks, starting with an after-window-moved hook
-- [ ] Window-space membership restoration across app restarts
+- [ ] Search across windows
+- [ ] CLI support
+- [ ] Runtime event hooks
 
 ## Compatibility
 
 - macOS 14 or later
-- Tested only on my Apple Silicon Mac running macOS Tahoe 26.5
-- Release builds target Apple Silicon and Intel, but Intel Macs have not been tested
+- Tested on an Apple Silicon Mac running macOS Tahoe 26.5
+- Release builds support Apple Silicon and Intel, but Cosmos has not been tested
+  on an Intel Mac
 
 ## Installation
 
-1. Download the latest DMG from [GitHub Releases](https://github.com/cjlee38/cosmos/releases).
+1. Download the latest DMG from
+   [GitHub Releases](https://github.com/cjlee38/cosmos/releases).
 2. Manual build:
 
    ```sh
