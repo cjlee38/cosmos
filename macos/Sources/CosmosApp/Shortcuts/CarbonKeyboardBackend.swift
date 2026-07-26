@@ -55,7 +55,9 @@ final class CarbonKeyboardBackend {
     }
 
     func replaceHotKeys(_ keystrokes: [Keystroke]) throws -> [Keystroke: UInt32] {
-        precondition(hotKeyHandler != nil, "CarbonKeyboardBackend must be started before registering hotkeys")
+        guard hotKeyHandler != nil else {
+            throw CarbonKeyboardError.notStarted
+        }
 
         let desiredKeystrokes = Set(keystrokes)
         let addedKeystrokes = keystrokes.filter { registrationsByKeystroke[$0] == nil }
@@ -192,11 +194,14 @@ private struct CarbonHotKeyRegistration {
 }
 
 private enum CarbonKeyboardError: Error, CustomStringConvertible {
+    case notStarted
     case installEventHandler(OSStatus)
     case registerHotKey(OSStatus)
 
     var description: String {
         switch self {
+        case .notStarted:
+            "CarbonKeyboardBackend must be started before registering hotkeys"
         case let .installEventHandler(status):
             "InstallEventHandler failed with status \(status)"
         case let .registerHotKey(status):

@@ -126,17 +126,61 @@ final class SpaceWindowFocusTests: SpaceControllerTestCase {
         _ = try controller.handleWindowSetChanged()
         try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
         windowSystem.focusedWindow = 100
+        windowSystem.operations.removeAll()
 
         _ = try controller.moveFocusedWindow(to: "B")
 
         XCTAssertEqual(controller.membership(for: 100), "B")
         XCTAssertTrue(controller.isHiddenBySpace(100))
         XCTAssertEqual(windowSystem.positions[100], hidePoint)
+        XCTAssertEqual(windowSystem.frames[100]?.size, CGSize(width: 150, height: 100))
+        XCTAssertEqual(
+            windowSystem.operations,
+            [
+                .refresh,
+                .setFrame(100, .frame(x: 100, y: 100, width: 150, height: 100)),
+                .setPosition(100, hidePoint)
+            ]
+        )
 
         _ = try controller.switchSpace(to: "B")
 
         XCTAssertFalse(controller.isHiddenBySpace(100))
         XCTAssertEqual(windowSystem.frames[100], .frame(x: 1050, y: 50, width: 150, height: 100))
+    }
+
+    func testMoveFocusedWindowToInactiveSpaceRestoresOriginalFrameWhenParkingFails() throws {
+        let originalFrame = WindowFrame.frame(x: 100, y: 100, width: 300, height: 200)
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Main", frame: originalFrame)
+        ])
+        let store = InMemorySpaceConfigStore()
+        try store.save(CosmosConfig(
+            spaces: spaceConfigs(["1", "A", "B"], displays: ["A": 2, "B": 2]),
+            switcher: CosmosConfig.default.switcher
+        ))
+        let controller = makeController(
+            windowSystem,
+            displayProvider: differentSizedDisplayProvider(),
+            configStore: store
+        )
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "1", controller: controller, windowSystem: windowSystem)
+        windowSystem.focusedWindow = 100
+        windowSystem.operationFailure = { operation in
+            guard case .setPosition(100, self.hidePoint) = operation else {
+                return nil
+            }
+            return FakeWindowSystemError.frameWrite(100)
+        }
+
+        XCTAssertThrowsError(try controller.moveFocusedWindow(to: "B"))
+
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertFalse(controller.isHiddenBySpace(100))
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertTrue(windowSystem.operations.contains(.setFrame(100, originalFrame)))
     }
 
     func testDraggedVisibleWindowToAnotherMonitorMovesMembershipToVisibleSpaceThere() throws {

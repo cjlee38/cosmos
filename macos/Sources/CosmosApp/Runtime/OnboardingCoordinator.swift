@@ -27,6 +27,7 @@ final class OnboardingCoordinator {
             permissionViewController: permissionViewController,
             spaceViewController: spaceViewController,
             canComplete: { spaceSettingsService.snapshot().isEditable },
+            onLeaveSpaces: { shortcutRecordingController.cancel() },
             onComplete: { completeHandler() }
         )
         windowController = OnboardingWindowController(contentViewController: contentViewController)
@@ -128,6 +129,7 @@ final class OnboardingViewController: NSViewController {
     private let permissionViewController: OnboardingPermissionViewController
     private let spaceViewController: SpaceSettingsViewController
     private let canComplete: () -> Bool
+    private let onLeaveSpaces: () -> Bool
     private let onComplete: () -> Void
     private let permissionsStepLabel = NSTextField(labelWithString: "1  Permissions")
     private let spacesStepLabel = NSTextField(labelWithString: "2  Spaces")
@@ -141,11 +143,13 @@ final class OnboardingViewController: NSViewController {
         permissionViewController: OnboardingPermissionViewController,
         spaceViewController: SpaceSettingsViewController,
         canComplete: @escaping () -> Bool,
+        onLeaveSpaces: @escaping () -> Bool,
         onComplete: @escaping () -> Void
     ) {
         self.permissionViewController = permissionViewController
         self.spaceViewController = spaceViewController
         self.canComplete = canComplete
+        self.onLeaveSpaces = onLeaveSpaces
         self.onComplete = onComplete
         super.init(nibName: nil, bundle: nil)
     }
@@ -304,6 +308,9 @@ final class OnboardingViewController: NSViewController {
     }
 
     @objc private func goBack() {
+        guard onLeaveSpaces() else {
+            return
+        }
         step = .permissions
         show(permissionViewController)
         updateNavigation()
@@ -319,7 +326,7 @@ final class OnboardingViewController: NSViewController {
             show(spaceViewController)
             updateNavigation()
         case .spaces:
-            guard canComplete() else {
+            guard canComplete(), onLeaveSpaces() else {
                 return
             }
             onComplete()

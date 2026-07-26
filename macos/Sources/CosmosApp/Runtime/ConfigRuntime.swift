@@ -58,6 +58,7 @@ final class ConfigRuntime {
     private let controller: any RuntimeConfigControlling
     private let shortcutInstaller: any KeyboardShortcutInstalling
     private let keyboardBindingMapper: KeyboardBindingMapper
+    private let shortcutResolver = KeyboardShortcutResolver()
     private var installedRegistrations: [KeyboardShortcutRegistration] = []
     private var isRecordingShortcut = false
 
@@ -88,7 +89,12 @@ final class ConfigRuntime {
 
     func installInitialShortcuts(actions: any KeyboardShortcutActionHandling) throws {
         do {
-            try installShortcuts(for: controller.currentConfig, actions: actions)
+            if let desiredConfig, desiredConfig != controller.currentConfig {
+                try applyConfigWithShortcuts(desiredConfig, actions: actions)
+                recordValid()
+            } else {
+                try installShortcuts(for: controller.currentConfig, actions: actions)
+            }
             return
         } catch {
             guard desiredConfig != nil else {
@@ -141,6 +147,23 @@ final class ConfigRuntime {
     }
 
     @discardableResult
+    func updateConfigBeforeRuntimeStart(
+        _ config: CosmosConfig,
+        actions: any KeyboardShortcutActionHandling
+    ) throws -> ConfigApplyResult {
+        try configStore.save(config)
+        desiredConfig = config
+        do {
+            try validateShortcuts(for: config, actions: actions)
+            recordValid()
+            return .applied
+        } catch {
+            recordApplyFailure(error)
+            return .rejected(ConfigErrorMessage.describe(error))
+        }
+    }
+
+    @discardableResult
     func updateShortcut(
         _ shortcut: String?,
         for target: ShortcutTarget,
@@ -159,6 +182,23 @@ final class ConfigRuntime {
     }
 
     @discardableResult
+    func updateShortcutBeforeRuntimeStart(
+        _ shortcut: String?,
+        for target: ShortcutTarget,
+        actions: any KeyboardShortcutActionHandling
+    ) throws -> ConfigApplyResult? {
+        guard let desiredConfig else {
+            throw ConfigEditingUnavailableError()
+        }
+        guard let config = desiredConfig.updatingShortcut(shortcut, for: target),
+              config != desiredConfig
+        else {
+            return nil
+        }
+        return try updateConfigBeforeRuntimeStart(config, actions: actions)
+    }
+
+    @discardableResult
     func editConfig(
         actions: any KeyboardShortcutActionHandling,
         _ edit: (CosmosConfig) throws -> CosmosConfig?
@@ -170,6 +210,20 @@ final class ConfigRuntime {
             return nil
         }
         return try updateConfig(config, actions: actions)
+    }
+
+    @discardableResult
+    func editConfigBeforeRuntimeStart(
+        actions: any KeyboardShortcutActionHandling,
+        _ edit: (CosmosConfig) throws -> CosmosConfig?
+    ) throws -> ConfigApplyResult? {
+        guard let desiredConfig else {
+            throw ConfigEditingUnavailableError()
+        }
+        guard let config = try edit(desiredConfig), config != desiredConfig else {
+            return nil
+        }
+        return try updateConfigBeforeRuntimeStart(config, actions: actions)
     }
 
     func beginShortcutRecording() throws {
@@ -234,6 +288,13 @@ final class ConfigRuntime {
         actions: any KeyboardShortcutActionHandling
     ) -> [KeyboardShortcutRegistration] {
         keyboardBindingMapper.registrations(for: shortcuts, actions: actions)
+    }
+
+    private func validateShortcuts(
+        for config: CosmosConfig,
+        actions: any KeyboardShortcutActionHandling
+    ) throws {
+        _ = try shortcutResolver.resolve(registrations(for: config.configuredShortcuts, actions: actions))
     }
 
     private func recordValid() {

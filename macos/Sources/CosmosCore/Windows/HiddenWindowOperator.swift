@@ -34,8 +34,16 @@ final class HiddenWindowOperator {
             throw SpaceError.windowNotFound(id)
         }
 
-        let frame = try preferredFrame ?? currentOrStoredFrame(for: id, state: state)
+        let currentFrame = try currentOrStoredFrame(for: id, state: state)
+        let frame = preferredFrame ?? currentFrame
         let wasAlreadyHidden = state.isHidden(id)
+        var hiddenSize = currentFrame.size
+        if preferredFrame != nil, !wasAlreadyHidden, currentFrame.size != frame.size {
+            let resizeFrame = WindowFrame(origin: currentFrame.origin, size: frame.size)
+            let appliedFrame = try windowSystem.setFrameOrMove(resizeFrame, for: id)
+            hiddenSize = appliedFrame.size
+            windowCache.updateFrame(appliedFrame, for: id)
+        }
         if preferredFrame == nil {
             state.storeHiddenFrameIfNeeded(frame, for: id)
         } else {
@@ -47,7 +55,7 @@ final class HiddenWindowOperator {
             throw SpaceError.noDisplayAvailable
         }
         let point = hidePointProvider.hidePoint(
-            for: frame,
+            for: WindowFrame(origin: frame.origin, size: hiddenSize),
             on: display,
             among: displays
         )
@@ -63,7 +71,7 @@ final class HiddenWindowOperator {
         do {
             try windowSystem.setPosition(point, for: id)
             windowCache.updateFrame(
-                WindowFrame(origin: point, size: frame.size),
+                WindowFrame(origin: point, size: hiddenSize),
                 for: id
             )
         } catch {
@@ -73,6 +81,17 @@ final class HiddenWindowOperator {
                     pid: window.app.pid
                 )
                 state.clearHiddenFrame(for: id)
+            }
+            if hiddenSize != currentFrame.size {
+                do {
+                    let restoredFrame = try windowSystem.setFrameOrMove(currentFrame, for: id)
+                    windowCache.updateFrame(restoredFrame, for: id)
+                } catch let rollbackError {
+                    throw WindowFrameTransactionError(
+                        applyError: error,
+                        rollbackError: rollbackError
+                    )
+                }
             }
             throw error
         }

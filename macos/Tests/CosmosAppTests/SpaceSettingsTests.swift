@@ -5,6 +5,47 @@ import CosmosCore
 import XCTest
 
 final class SpaceSettingsServiceTests: XCTestCase {
+    func testOnboardingSpaceEditDefersRuntimeChangesUntilInitialShortcutInstall() throws {
+        let (controller, _) = try makeSwitcherTestController(windows: [])
+        let initialConfig = controller.currentConfig
+        let configStore = ConfigStoreSpy(loadedConfig: initialConfig)
+        let shortcutInstaller = SpaceSettingsShortcutInstaller()
+        let configRuntime = ConfigRuntime(
+            configStore: configStore,
+            configURL: nil,
+            controller: controller,
+            keyboardShortcutManager: shortcutInstaller,
+            keyboardBindingMapper: KeyboardBindingMapper()
+        )
+        let actions = NoopShortcutActions()
+        var runtimeMode = SpaceSettingsRuntimeMode.deferredUntilStartup
+        let service = SpaceSettingsService(
+            controller: controller,
+            configRuntime: configRuntime,
+            actions: actions,
+            runtimeMode: { runtimeMode },
+            refreshAfterChange: {}
+        )
+
+        try service.addSpaces(["A"], displayID: 1)
+
+        let savedConfig = try XCTUnwrap(configStore.savedConfigs.last)
+        XCTAssertTrue(savedConfig.spaces.map(\.id).contains("A"))
+        XCTAssertEqual(controller.currentConfig, initialConfig)
+        XCTAssertTrue(shortcutInstaller.replacedKeys.isEmpty)
+
+        try configRuntime.installInitialShortcuts(actions: actions)
+
+        XCTAssertEqual(controller.currentConfig, savedConfig)
+        XCTAssertEqual(shortcutInstaller.replacedKeys, [savedConfig.configuredShortcuts.map(\.key)])
+
+        runtimeMode = .active
+        try service.addSpaces(["B"], displayID: 1)
+
+        XCTAssertTrue(controller.currentConfig.spaces.map(\.id).contains("B"))
+        XCTAssertEqual(shortcutInstaller.replacedKeys.count, 2)
+    }
+
     func testServicePersistsAppliesAndRefreshesExplicitSpaceEdits() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [])
         let configStore = ConfigStoreSpy(loadedConfig: controller.currentConfig)
@@ -142,6 +183,46 @@ final class SpaceSettingsSnapshotTests: XCTestCase {
 final class SpaceSettingsViewTests: XCTestCase {
     private enum TestError: Error {
         case shortcutRestore
+    }
+
+    func testLeavingOnboardingSpaceStepCancelsShortcutRecording() throws {
+        let permissionService = GeneralSettingsService(
+            launchAtLoginStatusProvider: { .disabled },
+            setLaunchAtLoginHandler: { _ in },
+            permissionStatusProvider: { _ in true },
+            openPermissionSettingsHandler: { _ in },
+            openLoginItemsSettingsHandler: {}
+        )
+        let spaceService = SpaceSettingsServiceStub(snapshot: settingsSnapshot())
+        var cancelCount = 0
+        var completeCount = 0
+        let viewController = OnboardingViewController(
+            permissionViewController: OnboardingPermissionViewController(service: permissionService),
+            spaceViewController: SpaceSettingsViewController(service: spaceService),
+            canComplete: { true },
+            onLeaveSpaces: {
+                cancelCount += 1
+                return true
+            },
+            onComplete: {
+                completeCount += 1
+            }
+        )
+        let buttons = descendants(of: viewController.view).compactMap { $0 as? NSButton }
+        let continueButton = try XCTUnwrap(buttons.first {
+            $0.accessibilityIdentifier() == "cosmos.onboarding.continue"
+        })
+        let backButton = try XCTUnwrap(buttons.first {
+            $0.accessibilityIdentifier() == "cosmos.onboarding.back"
+        })
+
+        continueButton.performClick(nil)
+        backButton.performClick(nil)
+        continueButton.performClick(nil)
+        continueButton.performClick(nil)
+
+        XCTAssertEqual(cancelCount, 2)
+        XCTAssertEqual(completeCount, 1)
     }
 
     func testDisplaySectionIncludesDisplaySettingsButton() throws {

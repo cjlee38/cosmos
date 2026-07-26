@@ -16,6 +16,7 @@ final class AppRuntime {
     private var settingsCoordinator: SettingsCoordinator?
     private var onboardingCoordinator: OnboardingCoordinator?
     private var didBootstrapWindowState = false
+    private var didBeginManagedRuntime = false
 
     private lazy var actionController = SpaceActionController(
         controller: controller,
@@ -98,6 +99,7 @@ final class AppRuntime {
         guard !didBootstrapWindowState else {
             return
         }
+        didBeginManagedRuntime = true
         startKeyboardShortcuts()
 
         let hasPermission = permissionController.checkAtLaunch()
@@ -171,6 +173,9 @@ private extension AppRuntime {
             controller: controller,
             configRuntime: configRuntime,
             actions: actionController,
+            runtimeMode: { [unowned self] in
+                didBeginManagedRuntime ? .active : .deferredUntilStartup
+            },
             refreshAfterChange: { [unowned self] in
                 refreshSpacePresentation()
                 onboardingCoordinator?.refresh()

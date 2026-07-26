@@ -11,6 +11,11 @@ protocol SpaceSettingsServing: AnyObject {
     func shortcutRecordingDidFinish(didPersistChange: Bool)
 }
 
+enum SpaceSettingsRuntimeMode: Equatable {
+    case active
+    case deferredUntilStartup
+}
+
 final class SpaceSettingsService: SpaceSettingsServing {
     private let log = Log(category: "settings")
 
@@ -18,16 +23,19 @@ final class SpaceSettingsService: SpaceSettingsServing {
     private let configRuntime: ConfigRuntime
     private let actions: any KeyboardShortcutActionHandling
     private let refreshAfterChange: () -> Void
+    private let runtimeMode: () -> SpaceSettingsRuntimeMode
 
     init(
         controller: SpaceController,
         configRuntime: ConfigRuntime,
         actions: any KeyboardShortcutActionHandling,
+        runtimeMode: @escaping () -> SpaceSettingsRuntimeMode = { .active },
         refreshAfterChange: @escaping () -> Void
     ) {
         self.controller = controller
         self.configRuntime = configRuntime
         self.actions = actions
+        self.runtimeMode = runtimeMode
         self.refreshAfterChange = refreshAfterChange
     }
 
@@ -50,7 +58,13 @@ final class SpaceSettingsService: SpaceSettingsServing {
     }
 
     func updateShortcut(_ shortcut: String?, for target: ShortcutTarget) throws -> Bool {
-        guard let result = try configRuntime.updateShortcut(shortcut, for: target, actions: actions) else {
+        let result = switch runtimeMode() {
+        case .active:
+            try configRuntime.updateShortcut(shortcut, for: target, actions: actions)
+        case .deferredUntilStartup:
+            try configRuntime.updateShortcutBeforeRuntimeStart(shortcut, for: target, actions: actions)
+        }
+        guard let result else {
             return false
         }
         switch result {
@@ -89,11 +103,15 @@ final class SpaceSettingsService: SpaceSettingsServing {
     }
 
     func beginShortcutRecording() throws {
-        try configRuntime.beginShortcutRecording()
+        if runtimeMode() == .active {
+            try configRuntime.beginShortcutRecording()
+        }
     }
 
     func cancelShortcutRecording() throws {
-        try configRuntime.cancelShortcutRecording()
+        if runtimeMode() == .active {
+            try configRuntime.cancelShortcutRecording()
+        }
     }
 
     func shortcutRecordingDidFinish(didPersistChange: Bool) {
@@ -103,7 +121,13 @@ final class SpaceSettingsService: SpaceSettingsServing {
     }
 
     private func editConfig(_ edit: (CosmosConfig) throws -> CosmosConfig?) throws -> Bool {
-        guard let result = try configRuntime.editConfig(actions: actions, edit) else {
+        let result = switch runtimeMode() {
+        case .active:
+            try configRuntime.editConfig(actions: actions, edit)
+        case .deferredUntilStartup:
+            try configRuntime.editConfigBeforeRuntimeStart(actions: actions, edit)
+        }
+        guard let result else {
             return false
         }
         refreshAfterChange()

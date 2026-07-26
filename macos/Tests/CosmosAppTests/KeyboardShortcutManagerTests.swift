@@ -3,6 +3,12 @@ import Carbon
 import XCTest
 
 final class KeyboardShortcutManagerTests: XCTestCase {
+    func testCarbonBackendRejectsRegistrationBeforeStartWithoutCrashing() {
+        let backend = CarbonKeyboardBackend(onEvent: { _ in })
+
+        XCTAssertThrowsError(try backend.replaceHotKeys([]))
+    }
+
     func testPressAndModifierReleaseInvokeOneHoldSession() throws {
         let backend = CarbonKeyboardSpy()
         let modifierMonitor = ModifierFlagsMonitorSpy()
