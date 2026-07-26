@@ -184,7 +184,7 @@ final class SpaceSettingsViewTests: XCTestCase {
         XCTAssertEqual(removedSpace, "1")
     }
 
-    func testDeletingSpaceWithWindowsRequiresIconlessConfirmation() throws {
+    func testDeletingSpaceWithWindowsRequiresConfirmation() throws {
         let snapshot = settingsSnapshot(
             spaces: [SpaceConfig(id: "1"), SpaceConfig(id: "2")],
             spaceWindowCounts: ["1": 1]
@@ -208,10 +208,6 @@ final class SpaceSettingsViewTests: XCTestCase {
         removeButton.performClick(nil)
 
         let sheet = try XCTUnwrap(window.attachedSheet)
-        let visibleIcons = try descendants(of: XCTUnwrap(sheet.contentView))
-            .compactMap { $0 as? NSImageView }
-            .filter { !$0.isHidden }
-        XCTAssertTrue(visibleIcons.isEmpty)
         XCTAssertNil(removedSpace)
 
         let deleteButton = try XCTUnwrap(

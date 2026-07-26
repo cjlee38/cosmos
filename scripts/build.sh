@@ -32,3 +32,5 @@ xcodebuild -quiet \
     -derivedDataPath .build/xcode \
     "${signing_args[@]}" \
     build
+
+print "Built: $repo_root/macos/.build/xcode/Build/Products/$configuration/Cosmos.app"

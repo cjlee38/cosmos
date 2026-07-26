@@ -140,12 +140,12 @@ macos/
 
 ## Release
 
-Release distribution runs only from the manual GitHub Actions `Release`
+Release distribution runs only from the manual GitHub Actions
+`Publish GitHub Releases`
 workflow:
 
-1. Update `MARKETING_VERSION` in `macos/Apps/Cosmos/Version.xcconfig`, commit,
-   and push `main`.
-2. Open **Actions > Release > Run workflow**.
+1. Run `just set-version <major.minor.patch>`, commit, and push `main`.
+2. Open **Actions > Publish GitHub Releases > Run workflow**.
 3. Run the workflow. It reads the version from `Version.xcconfig` and uses the
    GitHub Actions run number as the build number.
 4. Wait for the workflow to create the notarized DMG, annotated tag, checksum,

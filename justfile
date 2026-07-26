@@ -26,3 +26,6 @@ test:
 
 check:
     ./scripts/check.sh
+
+set-version version:
+    ./scripts/set-version.sh {{quote(version)}}

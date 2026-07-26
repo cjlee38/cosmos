@@ -16,7 +16,8 @@ final class SwitcherPreviewService {
     private var pendingSpaceRefreshIDs: Set<String> = []
     private var pendingPrioritySpaceIDs: [String] = []
     private var isUpdateNotificationScheduled = false
-    private var isSpaceRefreshScheduled = false
+    private var spaceRefreshWorkItem: DispatchWorkItem?
+    private var spaceRefreshGeneration: UInt64 = 0
     private var onUpdate: ((SwitcherPreviewUpdate) -> Void)?
 
     init(
@@ -208,22 +209,22 @@ final class SwitcherPreviewService {
         for id in priorityIDs where !pendingPrioritySpaceIDs.contains(id) {
             pendingPrioritySpaceIDs.append(id)
         }
-        guard !isSpaceRefreshScheduled else {
-            return
-        }
-
-        isSpaceRefreshScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else {
+        spaceRefreshWorkItem?.cancel()
+        spaceRefreshGeneration &+= 1
+        let generation = spaceRefreshGeneration
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, generation == spaceRefreshGeneration else {
                 return
             }
             let ids = pendingSpaceRefreshIDs
             let priorityIDs = pendingPrioritySpaceIDs
             pendingSpaceRefreshIDs.removeAll()
             pendingPrioritySpaceIDs.removeAll()
-            isSpaceRefreshScheduled = false
+            spaceRefreshWorkItem = nil
             refreshSpaces(ids: ids, priorityIDs: priorityIDs)
         }
+        spaceRefreshWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(16), execute: workItem)
     }
 
     private func notify(

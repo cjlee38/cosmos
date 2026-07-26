@@ -10,7 +10,7 @@ fi
 
 cd "$repo_root/macos"
 swift test
-xcodebuild -quiet \
+xcodebuild \
     -project Apps/Cosmos/Cosmos.xcodeproj \
     -scheme Cosmos \
     -configuration Debug \
