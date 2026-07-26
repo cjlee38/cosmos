@@ -1,6 +1,6 @@
 import Carbon
-import Foundation
 import CosmosCore
+import Foundation
 
 final class KeyboardShortcutResolver {
     func resolve(_ registrations: [KeyboardShortcutRegistration]) throws -> [ResolvedShortcut] {

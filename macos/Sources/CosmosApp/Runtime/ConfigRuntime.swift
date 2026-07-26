@@ -1,5 +1,5 @@
-import Foundation
 import CosmosCore
+import Foundation
 
 protocol RuntimeConfigControlling: AnyObject {
     var currentConfig: CosmosConfig { get }
@@ -246,7 +246,9 @@ final class ConfigRuntime {
             throw error
         }
     }
+}
 
+private extension ConfigRuntime {
     private func applyConfigWithShortcuts(
         _ config: CosmosConfig,
         actions: any KeyboardShortcutActionHandling

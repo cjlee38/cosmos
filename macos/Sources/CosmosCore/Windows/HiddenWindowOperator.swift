@@ -37,28 +37,17 @@ final class HiddenWindowOperator {
         let currentFrame = try currentOrStoredFrame(for: id, state: state)
         let frame = preferredFrame ?? currentFrame
         let wasAlreadyHidden = state.isHidden(id)
-        var hiddenSize = currentFrame.size
-        if preferredFrame != nil, !wasAlreadyHidden, currentFrame.size != frame.size {
-            let resizeFrame = WindowFrame(origin: currentFrame.origin, size: frame.size)
-            let appliedFrame = try windowSystem.setFrameOrMove(resizeFrame, for: id)
-            hiddenSize = appliedFrame.size
-            windowCache.updateFrame(appliedFrame, for: id)
-        }
-        if preferredFrame == nil {
-            state.storeHiddenFrameIfNeeded(frame, for: id)
-        } else {
-            state.replaceHiddenFrame(frame, for: id)
-        }
-
-        let displays = windowCache.displayTopology.displays
-        guard let display = DisplayGeometry.display(containingOrNearest: frame.center, among: displays) else {
-            throw SpaceError.noDisplayAvailable
-        }
-        let point = hidePointProvider.hidePoint(
-            for: WindowFrame(origin: frame.origin, size: hiddenSize),
-            on: display,
-            among: displays
+        let hiddenSize = try prepareFrameForHiding(
+            id,
+            preparation: HidePreparation(
+                frame: frame,
+                currentFrame: currentFrame,
+                preferredFrame: preferredFrame,
+                wasAlreadyHidden: wasAlreadyHidden
+            ),
+            state: &state
         )
+        let point = try hidePoint(for: frame, hiddenSize: hiddenSize)
         recordRepository.upsertRecord(
             HiddenWindowRecordPolicy.makeRecord(
                 window: window,
@@ -75,24 +64,17 @@ final class HiddenWindowOperator {
                 for: id
             )
         } catch {
-            if !wasAlreadyHidden {
-                recordRepository.removeRecord(
-                    windowID: id,
-                    pid: window.app.pid
-                )
-                state.clearHiddenFrame(for: id)
-            }
-            if hiddenSize != currentFrame.size {
-                do {
-                    let restoredFrame = try windowSystem.setFrameOrMove(currentFrame, for: id)
-                    windowCache.updateFrame(restoredFrame, for: id)
-                } catch let rollbackError {
-                    throw WindowFrameTransactionError(
-                        applyError: error,
-                        rollbackError: rollbackError
-                    )
-                }
-            }
+            try rollbackFailedHide(
+                id,
+                rollback: HideRollback(
+                    pid: window.app.pid,
+                    currentFrame: currentFrame,
+                    hiddenSize: hiddenSize,
+                    wasAlreadyHidden: wasAlreadyHidden,
+                    applyError: error
+                ),
+                state: &state
+            )
             throw error
         }
     }
@@ -213,4 +195,78 @@ final class HiddenWindowOperator {
         }
         return frame
     }
+
+    private func prepareFrameForHiding(
+        _ id: WindowID,
+        preparation: HidePreparation,
+        state: inout SpaceState
+    ) throws -> CGSize {
+        let frame = preparation.frame
+        let currentFrame = preparation.currentFrame
+        var hiddenSize = currentFrame.size
+        if preparation.preferredFrame != nil,
+           !preparation.wasAlreadyHidden,
+           currentFrame.size != frame.size {
+            let resizeFrame = WindowFrame(origin: currentFrame.origin, size: frame.size)
+            let appliedFrame = try windowSystem.setFrameOrMove(resizeFrame, for: id)
+            hiddenSize = appliedFrame.size
+            windowCache.updateFrame(appliedFrame, for: id)
+        }
+        if preparation.preferredFrame == nil {
+            state.storeHiddenFrameIfNeeded(frame, for: id)
+        } else {
+            state.replaceHiddenFrame(frame, for: id)
+        }
+        return hiddenSize
+    }
+
+    private func hidePoint(for frame: WindowFrame, hiddenSize: CGSize) throws -> CGPoint {
+        let displays = windowCache.displayTopology.displays
+        guard let display = DisplayGeometry.display(containingOrNearest: frame.center, among: displays) else {
+            throw SpaceError.noDisplayAvailable
+        }
+        return hidePointProvider.hidePoint(
+            for: WindowFrame(origin: frame.origin, size: hiddenSize),
+            on: display,
+            among: displays
+        )
+    }
+
+    private func rollbackFailedHide(
+        _ id: WindowID,
+        rollback: HideRollback,
+        state: inout SpaceState
+    ) throws {
+        if !rollback.wasAlreadyHidden {
+            recordRepository.removeRecord(windowID: id, pid: rollback.pid)
+            state.clearHiddenFrame(for: id)
+        }
+        guard rollback.hiddenSize != rollback.currentFrame.size else {
+            return
+        }
+        do {
+            let restoredFrame = try windowSystem.setFrameOrMove(rollback.currentFrame, for: id)
+            windowCache.updateFrame(restoredFrame, for: id)
+        } catch let rollbackError {
+            throw WindowFrameTransactionError(
+                applyError: rollback.applyError,
+                rollbackError: rollbackError
+            )
+        }
+    }
+}
+
+private struct HidePreparation {
+    let frame: WindowFrame
+    let currentFrame: WindowFrame
+    let preferredFrame: WindowFrame?
+    let wasAlreadyHidden: Bool
+}
+
+private struct HideRollback {
+    let pid: Int32
+    let currentFrame: WindowFrame
+    let hiddenSize: CGSize
+    let wasAlreadyHidden: Bool
+    let applyError: Error
 }

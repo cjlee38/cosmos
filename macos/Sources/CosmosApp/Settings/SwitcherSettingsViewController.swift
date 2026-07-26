@@ -47,23 +47,7 @@ final class SwitcherSettingsViewController: NSViewController {
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
-
-        configure(
-            windowSwitcherSizeSlider,
-            action: #selector(windowSwitcherSizeChanged),
-            width: 220,
-            accessibilityIdentifier: "cosmos.settings.switcher.window-size"
-        )
-        configure(
-            spaceSwitcherSizeSlider,
-            action: #selector(spaceSwitcherSizeChanged),
-            width: 220,
-            accessibilityIdentifier: "cosmos.settings.switcher.space-size"
-        )
-        configureValueLabel(windowSwitcherSizeValueLabel)
-        configureValueLabel(spaceSwitcherSizeValueLabel)
-        configureVerticalStack(spaceShortcutStack, spacing: 0)
-        configureVerticalStack(windowShortcutStack, spacing: 0)
+        configureControls()
 
         let header = SettingsControlFactory.header(
             title: "Switcher",
@@ -81,12 +65,7 @@ final class SwitcherSettingsViewController: NSViewController {
             sizeSlider: windowSwitcherSizeSlider,
             sizeValueLabel: windowSwitcherSizeValueLabel
         )
-        let root = NSStackView(views: [
-            header,
-            configErrorNotice,
-            spaceSection,
-            windowSection
-        ])
+        let root = NSStackView(views: [header, configErrorNotice, spaceSection, windowSection])
         configureVerticalStack(root, spacing: 20)
         root.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(root)
@@ -101,6 +80,25 @@ final class SwitcherSettingsViewController: NSViewController {
         ])
 
         refresh()
+    }
+
+    private func configureControls() {
+        configure(
+            windowSwitcherSizeSlider,
+            action: #selector(windowSwitcherSizeChanged),
+            width: 220,
+            accessibilityIdentifier: "cosmos.settings.switcher.window-size"
+        )
+        configure(
+            spaceSwitcherSizeSlider,
+            action: #selector(spaceSwitcherSizeChanged),
+            width: 220,
+            accessibilityIdentifier: "cosmos.settings.switcher.space-size"
+        )
+        configureValueLabel(windowSwitcherSizeValueLabel)
+        configureValueLabel(spaceSwitcherSizeValueLabel)
+        configureVerticalStack(spaceShortcutStack, spacing: 0)
+        configureVerticalStack(windowShortcutStack, spacing: 0)
     }
 
     func refresh() {

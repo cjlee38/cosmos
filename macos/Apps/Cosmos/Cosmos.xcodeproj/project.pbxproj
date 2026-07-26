@@ -10,6 +10,21 @@
 		01E6F2718D58B5B5E3810A9D /* AppearanceSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0CB6BE81CCA90D965BA053 /* AppearanceSettingsTests.swift */; };
 		02078B0FA0D39D63388487B9 /* ShortcutRecorderButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD745663A02D39267FBA0036 /* ShortcutRecorderButtonTests.swift */; };
 		05B449515D343165571F9C0F /* ConfigRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A65ED208864F99A20C9A0BF /* ConfigRuntime.swift */; };
+		110000000000000000000001 /* WindowRuntimeEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120000000000000000000001 /* WindowRuntimeEvent.swift */; };
+		110000000000000000000002 /* SwitcherAnchorFrameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120000000000000000000002 /* SwitcherAnchorFrameResolver.swift */; };
+		110000000000000000000003 /* GeneralSettingsViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120000000000000000000003 /* GeneralSettingsViewFactory.swift */; };
+		110000000000000000000004 /* SpaceSettingsViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120000000000000000000004 /* SpaceSettingsViewFactory.swift */; };
+		110000000000000000000005 /* SpaceDisplayCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120000000000000000000005 /* SpaceDisplayCardView.swift */; };
+		110000000000000000000006 /* SpaceDisplayPillViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120000000000000000000006 /* SpaceDisplayPillViews.swift */; };
+		130000000000000000000001 /* SpaceDisplayArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000001 /* SpaceDisplayArrangementTests.swift */; };
+		130000000000000000000002 /* SpaceIDPickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000002 /* SpaceIDPickerTests.swift */; };
+		130000000000000000000003 /* SpaceSettingsViewStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000003 /* SpaceSettingsViewStateTests.swift */; };
+		130000000000000000000004 /* SpaceSettingsViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000004 /* SpaceSettingsViewTests.swift */; };
+		130000000000000000000005 /* SpaceSwitcherLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000005 /* SpaceSwitcherLayoutTests.swift */; };
+		130000000000000000000006 /* SpaceThumbnailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000006 /* SpaceThumbnailTests.swift */; };
+		130000000000000000000007 /* SwitcherInteractionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000007 /* SwitcherInteractionPolicyTests.swift */; };
+		130000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift */; };
+		130000000000000000000009 /* WindowRuntimeEventHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000009 /* WindowRuntimeEventHandlerTests.swift */; };
 		0C1C6E3D55E91C177A67B9BF /* CosmosApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EFD77086498FA29C9CD2B7 /* CosmosApplication.swift */; };
 		0DD6BEA2B2DDC73C12A4722B /* DebugStatusRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE078C07E8072EB07D79443C /* DebugStatusRenderer.swift */; };
 		11A0AF43C6E2E49C0E2F6B79 /* AccessibilityPermissionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24246563E59CD46975B43C7 /* AccessibilityPermissionController.swift */; };
@@ -102,6 +117,21 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		120000000000000000000001 /* WindowRuntimeEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEvent.swift; sourceTree = "<group>"; };
+		120000000000000000000002 /* SwitcherAnchorFrameResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherAnchorFrameResolver.swift; sourceTree = "<group>"; };
+		120000000000000000000003 /* GeneralSettingsViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsViewFactory.swift; sourceTree = "<group>"; };
+		120000000000000000000004 /* SpaceSettingsViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSettingsViewFactory.swift; sourceTree = "<group>"; };
+		120000000000000000000005 /* SpaceDisplayCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceDisplayCardView.swift; sourceTree = "<group>"; };
+		120000000000000000000006 /* SpaceDisplayPillViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceDisplayPillViews.swift; sourceTree = "<group>"; };
+		140000000000000000000001 /* SpaceDisplayArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceDisplayArrangementTests.swift; sourceTree = "<group>"; };
+		140000000000000000000002 /* SpaceIDPickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceIDPickerTests.swift; sourceTree = "<group>"; };
+		140000000000000000000003 /* SpaceSettingsViewStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSettingsViewStateTests.swift; sourceTree = "<group>"; };
+		140000000000000000000004 /* SpaceSettingsViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSettingsViewTests.swift; sourceTree = "<group>"; };
+		140000000000000000000005 /* SpaceSwitcherLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherLayoutTests.swift; sourceTree = "<group>"; };
+		140000000000000000000006 /* SpaceThumbnailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceThumbnailTests.swift; sourceTree = "<group>"; };
+		140000000000000000000007 /* SwitcherInteractionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherInteractionPolicyTests.swift; sourceTree = "<group>"; };
+		140000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEventConcurrencyTests.swift; sourceTree = "<group>"; };
+		140000000000000000000009 /* WindowRuntimeEventHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEventHandlerTests.swift; sourceTree = "<group>"; };
 		01F67CB28B6CB06F4DB03B50 /* Cosmos Dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Cosmos Dev.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		07BEFE5DD28D09E37156901C /* ShortcutRecorderButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorderButton.swift; sourceTree = "<group>"; };
 		0A65ED208864F99A20C9A0BF /* ConfigRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigRuntime.swift; sourceTree = "<group>"; };
@@ -226,6 +256,7 @@
 				A30000000000000000000003 /* OnboardingStateStore.swift */,
 				6A3825B797E23797D8988D63 /* StatusMenuController.swift */,
 				E3E7D9BDF57C766FD89FDCAA /* WindowEventMonitor.swift */,
+				120000000000000000000001 /* WindowRuntimeEvent.swift */,
 				31796FE52334A52C16A26B5F /* WindowRuntimeEventHandler.swift */,
 				B3B34FA1681B2CABA63E153F /* SpaceActionController.swift */,
 				C80000000000000000000001 /* SpaceSwitchCommand.swift */,
@@ -238,6 +269,7 @@
 			children = (
 				71DF96855CCD916784F8E41B /* ApplicationIconCache.swift */,
 				FAEF94D847B787BE09CB8DCC /* SwitcherCoordinator.swift */,
+				120000000000000000000002 /* SwitcherAnchorFrameResolver.swift */,
 				BA153E480398570D63C3B9A7 /* SwitcherModels.swift */,
 				611448DEB72AFF4B0F79536B /* SwitcherOutsideClickMonitor.swift */,
 				893C57A28CC88D95E43CD308 /* SwitcherOverlayScreenLocator.swift */,
@@ -302,13 +334,22 @@
 				C8561E548E557C8E30D6F79D /* ModifierFlagsMonitorTests.swift */,
 				BD745663A02D39267FBA0036 /* ShortcutRecorderButtonTests.swift */,
 				C80000000000000000000003 /* SpaceSwitchCommandTests.swift */,
+				140000000000000000000001 /* SpaceDisplayArrangementTests.swift */,
+				140000000000000000000002 /* SpaceIDPickerTests.swift */,
 				1501C2846013654EA452412B /* SwitcherCoordinatorTests.swift */,
+				140000000000000000000007 /* SwitcherInteractionPolicyTests.swift */,
 				4805CB8CB28BF9396FEEBAB3 /* SwitcherPreviewServiceTests.swift */,
+				140000000000000000000005 /* SpaceSwitcherLayoutTests.swift */,
+				140000000000000000000006 /* SpaceThumbnailTests.swift */,
 				29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */,
 				B70000000000000000000001 /* WindowRuntimeFocusEventTests.swift */,
+				140000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift */,
+				140000000000000000000009 /* WindowRuntimeEventHandlerTests.swift */,
 				0A92B6BA939074278B64728C /* WindowRuntimeEventTests.swift */,
 				B70000000000000000000003 /* WindowThumbnailCacheTests.swift */,
 				F69A22CC6D1A445A26A5BDBF /* SpaceSettingsTests.swift */,
+				140000000000000000000003 /* SpaceSettingsViewStateTests.swift */,
+				140000000000000000000004 /* SpaceSettingsViewTests.swift */,
 			);
 			name = CosmosAppTests;
 			path = ../../Tests/CosmosAppTests;
@@ -352,6 +393,7 @@
 				F173A36FA5FEF966E4045361 /* AppSettingsStore.swift */,
 				A768E125FDF463F09E5E8C03 /* GeneralSettingsService.swift */,
 				D7ADAC95348EF0FBF0BEF484 /* GeneralSettingsViewController.swift */,
+				120000000000000000000003 /* GeneralSettingsViewFactory.swift */,
 				37038C6E71932BA8C8D029BD /* SettingsModels.swift */,
 				7A2D8F1E5C4B3A29081706F5 /* SettingsCoordinator.swift */,
 				BD98A4B57009D3E5C86143DF /* SettingsSidebarViewController.swift */,
@@ -359,10 +401,13 @@
 				73EC2EF8753A9300715E05E7 /* SettingsWindowController.swift */,
 				07BEFE5DD28D09E37156901C /* ShortcutRecorderButton.swift */,
 				E2B089E94FB0F81FFD08BF8D /* SpaceDisplayArrangementView.swift */,
+				120000000000000000000005 /* SpaceDisplayCardView.swift */,
+				120000000000000000000006 /* SpaceDisplayPillViews.swift */,
 				7D93A2F8CD2DCF2867B59EDD /* SpaceIDPickerView.swift */,
 				6B48F56E9A562434FF7C0BE7 /* SpaceSettingsControls.swift */,
 				C7A2E9B4D1F6483A95B0C6E7 /* SpaceSettingsService.swift */,
 				47815B96EB3BDF5149CE3905 /* SpaceSettingsViewController.swift */,
+				120000000000000000000004 /* SpaceSettingsViewFactory.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -485,6 +530,12 @@
 				2EAB9914186BA0D707335CC3 /* ApplicationIconCache.swift in Sources */,
 				7B499687C67A954ADA0B8D84 /* CarbonKeyboardBackend.swift in Sources */,
 				05B449515D343165571F9C0F /* ConfigRuntime.swift in Sources */,
+				110000000000000000000001 /* WindowRuntimeEvent.swift in Sources */,
+				110000000000000000000002 /* SwitcherAnchorFrameResolver.swift in Sources */,
+				110000000000000000000003 /* GeneralSettingsViewFactory.swift in Sources */,
+				110000000000000000000004 /* SpaceSettingsViewFactory.swift in Sources */,
+				110000000000000000000005 /* SpaceDisplayCardView.swift in Sources */,
+				110000000000000000000006 /* SpaceDisplayPillViews.swift in Sources */,
 				0DD6BEA2B2DDC73C12A4722B /* DebugStatusRenderer.swift in Sources */,
 				909EE7F746FA13213655A7B5 /* DebugStatusWindowController.swift in Sources */,
 				1A9D527F619FAA4D9792FDAE /* GeneralSettingsService.swift in Sources */,
@@ -550,13 +601,22 @@
 				4D23DABCA127F1A7B951376D /* ModifierFlagsMonitorTests.swift in Sources */,
 				02078B0FA0D39D63388487B9 /* ShortcutRecorderButtonTests.swift in Sources */,
 				C80000000000000000000004 /* SpaceSwitchCommandTests.swift in Sources */,
+				130000000000000000000001 /* SpaceDisplayArrangementTests.swift in Sources */,
+				130000000000000000000002 /* SpaceIDPickerTests.swift in Sources */,
 				951CA33D24DDB240318CB7EA /* SwitcherCoordinatorTests.swift in Sources */,
+				130000000000000000000007 /* SwitcherInteractionPolicyTests.swift in Sources */,
 				F352BA5B165A0FD7BBBCE15C /* SwitcherPreviewServiceTests.swift in Sources */,
+				130000000000000000000005 /* SpaceSwitcherLayoutTests.swift in Sources */,
+				130000000000000000000006 /* SpaceThumbnailTests.swift in Sources */,
 				30EE3B3E8B71E27139685497 /* SwitcherTestSupport.swift in Sources */,
 				B70000000000000000000002 /* WindowRuntimeFocusEventTests.swift in Sources */,
+				130000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift in Sources */,
+				130000000000000000000009 /* WindowRuntimeEventHandlerTests.swift in Sources */,
 				CD5CE66E2347BC5BAC2B129E /* WindowRuntimeEventTests.swift in Sources */,
 				B70000000000000000000004 /* WindowThumbnailCacheTests.swift in Sources */,
 				B6B8DCB9229512FE3511DC5D /* SpaceSettingsTests.swift in Sources */,
+				130000000000000000000003 /* SpaceSettingsViewStateTests.swift in Sources */,
+				130000000000000000000004 /* SpaceSettingsViewTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

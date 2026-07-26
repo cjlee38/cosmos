@@ -11,6 +11,7 @@ public final class SpaceController {
     private let assignmentCoordinator: WindowAssignmentCoordinator
     private let emergencyHiddenWindowRestorer: EmergencyHiddenWindowRestorer
     private let displayCoordinator: SpaceDisplayCoordinator
+    private let externalWindowChangeCoordinator: SpaceExternalWindowChangeCoordinator
     private let initialConfigLoadError: Error?
 
     private var state: SpaceState
@@ -66,6 +67,14 @@ public final class SpaceController {
         assignmentCoordinator = components.assignmentCoordinator
         emergencyHiddenWindowRestorer = components.emergencyHiddenWindowRestorer
         displayCoordinator = components.displayCoordinator
+        externalWindowChangeCoordinator = SpaceExternalWindowChangeCoordinator(
+            windowCache: components.windowCache,
+            runtimeSynchronizer: components.runtimeSynchronizer,
+            hiddenWindowOperator: components.hiddenWindowOperator,
+            visibilityCoordinator: components.visibilityCoordinator,
+            navigationCoordinator: components.navigationCoordinator,
+            displayCoordinator: components.displayCoordinator
+        )
         initialConfigLoadError = components.startupConfigLoadError
         state = components.state
     }
@@ -86,22 +95,7 @@ public extension SpaceController {
     }
 
     func handleExternalWindowChange(_ change: ExternalWindowChange) throws -> ExternalWindowEventResult {
-        let sync: SpaceSyncSummary
-        let targetFrames: [WindowID: WindowFrame]
-        if change.displayConfigurationChanged {
-            let displaySync = try displayCoordinator.synchronizeDisplayConfiguration(state: &state)
-            sync = displaySync.sync
-            targetFrames = displaySync.targetFrames
-        } else {
-            sync = try syncWindows()
-            targetFrames = [:]
-        }
-
-        return try finishExternalWindowChange(
-            change,
-            sync: sync,
-            targetFrames: targetFrames
-        )
+        try externalWindowChangeCoordinator.handle(change, state: &state)
     }
 
     func discoverWindows(
@@ -115,85 +109,7 @@ public extension SpaceController {
         _ change: ExternalWindowChange,
         discovery: WindowDiscoverySnapshot
     ) throws -> ExternalWindowEventResult? {
-        let sync: SpaceSyncSummary
-        let targetFrames: [WindowID: WindowFrame]
-        if change.displayConfigurationChanged {
-            guard let displaySync = try displayCoordinator.applyDisplayConfiguration(
-                discovery,
-                state: &state
-            ) else {
-                return nil
-            }
-            sync = displaySync.sync
-            targetFrames = displaySync.targetFrames
-        } else {
-            guard let appliedSync = runtimeSynchronizer.apply(
-                discovery,
-                displayTopology: windowCache.displayTopology,
-                state: &state
-            ) else {
-                return nil
-            }
-            sync = appliedSync
-            targetFrames = [:]
-        }
-
-        return try finishExternalWindowChange(
-            change,
-            sync: sync,
-            targetFrames: targetFrames
-        )
-    }
-
-    private func finishExternalWindowChange(
-        _ change: ExternalWindowChange,
-        sync: SpaceSyncSummary,
-        targetFrames initialTargetFrames: [WindowID: WindowFrame]
-    ) throws -> ExternalWindowEventResult {
-        var targetFrames = initialTargetFrames
-        let shouldFollowFocusedWindow = change.focusPolicy.shouldFollow(
-            focusedWindowID: windowCache.focusedWindowID,
-            state: state
-        )
-        if shouldFollowFocusedWindow,
-           let id = windowCache.focusedWindowID,
-           let targetFrame = targetFrames[id],
-           try recoverFocusedWindowParking(id, referenceFrame: targetFrame) {
-            targetFrames.removeValue(forKey: id)
-        }
-        let focusedWindowSync: FocusedWindowSpaceSyncResult?
-        if shouldFollowFocusedWindow {
-            let focusResult = try navigationCoordinator.syncSpaceToFocusedWindow(
-                frontToBackWindowIDs: windowCache.windows.filter { !$0.isMinimized }.map(\.id),
-                targetFrames: targetFrames,
-                state: &state
-            )
-            focusedWindowSync = focusResult
-            switch focusResult {
-            case .switched:
-                break
-            case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
-                try visibilityCoordinator.applyVisibleSpaces(
-                    state: &state,
-                    targetFrames: targetFrames
-                )
-            }
-        } else {
-            focusedWindowSync = nil
-            try visibilityCoordinator.applyVisibleSpaces(
-                state: &state,
-                targetFrames: targetFrames
-            )
-        }
-
-        if shouldFollowFocusedWindow, let id = windowCache.focusedWindowID {
-            try restoreFocusedWindow(id)
-        }
-
-        return ExternalWindowEventResult(
-            sync: sync,
-            focusedWindowSync: focusedWindowSync
-        )
+        try externalWindowChangeCoordinator.apply(change, discovery: discovery, state: &state)
     }
 
     func membership(for id: WindowID) -> String? {
@@ -366,22 +282,6 @@ public extension SpaceController {
 }
 
 private extension SpaceController {
-    func recoverFocusedWindowParking(
-        _ id: WindowID,
-        referenceFrame: WindowFrame
-    ) throws -> Bool {
-        guard let visibleFrame = visibleFrameForWindowSpace(id) else {
-            return false
-        }
-        return try hiddenWindowOperator.recoverParkingPositionForFocus(
-            id,
-            referenceFrame: referenceFrame,
-            fallbackVisibleFrame: visibleFrame,
-            displays: windowCache.displayTopology.displays,
-            state: state
-        )
-    }
-
     func restoreFocusedWindow(_ id: WindowID) throws {
         guard state.membership(for: id) != nil else {
             return
@@ -409,19 +309,6 @@ private extension SpaceController {
         return windowCache.displayTopology.monitorSlots.first(
             where: { $0.slot == monitorSlot }
         )?.display.visibleFrame
-    }
-}
-
-private extension ExternalWindowFocusPolicy {
-    func shouldFollow(focusedWindowID: WindowID?, state: SpaceState) -> Bool {
-        switch self {
-        case .never:
-            false
-        case .always:
-            true
-        case .visibleFocusedWindow:
-            focusedWindowID.map { !state.isHidden($0) } ?? false
-        }
     }
 }
 

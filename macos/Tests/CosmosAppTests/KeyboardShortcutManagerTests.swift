@@ -1,5 +1,5 @@
-@testable import CosmosApp
 import Carbon
+@testable import CosmosApp
 import XCTest
 
 final class KeyboardShortcutManagerTests: XCTestCase {

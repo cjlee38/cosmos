@@ -1,5 +1,5 @@
-import Foundation
 @testable import CosmosCore
+import Foundation
 import XCTest
 
 final class FileHiddenWindowRecordStoreTests: XCTestCase {

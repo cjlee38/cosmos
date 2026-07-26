@@ -66,7 +66,7 @@ final class GeneralSettingsViewController: NSViewController {
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
 
-        let (scrollView, documentView) = makeScrollView()
+        let (scrollView, documentView) = GeneralSettingsViewFactory.makeScrollView()
         view.addSubview(scrollView)
 
         let root = NSStackView()
@@ -76,11 +76,27 @@ final class GeneralSettingsViewController: NSViewController {
         root.spacing = 20
 
         let header = SettingsControlFactory.header(title: "General", symbolName: "gearshape.fill")
-        let launchSection = makeLaunchAtLoginSection()
-        let menuBarSection = makeMenuBarSection()
+        let launchSection = GeneralSettingsViewFactory.makeLaunchAtLoginSection(
+            toggle: launchAtLoginSwitch,
+            statusLabel: launchAtLoginStatusLabel,
+            settingsButton: launchAtLoginSettingsButton,
+            target: self,
+            actions: (
+                toggle: #selector(launchAtLoginChanged),
+                settings: #selector(openLoginItemsSettings)
+            )
+        )
+        let menuBarSection = GeneralSettingsViewFactory.makeMenuBarSection(
+            control: menuBarStyleControl,
+            target: self,
+            action: #selector(menuBarStyleChanged)
+        )
         let configurationSection = makeConfigurationSection()
         let permissionsSection = makePermissionsSection()
-        let setupSection = makeSetupSection()
+        let setupSection = GeneralSettingsViewFactory.makeSetupSection(
+            target: self,
+            action: #selector(runSetupAgain)
+        )
         root.addArrangedSubview(header)
         root.addArrangedSubview(launchSection)
         root.addArrangedSubview(menuBarSection)
@@ -89,22 +105,13 @@ final class GeneralSettingsViewController: NSViewController {
         root.addArrangedSubview(setupSection)
         documentView.addSubview(root)
 
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
-            root.topAnchor.constraint(equalTo: documentView.topAnchor, constant: 24),
-            root.leadingAnchor.constraint(equalTo: documentView.leadingAnchor, constant: 26),
-            root.trailingAnchor.constraint(equalTo: documentView.trailingAnchor, constant: -26),
-            root.bottomAnchor.constraint(equalTo: documentView.bottomAnchor, constant: -24),
-            launchSection.widthAnchor.constraint(equalTo: root.widthAnchor),
-            menuBarSection.widthAnchor.constraint(equalTo: root.widthAnchor),
-            permissionsSection.widthAnchor.constraint(equalTo: root.widthAnchor),
-            configurationSection.widthAnchor.constraint(equalTo: root.widthAnchor),
-            setupSection.widthAnchor.constraint(equalTo: root.widthAnchor)
-        ])
+        GeneralSettingsViewFactory.constrainContent(
+            in: view,
+            scrollView: scrollView,
+            documentView: documentView,
+            root: root,
+            sections: [launchSection, menuBarSection, permissionsSection, configurationSection, setupSection]
+        )
 
         refresh()
     }
@@ -123,96 +130,6 @@ final class GeneralSettingsViewController: NSViewController {
 }
 
 private extension GeneralSettingsViewController {
-    private func makeScrollView() -> (scrollView: NSScrollView, documentView: NSView) {
-        let scrollView = NSScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.scrollerStyle = .overlay
-        scrollView.automaticallyAdjustsContentInsets = false
-        let documentView = SettingsDocumentView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.documentView = documentView
-        return (scrollView, documentView)
-    }
-
-    private func makeMenuBarSection() -> NSView {
-        menuBarStyleControl.segmentStyle = .rounded
-        menuBarStyleControl.target = self
-        menuBarStyleControl.action = #selector(menuBarStyleChanged)
-        menuBarStyleControl.translatesAutoresizingMaskIntoConstraints = false
-        menuBarStyleControl.widthAnchor.constraint(equalToConstant: 260).isActive = true
-        menuBarStyleControl.setAccessibilityIdentifier("cosmos.settings.general.menu-bar-style")
-
-        let title = NSTextField(labelWithString: "Icon Style")
-        title.font = .systemFont(ofSize: 14, weight: .medium)
-        let row = NSStackView(views: [
-            title,
-            SettingsControlFactory.flexibleSpacer(),
-            menuBarStyleControl
-        ])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 12
-        return SettingsControlFactory.titledSection(
-            title: "Menu Bar",
-            content: SettingsControlFactory.groupBox(
-                content: SettingsControlFactory.padded(row)
-            )
-        )
-    }
-
-    private func makeLaunchAtLoginSection() -> NSView {
-        launchAtLoginSwitch.target = self
-        launchAtLoginSwitch.action = #selector(launchAtLoginChanged)
-
-        launchAtLoginStatusLabel.textColor = .secondaryLabelColor
-        launchAtLoginSettingsButton.target = self
-        launchAtLoginSettingsButton.action = #selector(openLoginItemsSettings)
-
-        let title = NSTextField(labelWithString: "Launch at Login")
-        title.font = .systemFont(ofSize: 14, weight: .medium)
-        let spacer = SettingsControlFactory.flexibleSpacer()
-        let row = NSStackView(views: [
-            title,
-            spacer,
-            launchAtLoginStatusLabel,
-            launchAtLoginSettingsButton,
-            launchAtLoginSwitch
-        ])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 10
-        return SettingsControlFactory.groupBox(
-            content: SettingsControlFactory.padded(row)
-        )
-    }
-
-    private func makeSetupSection() -> NSView {
-        let title = NSTextField(labelWithString: "Setup Assistant")
-        title.font = .systemFont(ofSize: 14, weight: .medium)
-        let detail = NSTextField(labelWithString: "Review permissions, displays, and spaces.")
-        detail.textColor = .secondaryLabelColor
-        let labels = NSStackView(views: [title, detail])
-        labels.orientation = .vertical
-        labels.alignment = .leading
-        labels.spacing = 3
-
-        let button = NSButton(title: "Run Setup Again...", target: self, action: #selector(runSetupAgain))
-        button.bezelStyle = .rounded
-        button.controlSize = .regular
-        button.setAccessibilityIdentifier("cosmos.settings.general.run-setup")
-        let row = NSStackView(views: [labels, SettingsControlFactory.flexibleSpacer(), button])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 12
-        return SettingsControlFactory.titledSection(
-            title: "Setup",
-            content: SettingsControlFactory.groupBox(content: SettingsControlFactory.padded(row))
-        )
-    }
-
     private func makePermissionsSection() -> NSView {
         let rows = NSStackView()
         rows.orientation = .vertical
@@ -286,7 +203,11 @@ private extension GeneralSettingsViewController {
         configErrorLabel.font = .systemFont(ofSize: 12)
         configErrorLabel.maximumNumberOfLines = 2
 
-        let fileRow = makeConfigFileRow()
+        let fileRow = GeneralSettingsViewFactory.makeConfigFileRow(
+            pathLabel: configPathLabel,
+            statusIcon: configStatusIcon,
+            statusLabel: configStatusLabel
+        )
         let details = NSStackView(views: [fileRow, configErrorLabel])
         details.orientation = .vertical
         details.alignment = .leading
@@ -306,39 +227,6 @@ private extension GeneralSettingsViewController {
             title: "Configuration",
             content: SettingsControlFactory.actionGroup(details: details, actions: buttons)
         )
-    }
-
-    private func makeConfigFileRow() -> NSView {
-        let fileIcon = NSImageView()
-        fileIcon.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: "Config file")
-        fileIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .medium)
-        fileIcon.contentTintColor = .secondaryLabelColor
-        fileIcon.translatesAutoresizingMaskIntoConstraints = false
-        fileIcon.widthAnchor.constraint(equalToConstant: 28).isActive = true
-        fileIcon.heightAnchor.constraint(equalToConstant: 28).isActive = true
-
-        let fileName = NSTextField(labelWithString: "config.yaml")
-        fileName.font = .systemFont(ofSize: 14, weight: .semibold)
-        let fileDetails = NSStackView(views: [fileName, configPathLabel])
-        fileDetails.orientation = .vertical
-        fileDetails.alignment = .leading
-        fileDetails.spacing = 2
-
-        let status = NSStackView(views: [configStatusIcon, configStatusLabel])
-        status.orientation = .horizontal
-        status.alignment = .centerY
-        status.spacing = 5
-
-        let fileRow = NSStackView(views: [
-            fileIcon,
-            fileDetails,
-            SettingsControlFactory.flexibleSpacer(),
-            status
-        ])
-        fileRow.orientation = .horizontal
-        fileRow.alignment = .centerY
-        fileRow.spacing = 10
-        return fileRow
     }
 
     private func configureReloadConfigButton() {

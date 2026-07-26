@@ -36,16 +36,27 @@ final class SpaceSettingsViewController: NSViewController {
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 540))
 
-        let (scrollView, documentView) = makeScrollView()
+        let (scrollView, documentView) = GeneralSettingsViewFactory.makeScrollView()
         view.addSubview(scrollView)
 
-        configureDisplayViews()
+        SpaceSettingsViewFactory.configureDisplayViews(
+            arrangementView: displayArrangementView,
+            statusStack: displayStatusStack,
+            editorStack: displayEditorStack,
+            editorTitle: displayEditorTitle,
+            spacePicker: spacePicker
+        )
         configureVerticalStack(inspectorSection, spacing: 8)
 
         let root = NSStackView(views: [
             SettingsControlFactory.header(title: "Spaces", symbolName: "rectangle.3.group.fill"),
             configErrorNotice,
-            makeDisplaySection(),
+            SpaceSettingsViewFactory.makeDisplaySection(
+                arrangementView: displayArrangementView,
+                statusStack: displayStatusStack,
+                target: self,
+                action: #selector(openDisplaySettings)
+            ),
             displayEditorStack,
             inspectorSection
         ])
@@ -73,10 +84,7 @@ final class SpaceSettingsViewController: NSViewController {
     }
 
     func refresh() {
-        guard isViewLoaded else {
-            return
-        }
-        guard shortcutRecordingController.cancel() else {
+        guard isViewLoaded, shortcutRecordingController.cancel() else {
             return
         }
         apply(service.snapshot())
@@ -84,85 +92,6 @@ final class SpaceSettingsViewController: NSViewController {
 }
 
 private extension SpaceSettingsViewController {
-    private func configureDisplayViews() {
-        displayArrangementView.translatesAutoresizingMaskIntoConstraints = false
-        configureVerticalStack(displayStatusStack, spacing: 7)
-        configureVerticalStack(displayEditorStack, spacing: 12)
-
-        displayEditorTitle.font = .systemFont(ofSize: 12.5, weight: .semibold)
-        displayEditorTitle.textColor = .secondaryLabelColor
-        spacePicker.translatesAutoresizingMaskIntoConstraints = false
-
-        let pickerContainer = NSView()
-        pickerContainer.addSubview(spacePicker)
-        NSLayoutConstraint.activate([
-            spacePicker.topAnchor.constraint(equalTo: pickerContainer.topAnchor, constant: 12),
-            spacePicker.centerXAnchor.constraint(equalTo: pickerContainer.centerXAnchor),
-            spacePicker.leadingAnchor.constraint(greaterThanOrEqualTo: pickerContainer.leadingAnchor, constant: 12),
-            spacePicker.trailingAnchor.constraint(lessThanOrEqualTo: pickerContainer.trailingAnchor, constant: -12),
-            spacePicker.bottomAnchor.constraint(equalTo: pickerContainer.bottomAnchor, constant: -12)
-        ])
-        let pickerGroup = SettingsControlFactory.groupBox(content: pickerContainer)
-        displayEditorStack.addArrangedSubview(displayEditorTitle)
-        displayEditorStack.addArrangedSubview(pickerGroup)
-        pickerGroup.widthAnchor.constraint(equalTo: displayEditorStack.widthAnchor).isActive = true
-        displayEditorStack.setAccessibilityIdentifier("cosmos.settings.space.editor")
-    }
-
-    private func makeDisplaySection() -> NSView {
-        let title = SpaceSettingsControlFactory.headerLabel("Displays")
-
-        let displaySettingsButton = NSButton(
-            title: "Display Settings",
-            target: self,
-            action: #selector(openDisplaySettings)
-        )
-        displaySettingsButton.image = NSImage(
-            systemSymbolName: "gearshape",
-            accessibilityDescription: "Display Settings"
-        )
-        displaySettingsButton.imagePosition = .imageLeading
-        displaySettingsButton.bezelStyle = .rounded
-        displaySettingsButton.controlSize = .regular
-        displaySettingsButton.setAccessibilityIdentifier("cosmos.settings.display-settings")
-
-        let header = NSStackView(views: [
-            title,
-            SettingsControlFactory.flexibleSpacer(),
-            displaySettingsButton
-        ])
-        header.orientation = .horizontal
-        header.alignment = .centerY
-
-        let content = NSStackView(views: [displayArrangementView, displayStatusStack])
-        configureVerticalStack(content, spacing: 10)
-        for arrangedView in content.arrangedSubviews {
-            arrangedView.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        }
-        let group = SettingsControlFactory.groupBox(
-            content: SettingsControlFactory.padded(content, vertical: 10, horizontal: 10)
-        )
-        let section = NSStackView(views: [header, group])
-        configureVerticalStack(section, spacing: 8)
-        header.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
-        group.widthAnchor.constraint(equalTo: section.widthAnchor).isActive = true
-        return section
-    }
-
-    private func makeScrollView() -> (scrollView: NSScrollView, documentView: NSView) {
-        let scrollView = NSScrollView()
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.scrollerStyle = .overlay
-        scrollView.automaticallyAdjustsContentInsets = false
-        let documentView = SettingsDocumentView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.documentView = documentView
-        return (scrollView, documentView)
-    }
-
     private func wireActions() {
         displayArrangementView.onDisplaySelected = { [weak self] displayID in
             self?.openSpaceEditor(for: displayID)
@@ -190,7 +119,7 @@ private extension SpaceSettingsViewController {
                 return
             }
             self.isDeleteMode = isDeleteMode
-            self.apply(service.snapshot())
+            apply(service.snapshot())
         }
     }
 
@@ -262,43 +191,21 @@ private extension SpaceSettingsViewController {
             return
         }
 
-        let title = SpaceSettingsControlFactory.headerLabel("Space \(selectedSpaceID.rawValue)")
-        let remove = SpaceSettingsControlFactory.removeButton(
+        let titleRow = SpaceSettingsViewFactory.makeInspectorTitleRow(
             spaceID: selectedSpaceID,
-            isEnabled: snapshot.spaces.count > 1,
+            canRemove: snapshot.spaces.count > 1,
             target: self,
             action: #selector(removeSpace(_:))
         )
-        let titleRow = NSStackView(views: [title, SettingsControlFactory.flexibleSpacer(), remove])
-        titleRow.orientation = .horizontal
-        titleRow.alignment = .centerY
-
-        let selector = monitorSelector(space: space, displays: snapshot.displays)
-        selector.translatesAutoresizingMaskIntoConstraints = false
-        selector.widthAnchor.constraint(equalToConstant: 180).isActive = true
-        let switchRecorder = SpaceSettingsControlFactory.shortcutRecorder(
-            shortcutTarget: .switchSpace(space.id),
-            shortcut: space.switchShortcut,
-            validationMessage: snapshot.shortcutValidationMessage(for: .switchSpace(space.id)),
+        let fields = SpaceSettingsViewFactory.makeInspectorFields(
+            space: space,
+            snapshot: snapshot,
             target: self,
-            action: #selector(beginShortcutRecording(_:))
+            actions: (
+                monitor: #selector(monitorSelectionChanged(_:)),
+                record: #selector(beginShortcutRecording(_:))
+            )
         )
-        let moveRecorder = SpaceSettingsControlFactory.shortcutRecorder(
-            shortcutTarget: .moveWindow(space.id),
-            shortcut: space.moveShortcut,
-            validationMessage: snapshot.shortcutValidationMessage(for: .moveWindow(space.id)),
-            target: self,
-            action: #selector(beginShortcutRecording(_:))
-        )
-        let fields = NSStackView(views: [
-            SpaceSettingsControlFactory.labeledControl(title: "Display", control: selector),
-            SpaceSettingsControlFactory.labeledControl(title: "Switch", control: switchRecorder),
-            SpaceSettingsControlFactory.labeledControl(title: "Move Window", control: moveRecorder)
-        ])
-        fields.orientation = .horizontal
-        fields.alignment = .bottom
-        fields.spacing = 18
-
         let content = NSStackView(views: [titleRow, fields])
         configureVerticalStack(content, spacing: 10)
         let group = SettingsControlFactory.groupBox(
@@ -308,20 +215,6 @@ private extension SpaceSettingsViewController {
         group.widthAnchor.constraint(equalTo: inspectorSection.widthAnchor).isActive = true
         inspectorSection.setAccessibilityIdentifier("cosmos.settings.space.inspector")
         inspectorSection.isHidden = false
-    }
-
-    private func monitorSelector(
-        space: SpaceSettingsItem,
-        displays: [SpaceSettingsDisplay]
-    ) -> SpaceMonitorPopUpButton {
-        let selector = SpaceMonitorPopUpButton(
-            spaceID: space.id,
-            currentMonitorSlot: space.monitorSlot,
-            displays: displays
-        )
-        selector.target = self
-        selector.action = #selector(monitorSelectionChanged(_:))
-        return selector
     }
 
     private func configureVerticalStack(_ stack: NSStackView, spacing: CGFloat) {
@@ -500,11 +393,6 @@ private extension SpaceSettingsViewController {
     }
 
     @objc private func openDisplaySettings() {
-        guard let url = URL(
-            string: "x-apple.systempreferences:com.apple.Displays-Settings.extension"
-        ) else {
-            return
-        }
-        NSWorkspace.shared.open(url)
+        SpaceSettingsViewFactory.openDisplaySettings()
     }
 }

@@ -1,6 +1,6 @@
 import CoreGraphics
-import Foundation
 import CosmosCore
+import Foundation
 
 final class DebugStatusRenderer {
     private let controller: SpaceController

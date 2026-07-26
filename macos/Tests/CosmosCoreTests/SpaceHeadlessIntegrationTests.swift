@@ -1,6 +1,6 @@
 import CoreGraphics
-import Foundation
 @testable import CosmosCore
+import Foundation
 import XCTest
 
 class SpaceHeadlessIntegrationTestCase: XCTestCase {

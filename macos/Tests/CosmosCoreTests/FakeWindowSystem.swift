@@ -1,6 +1,6 @@
 import CoreGraphics
-import Foundation
 @testable import CosmosCore
+import Foundation
 
 enum FakeWindowSystemError: Error, Equatable {
     case refresh

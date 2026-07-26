@@ -1,5 +1,5 @@
-import Foundation
 @testable import CosmosCore
+import Foundation
 
 final class InMemoryHiddenWindowRecordStore: HiddenWindowRecordStore {
     private(set) var records: [HiddenWindowRecord]

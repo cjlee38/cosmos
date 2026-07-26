@@ -1,6 +1,6 @@
 import AppKit
-import Foundation
 import CosmosCore
+import Foundation
 
 struct KeyboardShortcutRegistration {
     struct HoldActions {
@@ -170,7 +170,7 @@ final class KeyboardShortcutManager {
 
     private func handleModifierFlagsChanged(_ modifiers: UInt32) {
         let releasedGroups = activeHoldGroups.filter { _, holdGroup in
-            return modifiers & holdGroup.modifier != holdGroup.modifier
+            modifiers & holdGroup.modifier != holdGroup.modifier
         }
 
         for (group, holdGroup) in releasedGroups {

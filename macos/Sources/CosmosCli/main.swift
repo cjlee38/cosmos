@@ -1,5 +1,5 @@
-import Foundation
 import CosmosCore
+import Foundation
 
 private func runREPL() {
     let axClient = AXClient()

@@ -353,17 +353,13 @@ private extension SwitcherCoordinator {
         from windows: [WindowSnapshot],
         preferredWindowID: WindowID?
     ) -> WindowFrame? {
-        if let preferredWindowID,
-           let preferredFrame = windows.first(where: { $0.id == preferredWindowID })?.frame {
-            return preferredFrame
-        }
-
-        return windows.first {
-            controller.membership(for: $0.id) == controller.currentSpace
-                && !controller.isHiddenBySpace($0.id)
-                && !$0.isMinimized
-                && $0.frame != nil
-        }?.frame
+        SwitcherAnchorFrameResolver.resolve(
+            windows: windows,
+            preferredWindowID: preferredWindowID,
+            currentSpace: controller.currentSpace,
+            membership: controller.membership(for:),
+            isHidden: controller.isHiddenBySpace
+        )
     }
 }
 

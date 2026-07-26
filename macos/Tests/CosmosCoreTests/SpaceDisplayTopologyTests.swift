@@ -168,8 +168,8 @@ final class SpaceDisplayTopologyTests: SpaceControllerTestCase {
         )
         _ = try controller.handleWindowSetChanged()
         let frame = try XCTUnwrap(windowSystem.frames[200])
-        windowSystem.frames[200] = WindowFrame(
-            origin: try parkingPointProvider.hidePoint(for: frame),
+        windowSystem.frames[200] = try WindowFrame(
+            origin: parkingPointProvider.hidePoint(for: frame),
             size: frame.size
         )
         _ = try controller.handleWindowSetChanged()

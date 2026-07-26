@@ -100,51 +100,64 @@ final class SpaceDisplayCoordinator {
         }
 
         return state.assignedWindowIDs.reduce(into: [:]) { frames, id in
-            guard let space = state.membership(for: id),
-                  let frame = previousFrames[id]
-            else {
-                return
+            if let frame = targetFrameForDisplayChange(
+                id,
+                from: previousTopology,
+                to: currentTopology,
+                previousFrames: previousFrames,
+                state: state
+            ) {
+                frames[id] = frame
             }
-
-            let sourceSlot = state.monitorSlot(
-                for: space,
-                availableMonitorSlots: previousTopology.availableMonitorSlots
-            )
-            let targetSlot = state.monitorSlot(
-                for: space,
-                availableMonitorSlots: currentTopology.availableMonitorSlots
-            )
-            guard let sourceDisplay = monitorSlotResolver.display(
-                for: sourceSlot,
-                among: previousTopology.monitorSlots
-            ),
-                let targetDisplay = monitorSlotResolver.display(
-                    for: targetSlot,
-                    among: currentTopology.monitorSlots
-                )
-            else {
-                return
-            }
-            if hidePointProvider.isHidePosition(frame, displays: previousTopology.displays) {
-                frames[id] = WindowFrame(
-                    origin: hidePointProvider.hidePoint(
-                        for: frame,
-                        on: targetDisplay,
-                        among: currentTopology.displays
-                    ),
-                    size: frame.size
-                )
-                return
-            }
-            guard let translatedFrame = monitorSlotResolver.translatedFrame(
-                frame,
-                from: sourceDisplay,
-                to: targetDisplay
-            ) else {
-                return
-            }
-            frames[id] = translatedFrame
         }
+    }
+
+    private func targetFrameForDisplayChange(
+        _ id: WindowID,
+        from previousTopology: DisplayTopologySnapshot,
+        to currentTopology: DisplayTopologySnapshot,
+        previousFrames: [WindowID: WindowFrame],
+        state: SpaceState
+    ) -> WindowFrame? {
+        guard let space = state.membership(for: id),
+              let frame = previousFrames[id]
+        else {
+            return nil
+        }
+        let sourceSlot = state.monitorSlot(
+            for: space,
+            availableMonitorSlots: previousTopology.availableMonitorSlots
+        )
+        let targetSlot = state.monitorSlot(
+            for: space,
+            availableMonitorSlots: currentTopology.availableMonitorSlots
+        )
+        guard let sourceDisplay = monitorSlotResolver.display(
+            for: sourceSlot,
+            among: previousTopology.monitorSlots
+        ),
+            let targetDisplay = monitorSlotResolver.display(
+                for: targetSlot,
+                among: currentTopology.monitorSlots
+            )
+        else {
+            return nil
+        }
+        if hidePointProvider.isHidePosition(frame, displays: previousTopology.displays) {
+            return WindowFrame(
+                origin: hidePointProvider.hidePoint(
+                    for: frame,
+                    on: targetDisplay,
+                    among: currentTopology.displays
+                ),
+                size: frame.size
+            )
+        }
+        return monitorSlotResolver.translatedFrame(
+            frame,
+            from: sourceDisplay,
+            to: targetDisplay
+        )
     }
 
     private func frames(for state: SpaceState) -> [WindowID: WindowFrame] {

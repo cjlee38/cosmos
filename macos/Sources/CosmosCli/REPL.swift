@@ -1,5 +1,5 @@
-import Foundation
 import CosmosCore
+import Foundation
 
 final class REPL {
     private let controller: SpaceController
