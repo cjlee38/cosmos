@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -433,6 +433,7 @@
 				LastUpgradeCheck = 1430;
 			};
 			buildConfigurationList = CF39F17CA13D0EF310945F82 /* Build configuration list for PBXProject "Cosmos" */;
+			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -444,7 +445,6 @@
 			packageReferences = (
 				EB6D50EA35444DD0A860C849 /* XCLocalSwiftPackageReference "../.." */,
 			);
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 39C797E23DC051BDC4241229 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";

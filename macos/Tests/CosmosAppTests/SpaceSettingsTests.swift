@@ -824,14 +824,17 @@ final class SpaceDisplayArrangementTests: XCTestCase {
     }
 
     func testDisplayArrangementScrollsInsteadOfShrinkingWideLayouts() throws {
-        let displays = (0 ..< 3).map { index in
-            SpaceSettingsDisplay(
-                id: DisplayID(index + 1),
-                name: "Display \(index + 1)",
-                frame: CGRect(x: index * 1440, y: 0, width: 1440, height: 900),
-                role: index == 0 ? .main : .extended,
-                monitorSlot: index + 1,
-                spaceIDs: [SpaceID.allCases[index + 1]]
+        let displays: [SpaceSettingsDisplay] = (0 ..< 3).map { index in
+            let slot = index + 1
+            let role: DisplayRole = index == 0 ? .main : .extended
+            let frame = CGRect(x: CGFloat(index) * 1440, y: 0, width: 1440, height: 900)
+            return SpaceSettingsDisplay(
+                id: DisplayID(slot),
+                name: "Display \(slot)",
+                frame: frame,
+                role: role,
+                monitorSlot: slot,
+                spaceIDs: [SpaceID.allCases[slot]]
             )
         }
         let arrangement = SpaceDisplayArrangementView(
