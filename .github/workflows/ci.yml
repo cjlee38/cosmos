@@ -15,6 +15,22 @@ concurrency:
 
 jobs:
   check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - macos-15-intel
+          - macos-26
+    runs-on: ${{ matrix.os }}
+    env:
+      COSMOS_SKIP_CODE_SIGNING: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: ./scripts/check.sh
+
+  lint:
     runs-on: macos-26
     env:
       COSMOS_SKIP_CODE_SIGNING: "1"
@@ -22,7 +38,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install lint tools
         run: brew install swiftlint periphery
-      - name: Build and test
-        run: ./scripts/check.sh
       - name: Lint
         run: ./scripts/lint.sh
