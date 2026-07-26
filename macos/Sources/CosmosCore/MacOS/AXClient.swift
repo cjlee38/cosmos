@@ -164,10 +164,9 @@ public final class AXClient {
     }
 
     func focus(_ handle: WindowHandle) {
-        let axApp = AXUIElementCreateApplication(handle.runningApp.processIdentifier)
-        AXUIElementSetAttributeValue(axApp, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
         AXUIElementSetAttributeValue(handle.axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(handle.axWindow, kAXRaiseAction as CFString)
+        handle.runningApp.activate()
     }
 
     private func enumerateWindows(for app: NSRunningApplication) throws -> [WindowHandle] {
