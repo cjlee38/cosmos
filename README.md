@@ -1,124 +1,75 @@
-# cosmos
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/cosmos-icon-dark.png">
+    <img src="docs/assets/cosmos-icon-light.png" width="160" alt="Cosmos icon">
+  </picture>
+</p>
 
-macOS-only space/window manager prototype.
+<h1 align="center">Cosmos</h1>
 
-The current runtime supports:
+<p align="center">A non-tiling virtual workspace manager for macOS.</p>
 
-- enumerate macOS windows through Accessibility
-- identify windows by `CGWindowID`
-- move individual windows to a screen corner
-- restore their original frame
-- assign windows to runtime spaces
-- auto-assign newly discovered windows to the active space on their monitor
-- prune closed/missing windows from runtime state
-- switch spaces by hiding/restoring assigned windows
-- cycle configured spaces and focus windows within the active space
-- configure spaces and global hotkeys through YAML
+> [!WARNING]
+> This project is under development.
 
-## Run
+## Why Cosmos?
 
-```sh
-just repl
-```
+Cosmos is a macOS space manager built around virtual workspaces.
 
-Grant Accessibility permission when prompted. If it is granted after startup, relaunch the app or check the permission state in Settings.
+The project is inspired by
+[AeroSpace](https://github.com/nikitabobko/AeroSpace), a tiling window manager
+for macOS. AeroSpace is great, but some of its design choices did not fit the
+way I wanted to manage windows.
 
-Run the menu bar runtime app with:
+To keep the app simple, AeroSpace intentionally uses file-based configuration
+instead of providing a GUI. Its tiling layout also manages window sizes by
+default. You can work around that, but I ended up maintaining extra shell
+scripts to get the behavior I wanted.
 
-```sh
-just run dev
-```
+Cosmos uses the same basic approach to virtual workspaces by moving inactive
+windows to a display corner.
 
-The menu bar app captures non-minimized windows discovered during startup into the active space for each window's monitor. Use `Show Debug Status` from the menu bar item when runtime state needs inspection.
+## Features and Roadmap
 
-Space config is stored at:
+- [x] Logical spaces for each display
+- [x] Keyboard shortcuts for switching spaces
+- [x] Move the focused window between spaces
+- [x] Space and window switchers with thumbnail previews
+- [x] Native Settings and first-run setup
+- [x] YAML configuration
+- [x] Multi-display support
+- [x] Preservation of user-created window frames
+- [x] Emergency recovery for hidden windows
+- [ ] Homebrew installation
+- [ ] Rectangle/Spectacle-style window move and resize commands
+- [ ] Search across all managed windows
+- [ ] First-class CLI
+- [ ] Runtime event hooks, starting with an after-window-moved hook
+- [ ] Window-space membership restoration across app restarts
 
-```text
-~/.config/cosmos/config.yaml
-```
+## Compatibility
 
-The development app uses `~/.config/cosmos-dev/config.yaml` so it can run alongside the release app without sharing runtime state.
+- macOS 14 or later
+- Tested only on my Apple Silicon Mac running macOS Tahoe 26.5
+- Release builds target Apple Silicon and Intel, but Intel Macs have not been tested
 
-If the config does not exist, cosmos creates the default spaces `1`, `2`, and `3`. Space IDs are limited to `0...9` and `A...Z`; letter IDs are normalized to uppercase. Runtime commands only use configured spaces; a missing space is a no-op and is never added to the config automatically.
+## Installation
 
-```yaml
-version: 1
+1. Download the latest DMG from [GitHub Releases](https://github.com/cjlee38/cosmos/releases).
+2. Manual build:
 
-switcher:
-  shortcuts:
-    space: option+shift+tab
-    window: option+tab
+   ```sh
+   git clone https://github.com/cjlee38/cosmos.git
+   cd cosmos
+   just build release
+   ```
 
-spaces:
-  - id: 1
-    display: 1
-    shortcuts:
-      switch: option+1
-      move_window: option+shift+1
-  - id: D
-    display: 2
-    shortcuts:
-      switch: option+d
-      move_window: option+shift+d
-```
+   The built app is located at
+   `macos/.build/xcode/Build/Products/Release/Cosmos.app`.
 
-The default config registers these global hotkeys:
+3. Homebrew support is not available yet.
 
-```text
-Option+Shift+Tab      cycle space
-Option+Tab            cycle window
-Option+1/2/3          switch to space 1/2/3
-Option+Shift+1/2/3    move focused window to space 1/2/3
-```
+## Development
 
-Use `Reload Config` from the menu bar item after editing `config.yaml`.
-If reload fails, cosmos keeps the previous valid config. If the initial load fails, cosmos runs with defaults until a later reload succeeds and avoids overwriting the broken config.
-Settings rewrites the complete YAML file with a standard help header. Custom comments and formatting may be removed, and the last editor or Settings save wins.
-
-Space monitor slots are config-level roles. `monitor 1` is the current macOS main display. Other monitors are ordered by distance from the main display, then by x/y position as deterministic ties. Cosmos does not store physical display IDs in the config.
-
-## REPL
-
-```text
-help
-permission
-list
-displays
-focused
-switch 1
-switch 2
-move 2
-unhide-all
-spaces
-quit
-```
-
-The CLI is a client of the same Core command model as the menu bar app. It restores matching hidden-window records, then captures each still-unassigned visible window into the active space on that window's monitor. It does not expose CLI-only window or space behavior.
-
-The acceptance test for the core primitive is two windows from the same app assigned to different spaces, then switching spaces so only the assigned window is restored.
-
-## Tests
-
-The XCTest suite uses fake windows and does not move real macOS windows:
-
-```sh
-just test
-```
-
-Run the build-and-test check with:
-
-```sh
-just check
-```
-
-Run SwiftLint and Periphery with:
-
-```sh
-just lint
-```
-
-Format Swift sources with:
-
-```sh
-just fmt
-```
+Build instructions, tests, project structure, and release tooling are documented
+in [docs/development/README.md](docs/development/README.md).
