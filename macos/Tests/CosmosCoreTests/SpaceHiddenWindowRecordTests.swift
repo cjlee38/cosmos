@@ -301,3 +301,54 @@ final class SpaceHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase {
         XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
     }
 }
+
+final class HiddenWindowAppliedPositionTests: SpaceHiddenWindowRecordTestCase {
+    func testHideRecordsAppliedPositionAfterWindowAdjustsRequestedPosition() throws {
+        let originalFrame = WindowFrame.frame(x: 0, y: 31, width: 2560, height: 1409)
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, appName: "Zed", frame: originalFrame)
+        ])
+        windowSystem.appliedPosition = { _, point in
+            CGPoint(x: point.x, y: point.y - 27)
+        }
+        let displayProvider = FakeDisplayProvider(snapshots: [
+            DisplaySnapshot(
+                id: 1,
+                frame: CGRect(x: 0, y: 0, width: 2560, height: 1440),
+                visibleFrame: CGRect(x: 0, y: 31, width: 2560, height: 1409),
+                role: .main
+            )
+        ])
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = SpaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider,
+            hidePointProvider: WindowParkingPointProvider(displayProvider: displayProvider),
+            sessionStateStore: sessionStateStore
+        )
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+
+        XCTAssertEqual(sessionStateStore.records.map(\.hiddenPosition), [
+            CGPoint(x: 2559, y: 1412)
+        ])
+        XCTAssertEqual(windowSystem.frames[100]?.origin, sessionStateStore.records[0].hiddenPosition)
+    }
+
+    func testHideKeepsRequestedPositionWhenImmediateReadbackIsNotParked() throws {
+        let originalFrame = WindowFrame.frame(x: 100, y: 100)
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, frame: originalFrame)
+        ])
+        windowSystem.frameReadOverrides[100] = originalFrame
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+
+        XCTAssertEqual(sessionStateStore.records.map(\.hiddenPosition), [hidePoint])
+        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+    }
+}

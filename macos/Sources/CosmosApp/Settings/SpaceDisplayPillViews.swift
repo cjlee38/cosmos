@@ -37,7 +37,7 @@ final class SpacePillFlowView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var isFlipped: Bool {
@@ -151,7 +151,7 @@ final class SpacePillView: NSView, NSDraggingSource {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var intrinsicContentSize: NSSize {
@@ -242,7 +242,7 @@ private final class SpaceOverflowPillView: NSButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var wantsUpdateLayer: Bool {
@@ -311,7 +311,7 @@ final class SpaceOverflowViewController: NSViewController {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 }
 
@@ -356,7 +356,7 @@ final class ParkingWarningViewController: NSViewController {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     @objc private func openDetails() {

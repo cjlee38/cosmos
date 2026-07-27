@@ -43,6 +43,7 @@ enum SpaceControllerComposition {
                 windowSystem: windowSystem,
                 windowCache: windows.cache,
                 recordRepository: windows.recordRepository,
+                hidePointProvider: windows.hidePointProvider,
                 restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider)
             ),
             navigationCoordinator: SpaceNavigationCoordinator(

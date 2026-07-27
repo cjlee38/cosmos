@@ -52,7 +52,7 @@ final class SpaceMonitorPopUpButton: NSPopUpButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     private func displayOrder(_ lhs: SpaceSettingsDisplay, _ rhs: SpaceSettingsDisplay)
@@ -71,7 +71,7 @@ final class SpaceRemoveButton: NSButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 }
 

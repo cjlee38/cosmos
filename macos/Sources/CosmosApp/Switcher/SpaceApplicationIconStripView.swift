@@ -1,4 +1,5 @@
 import AppKit
+import CosmosCore
 
 struct SpaceApplicationIconLayout {
     private static let maximumWidthRatio: CGFloat = 0.70
@@ -83,7 +84,7 @@ final class SpaceApplicationIconStripView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override func layout() {
@@ -152,7 +153,7 @@ private final class SpaceApplicationOverflowView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override func layout() {

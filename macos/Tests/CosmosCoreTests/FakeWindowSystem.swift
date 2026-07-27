@@ -20,9 +20,11 @@ final class FakeWindowSystem: WindowSystem {
     var focusedIDs: [WindowID] = []
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
+    var frameReadOverrides: [WindowID: WindowFrame] = [:]
     var unavailableFrameReads: Set<WindowID> = []
     var operations: [Operation] = []
     var frameWriteFailures: Set<WindowID> = []
+    var appliedPosition: ((WindowID, CGPoint) -> CGPoint)?
     var operationFailure: ((Operation) -> Error?)?
     var operationFailureAfterMutation: ((Operation) -> Error?)?
     var discoveryApplyResults: [Bool] = []
@@ -69,7 +71,7 @@ final class FakeWindowSystem: WindowSystem {
         guard !unavailableFrameReads.contains(id) else {
             return nil
         }
-        return frames[id]
+        return frameReadOverrides[id] ?? frames[id]
     }
 
     func setPosition(_ point: CGPoint, for id: WindowID) throws {
@@ -85,9 +87,10 @@ final class FakeWindowSystem: WindowSystem {
             throw FakeWindowSystemError.frameWrite(id)
         }
 
-        positions[id] = point
+        let appliedPoint = appliedPosition?(id, point) ?? point
+        positions[id] = appliedPoint
         if var frame = frames[id] {
-            frame.origin = point
+            frame.origin = appliedPoint
             frames[id] = frame
         }
         if let error = operationFailureAfterMutation?(operation) {

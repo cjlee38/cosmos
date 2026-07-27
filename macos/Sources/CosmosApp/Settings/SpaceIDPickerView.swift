@@ -29,7 +29,7 @@ final class SpaceIDPickerView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     func apply(
@@ -161,7 +161,7 @@ private final class SpaceDeleteModeButton: NSButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var wantsUpdateLayer: Bool {
@@ -216,7 +216,7 @@ final class SpaceIDKeyButton: NSButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var wantsUpdateLayer: Bool {

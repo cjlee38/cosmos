@@ -49,7 +49,7 @@ final class SpaceDisplayArrangementView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var intrinsicContentSize: NSSize {
@@ -129,7 +129,7 @@ private final class SpaceDisplayCanvasView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var isFlipped: Bool {

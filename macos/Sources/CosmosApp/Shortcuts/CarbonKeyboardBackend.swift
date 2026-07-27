@@ -1,4 +1,5 @@
 import Carbon
+import CosmosCore
 import Foundation
 
 enum CarbonKeyboardEvent {
@@ -140,7 +141,7 @@ final class CarbonKeyboardBackend {
             throw CarbonKeyboardError.registerHotKey(status)
         }
         guard let hotKeyRef else {
-            preconditionFailure("RegisterEventHotKey succeeded without returning an EventHotKeyRef")
+            panic("RegisterEventHotKey succeeded without returning an EventHotKeyRef")
         }
 
         return CarbonHotKeyRegistration(id: id, ref: hotKeyRef)
@@ -172,7 +173,7 @@ final class CarbonKeyboardBackend {
             throw CarbonKeyboardError.installEventHandler(status)
         }
         guard let handler else {
-            preconditionFailure("InstallEventHandler succeeded without returning an EventHandlerRef")
+            panic("InstallEventHandler succeeded without returning an EventHandlerRef")
         }
         return handler
     }

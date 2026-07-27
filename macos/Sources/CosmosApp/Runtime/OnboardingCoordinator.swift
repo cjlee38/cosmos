@@ -1,4 +1,5 @@
 import AppKit
+import CosmosCore
 
 final class OnboardingCoordinator {
     private let stateStore: OnboardingStateStore
@@ -84,7 +85,7 @@ private final class OnboardingWindowController: NSWindowController, NSWindowDele
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     deinit {
@@ -156,7 +157,7 @@ final class OnboardingViewController: NSViewController {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override func loadView() {

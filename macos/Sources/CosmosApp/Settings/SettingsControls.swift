@@ -1,4 +1,5 @@
 import AppKit
+import CosmosCore
 
 enum SettingsControlFactory {
     static func header(title: String, symbolName: String) -> NSView {
@@ -125,7 +126,7 @@ private final class SettingsGroupView: NSView {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var wantsUpdateLayer: Bool {
@@ -155,7 +156,7 @@ final class SettingsFilledButton: NSButton {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override var wantsUpdateLayer: Bool {

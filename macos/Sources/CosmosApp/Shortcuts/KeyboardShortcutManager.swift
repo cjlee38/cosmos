@@ -121,7 +121,7 @@ final class KeyboardShortcutManager {
 
         shortcutsByID = Dictionary(uniqueKeysWithValues: resolvedRegistrations.map { registration in
             guard let id = idsByKeystroke[registration.keystroke] else {
-                preconditionFailure("Carbon backend omitted a registered keystroke")
+                panic("Carbon backend omitted a registered keystroke")
             }
             log.debug("register key=\(registration.registration.key) action=\(registration.registration.name)")
             return (id, registration)

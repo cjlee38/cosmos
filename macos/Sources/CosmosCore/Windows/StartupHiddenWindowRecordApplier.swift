@@ -4,17 +4,20 @@ final class StartupHiddenWindowRecordApplier {
     private let windowSystem: any WindowSystem
     private let windowCache: WindowStateCache
     private let recordRepository: HiddenWindowRecordRepository
+    private let hidePointProvider: any HidePointProviding
     private let restorableFrameResolver: RestorableFrameResolver
 
     init(
         windowSystem: any WindowSystem,
         windowCache: WindowStateCache,
         recordRepository: HiddenWindowRecordRepository,
+        hidePointProvider: any HidePointProviding,
         restorableFrameResolver: RestorableFrameResolver
     ) {
         self.windowSystem = windowSystem
         self.windowCache = windowCache
         self.recordRepository = recordRepository
+        self.hidePointProvider = hidePointProvider
         self.restorableFrameResolver = restorableFrameResolver
     }
 
@@ -32,9 +35,17 @@ final class StartupHiddenWindowRecordApplier {
         var failed: [WindowID] = []
 
         for record in records {
+            let liveWindow = windowCache.snapshot(for: record.windowID)
+            let isAtHidePosition = liveWindow?.frame.map {
+                hidePointProvider.isHidePosition(
+                    $0,
+                    displays: windowCache.displayTopology.displays
+                )
+            } ?? false
             let action = HiddenWindowRecordPolicy.startupAction(
                 for: record,
-                liveWindow: windowCache.snapshot(for: record.windowID)
+                liveWindow: liveWindow,
+                isAtHidePosition: isAtHidePosition
             )
             guard let targetSpace = action.space else {
                 ignored.append(record)

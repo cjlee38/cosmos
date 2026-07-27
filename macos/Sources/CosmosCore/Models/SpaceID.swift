@@ -21,7 +21,7 @@ public struct SpaceID: RawRepresentable, Hashable, Comparable, Codable, CaseIter
 
     public init(stringLiteral value: String) {
         guard let id = SpaceID(rawValue: value) else {
-            preconditionFailure("Invalid space ID: \(value)")
+            panic("Invalid space ID: \(value)")
         }
         self = id
     }

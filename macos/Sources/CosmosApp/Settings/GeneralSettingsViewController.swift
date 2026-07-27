@@ -1,4 +1,5 @@
 import AppKit
+import CosmosCore
 
 final class GeneralSettingsViewController: NSViewController {
     private struct PermissionControls {
@@ -60,7 +61,7 @@ final class GeneralSettingsViewController: NSViewController {
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        panic("init(coder:) has not been implemented")
     }
 
     override func loadView() {

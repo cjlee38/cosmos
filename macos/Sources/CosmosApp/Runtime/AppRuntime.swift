@@ -17,6 +17,13 @@ final class AppRuntime {
     private var onboardingCoordinator: OnboardingCoordinator?
     private var didBootstrapWindowState = false
     private var didBeginManagedRuntime = false
+    private var didShutdown = false
+
+    private lazy var terminationSignalMonitor = TerminationSignalMonitor(
+        recover: { [weak self] in
+            self?.shutdown()
+        }
+    )
 
     private lazy var actionController = SpaceActionController(
         controller: controller,
@@ -71,6 +78,11 @@ final class AppRuntime {
     }
 
     func start() {
+        PanicRecovery.install { [weak self] in
+            self?.shutdown()
+        }
+        terminationSignalMonitor.start()
+
         do {
             try controller.refreshDisplayTopology()
         } catch {
@@ -85,9 +97,10 @@ final class AppRuntime {
     }
 
     func shutdown() {
-        guard didBootstrapWindowState else {
+        guard didBootstrapWindowState, !didShutdown else {
             return
         }
+        didShutdown = true
         do {
             try controller.restoreHiddenWindowsForShutdown()
         } catch {

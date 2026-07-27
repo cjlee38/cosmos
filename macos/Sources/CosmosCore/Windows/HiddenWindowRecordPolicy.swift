@@ -43,7 +43,8 @@ enum HiddenWindowRecordPolicy {
 
     static func startupAction(
         for record: HiddenWindowRecord,
-        liveWindow: WindowSnapshot?
+        liveWindow: WindowSnapshot?,
+        isAtHidePosition: Bool
     ) -> HiddenWindowRecordStartupAction {
         guard let liveWindow,
               liveWindow.app.pid == record.pid,
@@ -52,7 +53,7 @@ enum HiddenWindowRecordPolicy {
             return .ignore
         }
 
-        if isPoint(currentFrame.origin, near: record.hiddenPosition) {
+        if isAtHidePosition || isPoint(currentFrame.origin, near: record.hiddenPosition) {
             return .restoreAndAssign(space: record.space)
         }
 

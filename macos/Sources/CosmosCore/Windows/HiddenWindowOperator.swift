@@ -48,21 +48,23 @@ final class HiddenWindowOperator {
             state: &state
         )
         let point = try hidePoint(for: frame, hiddenSize: hiddenSize)
-        recordRepository.upsertRecord(
-            HiddenWindowRecordPolicy.makeRecord(
-                window: window,
-                space: space,
-                originalFrame: frame,
-                hiddenPosition: point
-            )
+        let record = HiddenWindowRecordPolicy.makeRecord(
+            window: window,
+            space: space,
+            originalFrame: frame,
+            hiddenPosition: point
         )
+        recordRepository.upsertRecord(record)
 
         do {
             try windowSystem.setPosition(point, for: id)
-            windowCache.updateFrame(
-                WindowFrame(origin: point, size: hiddenSize),
-                for: id
+            let appliedFrame = observedHiddenFrame(
+                for: id,
+                requestedPoint: point,
+                hiddenSize: hiddenSize,
+                record: record
             )
+            windowCache.updateFrame(appliedFrame, for: id)
         } catch {
             try rollbackFailedHide(
                 id,
@@ -253,6 +255,36 @@ final class HiddenWindowOperator {
                 rollbackError: rollbackError
             )
         }
+    }
+}
+
+private extension HiddenWindowOperator {
+    func observedHiddenFrame(
+        for id: WindowID,
+        requestedPoint: CGPoint,
+        hiddenSize: CGSize,
+        record: HiddenWindowRecord
+    ) -> WindowFrame {
+        let requestedFrame = WindowFrame(origin: requestedPoint, size: hiddenSize)
+        guard let appliedFrame = windowSystem.frame(for: id),
+              hidePointProvider.isHidePosition(
+                  appliedFrame,
+                  displays: windowCache.displayTopology.displays
+              )
+        else {
+            return requestedFrame
+        }
+        guard appliedFrame.origin != requestedPoint else {
+            return appliedFrame
+        }
+        recordRepository.upsertRecord(HiddenWindowRecord(
+            windowID: record.windowID,
+            pid: record.pid,
+            space: record.space,
+            originalFrame: record.originalFrame,
+            hiddenPosition: appliedFrame.origin
+        ))
+        return appliedFrame
     }
 }
 
