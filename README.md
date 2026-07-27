@@ -1,3 +1,5 @@
+[![CI](https://github.com/cjlee38/cosmos/actions/workflows/ci.yml/badge.svg)](https://github.com/cjlee38/cosmos/actions/workflows/ci.yml)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/cosmos-icon-dark.png">
