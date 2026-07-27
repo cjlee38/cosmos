@@ -4,7 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "macos/**"
+      - "scripts/**"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "macos/**"
+      - "scripts/**"
+      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
