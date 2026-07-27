@@ -265,6 +265,37 @@ final class SwitcherPreviewServiceTests: XCTestCase {
     }
 }
 
+final class SwitcherPreviewCaptureEligibilityTests: XCTestCase {
+    func testRefreshSkipsWindowWhoseFrameIsTemporarilyUnavailable() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 10, title: "One")
+        ])
+        windowSystem.replaceWindows([
+            WindowSnapshot(
+                id: 10,
+                app: RunningAppInfo(pid: 1, name: "App 1"),
+                title: "One",
+                frame: nil,
+                isMinimized: false
+            )
+        ])
+        _ = try controller.handleWindowSetChanged()
+        let captureAttempted = expectation(description: "window capture is not attempted")
+        captureAttempted.isInverted = true
+        let service = makeSwitcherTestPreviewService(
+            controller: controller,
+            captureImage: { _ in
+                captureAttempted.fulfill()
+                return makeSwitcherTestImage()
+            }
+        )
+
+        service.refresh(windowIDs: [10], spaceIDs: [])
+
+        wait(for: [captureAttempted], timeout: 0.25)
+    }
+}
+
 private func waitUntil(
     timeout: TimeInterval = 1,
     condition: () -> Bool

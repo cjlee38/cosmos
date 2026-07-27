@@ -7,12 +7,19 @@ struct SwitcherPreviewUpdate {
 }
 
 final class SwitcherPreviewService {
+    typealias ScheduleBackgroundRefresh = (DispatchWorkItem) -> Void
+
     private let controller: SpaceController
     private let windowThumbnailCache: WindowThumbnailCache
     private let spaceThumbnailCache: SpaceThumbnailCache
     private let applicationIconCache: ApplicationIconCache
+    private let scheduleBackgroundRefreshWork: ScheduleBackgroundRefresh
     private var pendingUpdatedWindowIDs: Set<WindowID> = []
     private var pendingUpdatedSpaceIDs: Set<String> = []
+    private var pendingBackgroundWindowIDs: Set<WindowID> = []
+    private var pendingBackgroundSpaceIDs: Set<String> = []
+    private var backgroundRefreshWorkItem: DispatchWorkItem?
+    private var backgroundRefreshGeneration: UInt64 = 0
     private var pendingSpaceRefreshIDs: Set<String> = []
     private var pendingPrioritySpaceIDs: [String] = []
     private var isUpdateNotificationScheduled = false
@@ -24,12 +31,16 @@ final class SwitcherPreviewService {
         controller: SpaceController,
         windowThumbnailCache: WindowThumbnailCache,
         spaceThumbnailCache: SpaceThumbnailCache,
-        applicationIconCache: ApplicationIconCache
+        applicationIconCache: ApplicationIconCache,
+        scheduleBackgroundRefreshWork: @escaping ScheduleBackgroundRefresh = {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(250), execute: $0)
+        }
     ) {
         self.controller = controller
         self.windowThumbnailCache = windowThumbnailCache
         self.spaceThumbnailCache = spaceThumbnailCache
         self.applicationIconCache = applicationIconCache
+        self.scheduleBackgroundRefreshWork = scheduleBackgroundRefreshWork
 
         windowThumbnailCache.setUpdateHandler { [weak self] windowID in
             self?.handleWindowThumbnailUpdated(windowID)
@@ -98,6 +109,9 @@ final class SwitcherPreviewService {
     ) {
         let windows = controller.currentWindows()
         let liveWindowIDs = Set(windows.map(\.id))
+        let capturableWindowIDs = Set(windows.compactMap { window in
+            window.frame == nil ? nil : window.id
+        })
         let liveSpaceIDs = Set(controller.spaces)
 
         windowThumbnailCache.removeStaleThumbnails(keeping: liveWindowIDs)
@@ -107,7 +121,7 @@ final class SwitcherPreviewService {
         let prioritySpaceIDs = priorityIDs.compactMap(controller.membership(for:))
         refreshSpaces(ids: requestedSpaceIDs, priorityIDs: prioritySpaceIDs)
         windowThumbnailCache.refresh(windowIDs: orderedWindowIDs(
-            windowIDs.intersection(liveWindowIDs),
+            windowIDs.intersection(liveWindowIDs).intersection(capturableWindowIDs),
             windows: windows,
             priorityIDs: priorityIDs
         ))
@@ -252,5 +266,63 @@ final class SwitcherPreviewService {
             isUpdateNotificationScheduled = false
             onUpdate?(update)
         }
+    }
+}
+
+extension SwitcherPreviewService {
+    func postponeBackgroundRefresh() {
+        backgroundRefreshWorkItem?.cancel()
+        backgroundRefreshWorkItem = nil
+        backgroundRefreshGeneration &+= 1
+    }
+
+    func scheduleBackgroundRefresh(
+        windowIDs: Set<WindowID>,
+        spaceIDs: Set<String>
+    ) {
+        pendingBackgroundWindowIDs.formUnion(windowIDs)
+        pendingBackgroundSpaceIDs.formUnion(spaceIDs)
+        guard !pendingBackgroundWindowIDs.isEmpty || !pendingBackgroundSpaceIDs.isEmpty else {
+            return
+        }
+        schedulePendingBackgroundRefresh()
+    }
+
+    private func schedulePendingBackgroundRefresh() {
+        backgroundRefreshWorkItem?.cancel()
+        backgroundRefreshGeneration &+= 1
+        let generation = backgroundRefreshGeneration
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, generation == backgroundRefreshGeneration else {
+                return
+            }
+            backgroundRefreshWorkItem = nil
+            performBackgroundRefresh()
+        }
+        backgroundRefreshWorkItem = workItem
+        scheduleBackgroundRefreshWork(workItem)
+    }
+
+    private func performBackgroundRefresh() {
+        guard !windowThumbnailCache.isRefreshInProgress else {
+            schedulePendingBackgroundRefresh()
+            return
+        }
+
+        let windows = controller.currentWindows()
+        let liveWindowIDs = Set(windows.map(\.id))
+        let capturableWindowIDs = Set(windows.compactMap { window in
+            window.frame == nil ? nil : window.id
+        })
+        pendingBackgroundWindowIDs.formIntersection(liveWindowIDs)
+        let windowIDs = pendingBackgroundWindowIDs.intersection(capturableWindowIDs)
+        pendingBackgroundWindowIDs.subtract(windowIDs)
+
+        let liveSpaceIDs = Set(controller.spaces)
+        pendingBackgroundSpaceIDs.formIntersection(liveSpaceIDs)
+        let spaceIDs = pendingBackgroundSpaceIDs
+        pendingBackgroundSpaceIDs.removeAll()
+
+        refresh(windowIDs: windowIDs, spaceIDs: spaceIDs)
     }
 }

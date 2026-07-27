@@ -199,13 +199,17 @@ func makeSwitcherTestPreviewService(
     captureImage: @escaping (WindowID) -> CGImage? = { _ in nil },
     canCapture: @escaping () -> Bool = { true },
     renderSpace: @escaping (SpaceThumbnailRenderGroup) -> CGImage? = SpaceThumbnailRenderer.render,
-    loadIcon: @escaping (pid_t) -> NSImage? = { _ in nil }
+    loadIcon: @escaping (pid_t) -> NSImage? = { _ in nil },
+    scheduleBackgroundRefreshWork: @escaping SwitcherPreviewService.ScheduleBackgroundRefresh = {
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(250), execute: $0)
+    }
 ) -> SwitcherPreviewService {
     SwitcherPreviewService(
         controller: controller,
         windowThumbnailCache: WindowThumbnailCache(captureImage: captureImage, canCapture: canCapture),
         spaceThumbnailCache: SpaceThumbnailCache(render: renderSpace),
-        applicationIconCache: ApplicationIconCache(loadIcon: loadIcon)
+        applicationIconCache: ApplicationIconCache(loadIcon: loadIcon),
+        scheduleBackgroundRefreshWork: scheduleBackgroundRefreshWork
     )
 }
 

@@ -220,7 +220,7 @@ final class WindowRuntimeEventHandlerTests: XCTestCase {
         XCTAssertEqual(Set(controller.visibleSpaces), ["A", "B"])
     }
 
-    func testDisplayEventRefreshesEveryLiveWindowThumbnail() throws {
+    func testRuntimeEventsCoalesceBackgroundThumbnailRefresh() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "One"),
             makeSwitcherTestWindow(id: 200, title: "Two")
@@ -228,20 +228,44 @@ final class WindowRuntimeEventHandlerTests: XCTestCase {
         let captured = expectation(description: "all window thumbnails captured")
         captured.expectedFulfillmentCount = 2
         var capturedIDs: Set<WindowID> = []
+        var scheduledRefreshes: [DispatchWorkItem] = []
+        var scheduledDiscovery: [() -> Void] = []
         let previewService = makeSwitcherTestPreviewService(
             controller: controller,
             captureImage: { windowID in
                 capturedIDs.insert(windowID)
                 captured.fulfill()
                 return nil
-            }
+            },
+            scheduleBackgroundRefreshWork: { scheduledRefreshes.append($0) }
         )
-        let handler = makeHandler(controller: controller, previewService: previewService)
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: previewService,
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { scheduledDiscovery.append($0) },
+            scheduleApply: { $0() }
+        )
 
         handler.handle(WindowRuntimeEventBatch(events: [
             WindowRuntimeEvent(kind: .displayChanged, windowID: nil)
         ]))
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
+        ]))
 
+        XCTAssertTrue(capturedIDs.isEmpty)
+        XCTAssertEqual(scheduledDiscovery.count, 1)
+        XCTAssertTrue(scheduledRefreshes.isEmpty)
+
+        scheduledDiscovery[0]()
+        XCTAssertEqual(scheduledDiscovery.count, 2)
+        XCTAssertTrue(scheduledRefreshes.isEmpty)
+
+        scheduledDiscovery[1]()
+        XCTAssertEqual(scheduledRefreshes.count, 1)
+        scheduledRefreshes[0].perform()
         wait(for: [captured], timeout: 1)
         XCTAssertEqual(capturedIDs, [100, 200])
     }

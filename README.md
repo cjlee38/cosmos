@@ -10,7 +10,9 @@
 <p align="center">A window and space manager for macOS.</p>
 
 > [!WARNING]
-> This project is under development.
+> Cosmos is still under active development. I’m currently focused on making it as stable and safe as possible.
+>
+> If you find a bug or have a suggestion, please feel free to [open an issue](https://github.com/cjlee38/cosmos/issues).
 
 ## Why Cosmos?
 

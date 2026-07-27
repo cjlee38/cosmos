@@ -16,6 +16,8 @@ final class WindowRuntimeEventHandler {
     private let scheduleDiscovery: (@escaping () -> Void) -> Void
     private let scheduleApply: (@escaping () -> Void) -> Void
     private var pendingEvents: Set<WindowRuntimeEvent> = []
+    private var pendingPreviewWindowIDs: Set<WindowID> = []
+    private var pendingPreviewSpaceIDs: Set<String> = []
     private var isProcessing = false
     private var isSessionActive = true
     private var sessionGeneration: UInt64 = 0
@@ -50,6 +52,7 @@ final class WindowRuntimeEventHandler {
         guard isSessionActive else {
             return
         }
+        previewService.postponeBackgroundRefresh()
         pendingEvents.formUnion(events.events)
         processNextBatch()
     }
@@ -107,6 +110,7 @@ final class WindowRuntimeEventHandler {
 
         defer {
             isProcessing = false
+            schedulePreviewRefreshIfIdle()
             processNextBatch()
         }
 
@@ -181,10 +185,20 @@ final class WindowRuntimeEventHandler {
         }
 
         previewService.markWindowThumbnailsDirty(windowIDs)
-        previewService.refresh(
-            windowIDs: windowIDs,
-            spaceIDs: spaceIDs,
-            priorityIDs: focusedWindowID.map { [$0] } ?? []
+        pendingPreviewWindowIDs.formUnion(windowIDs)
+        pendingPreviewSpaceIDs.formUnion(spaceIDs)
+    }
+
+    private func schedulePreviewRefreshIfIdle() {
+        guard pendingEvents.isEmpty else {
+            return
+        }
+
+        previewService.scheduleBackgroundRefresh(
+            windowIDs: pendingPreviewWindowIDs,
+            spaceIDs: pendingPreviewSpaceIDs
         )
+        pendingPreviewWindowIDs.removeAll()
+        pendingPreviewSpaceIDs.removeAll()
     }
 }

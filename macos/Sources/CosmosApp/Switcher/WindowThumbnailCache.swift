@@ -24,6 +24,10 @@ final class WindowThumbnailCache {
 
     private(set) var isCaptureAvailable: Bool
 
+    var isRefreshInProgress: Bool {
+        !capturingWindowIDs.isEmpty || !queuedWindowIDs.isEmpty
+    }
+
     convenience init(
         canCapture: @escaping () -> Bool = CGPreflightScreenCaptureAccess,
         maximumAge: TimeInterval = 2,
