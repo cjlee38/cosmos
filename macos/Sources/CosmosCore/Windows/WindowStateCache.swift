@@ -78,6 +78,16 @@ final class WindowStateCache {
         self.displayTopology = displayTopology
     }
 
+    func remove(_ windowIDs: Set<WindowID>) {
+        guard !windowIDs.isEmpty else {
+            return
+        }
+        windows.removeAll { windowIDs.contains($0.id) }
+        if let focusedWindowID, windowIDs.contains(focusedWindowID) {
+            self.focusedWindowID = nil
+        }
+    }
+
     func updateFrame(_ frame: WindowFrame, for id: WindowID) {
         guard let index = windows.firstIndex(where: { $0.id == id }) else {
             return

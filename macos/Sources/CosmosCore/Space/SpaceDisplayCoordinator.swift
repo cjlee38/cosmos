@@ -23,13 +23,16 @@ final class SpaceDisplayCoordinator {
     }
 
     func synchronizeDisplayConfiguration(
+        lifecycle: WindowLifecycleConfirmation,
         state: inout SpaceState
     ) throws -> DisplayConfigurationSyncResult {
         let previousTopology = windowCache.displayTopology
         let previousFrames = frames(for: state)
         let sync = try runtimeSynchronizer.synchronize(
             state: &state,
-            reconcileVisibleWindowMonitorMembership: false
+            reconcileVisibleWindowMonitorMembership: false,
+            detectDisplayContinuityLoss: true,
+            lifecycle: lifecycle
         )
         let targetFrames = targetFramesForDisplayChange(
             from: previousTopology,
@@ -41,6 +44,7 @@ final class SpaceDisplayCoordinator {
 
     func applyDisplayConfiguration(
         _ discovery: WindowDiscoverySnapshot,
+        lifecycle: WindowLifecycleConfirmation,
         state: inout SpaceState
     ) throws -> DisplayConfigurationSyncResult? {
         let previousTopology = windowCache.displayTopology
@@ -50,7 +54,9 @@ final class SpaceDisplayCoordinator {
             discovery,
             displayTopology: displayTopology,
             state: &state,
-            reconcileVisibleWindowMonitorMembership: false
+            reconcileVisibleWindowMonitorMembership: false,
+            detectDisplayContinuityLoss: true,
+            lifecycle: lifecycle
         ) else {
             return nil
         }

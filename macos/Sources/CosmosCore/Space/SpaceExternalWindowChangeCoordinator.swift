@@ -28,14 +28,21 @@ final class SpaceExternalWindowChangeCoordinator {
         _ change: ExternalWindowChange,
         state: inout SpaceState
     ) throws -> ExternalWindowEventResult {
+        let lifecycle = lifecycleConfirmation(for: change)
         let sync: SpaceSyncSummary
         let targetFrames: [WindowID: WindowFrame]
         if change.displayConfigurationChanged {
-            let displaySync = try displayCoordinator.synchronizeDisplayConfiguration(state: &state)
+            let displaySync = try displayCoordinator.synchronizeDisplayConfiguration(
+                lifecycle: lifecycle,
+                state: &state
+            )
             sync = displaySync.sync
             targetFrames = displaySync.targetFrames
         } else {
-            sync = try runtimeSynchronizer.synchronize(state: &state)
+            sync = try runtimeSynchronizer.synchronize(
+                state: &state,
+                lifecycle: lifecycle
+            )
             targetFrames = [:]
         }
         return try finish(change, sync: sync, targetFrames: targetFrames, state: &state)
@@ -46,11 +53,13 @@ final class SpaceExternalWindowChangeCoordinator {
         discovery: WindowDiscoverySnapshot,
         state: inout SpaceState
     ) throws -> ExternalWindowEventResult? {
+        let lifecycle = lifecycleConfirmation(for: change)
         let sync: SpaceSyncSummary
         let targetFrames: [WindowID: WindowFrame]
         if change.displayConfigurationChanged {
             guard let displaySync = try displayCoordinator.applyDisplayConfiguration(
                 discovery,
+                lifecycle: lifecycle,
                 state: &state
             ) else {
                 return nil
@@ -61,7 +70,8 @@ final class SpaceExternalWindowChangeCoordinator {
             guard let appliedSync = runtimeSynchronizer.apply(
                 discovery,
                 displayTopology: windowCache.displayTopology,
-                state: &state
+                state: &state,
+                lifecycle: lifecycle
             ) else {
                 return nil
             }
@@ -69,6 +79,15 @@ final class SpaceExternalWindowChangeCoordinator {
             targetFrames = [:]
         }
         return try finish(change, sync: sync, targetFrames: targetFrames, state: &state)
+    }
+
+    private func lifecycleConfirmation(
+        for change: ExternalWindowChange
+    ) -> WindowLifecycleConfirmation {
+        WindowLifecycleConfirmation(
+            terminatedApplicationPIDs: change.terminatedApplicationPIDs,
+            destroyedWindowIDs: change.displayConfigurationChanged ? [] : change.destroyedWindowIDs
+        )
     }
 
     private func finish(

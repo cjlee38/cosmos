@@ -11,6 +11,7 @@ enum WindowRuntimeEventKind: Hashable {
     case layoutChanged
     case windowSetChanged
     case windowDestroyed
+    case applicationTerminated
     case displayChanged
     case sessionResumed
 
@@ -43,6 +44,13 @@ enum WindowRuntimeEventKind: Hashable {
 struct WindowRuntimeEvent: Hashable {
     let kind: WindowRuntimeEventKind
     let windowID: WindowID?
+    let processID: pid_t?
+
+    init(kind: WindowRuntimeEventKind, windowID: WindowID?, processID: pid_t? = nil) {
+        self.kind = kind
+        self.windowID = windowID
+        self.processID = processID
+    }
 }
 
 enum AXFocusChangeFilter {
@@ -80,8 +88,22 @@ struct WindowRuntimeEventBatch {
 
     var containsWindowSetChange: Bool {
         events.contains { event in
-            event.kind == .windowSetChanged || event.kind == .windowDestroyed
+            event.kind == .windowSetChanged
+                || event.kind == .windowDestroyed
+                || event.kind == .applicationTerminated
         }
+    }
+
+    var terminatedApplicationPIDs: Set<pid_t> {
+        Set(events.compactMap { event in
+            event.kind == .applicationTerminated ? event.processID : nil
+        })
+    }
+
+    var destroyedWindowIDs: Set<WindowID> {
+        Set(events.compactMap { event in
+            event.kind == .windowDestroyed ? event.windowID : nil
+        })
     }
 
     func shouldFollowVisibleFocusedWindow(

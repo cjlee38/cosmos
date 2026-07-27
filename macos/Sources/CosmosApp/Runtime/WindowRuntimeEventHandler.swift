@@ -112,21 +112,13 @@ final class WindowRuntimeEventHandler {
 
         do {
             let discovery = try discovery.get()
-            let focusPolicy: ExternalWindowFocusPolicy = if events.containsApplicationActivation {
-                .always
-            } else if events.shouldFollowVisibleFocusedWindow(
-                focusedWindowID: discovery.focusedWindowID,
-                previouslyFocusedWindowID: controller.cachedFocusedWindowID(),
-                liveWindowIDs: Set(discovery.windows.map(\.id))
-            ) {
-                .visibleFocusedWindow
-            } else {
-                .never
-            }
+            let focusPolicy = focusPolicy(for: events, discovery: discovery)
             guard let result = try controller.applyExternalWindowChange(
                 ExternalWindowChange(
                     displayConfigurationChanged: events.containsDisplayChange,
-                    focusPolicy: focusPolicy
+                    focusPolicy: focusPolicy,
+                    terminatedApplicationPIDs: events.terminatedApplicationPIDs,
+                    destroyedWindowIDs: events.destroyedWindowIDs
                 ),
                 discovery: discovery
             ) else {
@@ -142,6 +134,23 @@ final class WindowRuntimeEventHandler {
         } catch {
             log.error("Window update failed: \(String(describing: error))")
         }
+    }
+
+    private func focusPolicy(
+        for events: WindowRuntimeEventBatch,
+        discovery: WindowDiscoverySnapshot
+    ) -> ExternalWindowFocusPolicy {
+        if events.containsApplicationActivation {
+            return .always
+        }
+        if events.shouldFollowVisibleFocusedWindow(
+            focusedWindowID: discovery.focusedWindowID,
+            previouslyFocusedWindowID: controller.cachedFocusedWindowID(),
+            liveWindowIDs: Set(discovery.windows.map(\.id))
+        ) {
+            return .visibleFocusedWindow
+        }
+        return .never
     }
 
     private func refreshPreviews(

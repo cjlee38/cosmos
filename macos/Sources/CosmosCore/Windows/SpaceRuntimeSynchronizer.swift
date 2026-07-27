@@ -6,6 +6,7 @@ final class SpaceRuntimeSynchronizer {
     private let recordRepository: HiddenWindowRecordRepository
     private let monitorSlotResolver: MonitorSlotResolver
     private let hidePointProvider: any HidePointProviding
+    private let continuityProtector = WindowContinuityProtector()
 
     init(
         windowSystem: any WindowSystem,
@@ -23,7 +24,9 @@ final class SpaceRuntimeSynchronizer {
 
     func synchronize(
         state: inout SpaceState,
-        reconcileVisibleWindowMonitorMembership: Bool = true
+        reconcileVisibleWindowMonitorMembership: Bool = true,
+        detectDisplayContinuityLoss: Bool = false,
+        lifecycle: WindowLifecycleConfirmation = .empty
     ) throws -> SpaceSyncSummary {
         while true {
             let discovery = try windowSystem.discover(windowIDs: nil, mode: .normal)
@@ -31,10 +34,19 @@ final class SpaceRuntimeSynchronizer {
             guard windowSystem.apply(discovery) else {
                 continue
             }
+            if detectDisplayContinuityLoss {
+                continuityProtector.captureIfDisplayContinuityWasLost(
+                    previousTopology: windowCache.displayTopology,
+                    currentTopology: displayTopology,
+                    windows: windowCache.windows,
+                    state: state
+                )
+            }
             return synchronizeAppliedDiscovery(
                 discovery,
                 displayTopology: displayTopology,
                 reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+                lifecycle: lifecycle,
                 state: &state
             )
         }
@@ -44,15 +56,26 @@ final class SpaceRuntimeSynchronizer {
         _ discovery: WindowDiscoverySnapshot,
         displayTopology: DisplayTopologySnapshot,
         state: inout SpaceState,
-        reconcileVisibleWindowMonitorMembership: Bool = true
+        reconcileVisibleWindowMonitorMembership: Bool = true,
+        detectDisplayContinuityLoss: Bool = false,
+        lifecycle: WindowLifecycleConfirmation = .empty
     ) -> SpaceSyncSummary? {
         guard windowSystem.apply(discovery) else {
             return nil
+        }
+        if detectDisplayContinuityLoss {
+            continuityProtector.captureIfDisplayContinuityWasLost(
+                previousTopology: windowCache.displayTopology,
+                currentTopology: displayTopology,
+                windows: windowCache.windows,
+                state: state
+            )
         }
         return synchronizeAppliedDiscovery(
             discovery,
             displayTopology: displayTopology,
             reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+            lifecycle: lifecycle,
             state: &state
         )
     }
@@ -61,21 +84,30 @@ final class SpaceRuntimeSynchronizer {
         _ discovery: WindowDiscoverySnapshot,
         displayTopology: DisplayTopologySnapshot,
         reconcileVisibleWindowMonitorMembership: Bool,
+        lifecycle: WindowLifecycleConfirmation,
         state: inout SpaceState
     ) -> SpaceSyncSummary {
+        let protection = continuityProtector.resolve(
+            with: discovery,
+            lifecycle: lifecycle
+        )
         let windowSetDiff = windowCache.apply(
             discovery,
             displayTopology: displayTopology
         )
+        windowCache.remove(protection.suppressedDiscoveredWindowIDs)
         let windows = windowCache.windows
+        let removedWindowIDs = Set(windowSetDiff.removed)
+            .subtracting(protection.protectedWindowIDs)
+            .union(protection.confirmedRemovedWindowIDs)
         let sync = synchronizeMemberships(
             windows: windows,
-            windowSetDiff: windowSetDiff,
+            removedWindowIDs: removedWindowIDs,
             displayTopology: displayTopology,
             reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
             state: &state
         )
-        for id in sync.removed {
+        for id in removedWindowIDs {
             recordRepository.removeAllRecords(for: id)
         }
 
@@ -84,16 +116,20 @@ final class SpaceRuntimeSynchronizer {
 
     private func synchronizeMemberships(
         windows: [WindowSnapshot],
-        windowSetDiff: WindowSetDiff,
+        removedWindowIDs: Set<WindowID>,
         displayTopology: DisplayTopologySnapshot,
         reconcileVisibleWindowMonitorMembership: Bool,
         state: inout SpaceState
     ) -> SpaceSyncSummary {
         let liveWindowIDs = Set(windows.map(\.id))
-        let relevantWindowIDs = liveWindowIDs.union(windowSetDiff.removed)
+        let relevantWindowIDs = liveWindowIDs.union(removedWindowIDs)
         let previousMemberships = Dictionary(uniqueKeysWithValues: relevantWindowIDs.compactMap { id in
             state.membership(for: id).map { (id, $0) }
         })
+
+        for id in removedWindowIDs {
+            state.removeWindow(id)
+        }
 
         for window in windows where !window.isMinimized && state.membership(for: window.id) == nil {
             let monitorSlot = monitorSlotResolver.slot(
@@ -115,10 +151,6 @@ final class SpaceRuntimeSynchronizer {
                 displayTopology: displayTopology,
                 state: &state
             )
-        }
-
-        for id in windowSetDiff.removed {
-            state.removeWindow(id)
         }
 
         let changes = relevantWindowIDs.sorted().compactMap { id -> SpaceMembershipChange? in

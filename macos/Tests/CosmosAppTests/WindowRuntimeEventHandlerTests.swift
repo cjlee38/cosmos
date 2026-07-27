@@ -78,6 +78,18 @@ final class WindowRuntimeEventHandlerTests: XCTestCase {
         ))
     }
 
+    func testApplicationTerminationCarriesTheTerminatedProcessID() {
+        let batch = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .applicationTerminated, windowID: nil, processID: 42),
+            WindowRuntimeEvent(kind: .windowDestroyed, windowID: 100)
+        ])
+
+        XCTAssertEqual(batch.terminatedApplicationPIDs, [42])
+        XCTAssertEqual(batch.destroyedWindowIDs, [100])
+        XCTAssertTrue(batch.containsWindowSetChange)
+        XCTAssertNil(batch.discoveryWindowIDs)
+    }
+
     func testSuccessfulWindowEventAlwaysRefreshesSwitcherContent() throws {
         let (controller, _) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "Window")

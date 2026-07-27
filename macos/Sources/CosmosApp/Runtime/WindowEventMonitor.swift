@@ -103,7 +103,11 @@ final class WindowEventMonitor {
                 return
             }
             self?.axObserverRegistry.removeObserver(for: app.processIdentifier)
-            self?.schedule(.init(kind: .windowSetChanged, windowID: nil))
+            self?.schedule(.init(
+                kind: .applicationTerminated,
+                windowID: nil,
+                processID: app.processIdentifier
+            ))
         })
 
         spaceObserverTokens.append(notificationCenter.addObserver(

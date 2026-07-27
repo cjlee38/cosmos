@@ -158,13 +158,19 @@ public enum ExternalWindowFocusPolicy {
 public struct ExternalWindowChange {
     public let displayConfigurationChanged: Bool
     public let focusPolicy: ExternalWindowFocusPolicy
+    public let terminatedApplicationPIDs: Set<pid_t>
+    public let destroyedWindowIDs: Set<WindowID>
 
     public init(
         displayConfigurationChanged: Bool = false,
-        focusPolicy: ExternalWindowFocusPolicy = .never
+        focusPolicy: ExternalWindowFocusPolicy = .never,
+        terminatedApplicationPIDs: Set<pid_t> = [],
+        destroyedWindowIDs: Set<WindowID> = []
     ) {
         self.displayConfigurationChanged = displayConfigurationChanged
         self.focusPolicy = focusPolicy
+        self.terminatedApplicationPIDs = terminatedApplicationPIDs
+        self.destroyedWindowIDs = destroyedWindowIDs
     }
 }
 

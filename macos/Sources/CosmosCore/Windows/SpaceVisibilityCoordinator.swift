@@ -27,7 +27,7 @@ final class SpaceVisibilityCoordinator {
         )
 
         for space in visibleSpaces.sorted() {
-            for id in state.windowIDs(in: space) {
+            for id in state.windowIDs(in: space) where windowCache.snapshot(for: id) != nil {
                 do {
                     _ = try hiddenWindowOperator.restore(
                         id,
@@ -51,7 +51,7 @@ final class SpaceVisibilityCoordinator {
             state: state,
             visibleSpaces: visibleSpaces,
             hideLastWindowID: hideLastWindowID
-        ) {
+        ) where windowCache.snapshot(for: id) != nil {
             do {
                 try hiddenWindowOperator.hide(
                     id,

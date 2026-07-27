@@ -25,6 +25,7 @@ final class FakeWindowSystem: WindowSystem {
     var frameWriteFailures: Set<WindowID> = []
     var operationFailure: ((Operation) -> Error?)?
     var operationFailureAfterMutation: ((Operation) -> Error?)?
+    var discoveryApplyResults: [Bool] = []
     var refreshCount = 0
     var refreshError: Error?
 
@@ -58,6 +59,10 @@ final class FakeWindowSystem: WindowSystem {
 
     func focusedWindowID() -> WindowID? {
         focusedWindow
+    }
+
+    func apply(_: WindowDiscoverySnapshot) -> Bool {
+        discoveryApplyResults.isEmpty ? true : discoveryApplyResults.removeFirst()
     }
 
     func frame(for id: WindowID) -> WindowFrame? {
