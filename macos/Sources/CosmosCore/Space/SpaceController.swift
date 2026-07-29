@@ -91,6 +91,14 @@ public final class SpaceController {
 }
 
 public extension SpaceController {
+    func beginWindowContinuityProtection() {
+        runtimeSynchronizer.beginContinuityProtection(state: state)
+    }
+
+    func windowContinuityDiagnostics() -> WindowContinuityDiagnostics {
+        runtimeSynchronizer.continuityDiagnostics()
+    }
+
     func currentWindows() -> [WindowSnapshot] {
         windowCache.windows
     }
@@ -224,6 +232,9 @@ public extension SpaceController {
         guard let space = state.findSpace(space) else {
             return nil
         }
+        if let focusedWindowID = windowSystem.focusedWindowID() {
+            runtimeSynchronizer.cancelContinuityRecovery(windowIDs: [focusedWindowID])
+        }
         _ = try syncWindows()
         let result = try assignmentCoordinator.moveFocusedWindow(
             to: space,
@@ -236,6 +247,9 @@ public extension SpaceController {
 
     @discardableResult
     func centerFocusedWindow() throws -> WindowID {
+        if let focusedWindowID = windowSystem.focusedWindowID() {
+            runtimeSynchronizer.cancelContinuityRecovery(windowIDs: [focusedWindowID])
+        }
         _ = try syncWindows(reconcileVisibleWindowMonitorMembership: false)
         guard let id = windowSystem.focusedWindowID(), windowSystem.contains(id) else {
             throw SpaceError.noFocusedWindow
@@ -342,6 +356,7 @@ private extension SpaceController {
     }
 
     private func applyConfigTransaction(_ config: CosmosConfig) throws -> SpaceSyncSummary {
+        runtimeSynchronizer.cancelContinuityRecovery(windowIDs: Set(state.assignedWindowIDs))
         let sync = try syncWindows()
         let previousState = state
         state.applyConfig(config)

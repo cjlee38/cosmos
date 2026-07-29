@@ -16,10 +16,14 @@ final class WindowRuntimeEventHandler {
     private let scheduleDiscovery: (@escaping () -> Void) -> Void
     private let scheduleApply: (@escaping () -> Void) -> Void
     private var pendingEvents: Set<WindowRuntimeEvent> = []
+    private var inFlightEvents: Set<WindowRuntimeEvent> = []
     private var pendingPreviewWindowIDs: Set<WindowID> = []
     private var pendingPreviewSpaceIDs: Set<String> = []
     private var isProcessing = false
     private var isSessionActive = true
+    private var isSystemAwake = true
+    private var needsWakeRecovery = false
+    private var hasRetriedWakeRecovery = false
     private var sessionGeneration: UInt64 = 0
 
     init(
@@ -49,7 +53,7 @@ final class WindowRuntimeEventHandler {
     }
 
     func handle(_ events: WindowRuntimeEventBatch) {
-        guard isSessionActive else {
+        guard isObservationActive else {
             return
         }
         previewService.postponeBackgroundRefresh()
@@ -64,22 +68,44 @@ final class WindowRuntimeEventHandler {
 
         isSessionActive = isActive
         sessionGeneration &+= 1
-        pendingEvents.removeAll()
-        if isActive {
-            handle(WindowRuntimeEventBatch(events: [
-                WindowRuntimeEvent(kind: .sessionResumed, windowID: nil)
-            ]))
+        preserveLifecycleEvidence()
+        if isObservationActive {
+            scheduleObservationRecovery()
         }
     }
 
-    private func processNextBatch() {
-        guard isSessionActive, !isProcessing, !pendingEvents.isEmpty else {
+    func systemSleepChanged(isAwake: Bool) {
+        guard isSystemAwake != isAwake else {
             return
         }
 
-        let batch = WindowRuntimeEventBatch(events: pendingEvents)
+        if !isAwake {
+            controller.beginWindowContinuityProtection()
+            hasRetriedWakeRecovery = false
+        }
+        isSystemAwake = isAwake
+        needsWakeRecovery = needsWakeRecovery || isAwake
+        sessionGeneration &+= 1
+        preserveLifecycleEvidence()
+        if isObservationActive {
+            scheduleObservationRecovery()
+        }
+    }
+
+    private var isObservationActive: Bool {
+        isSessionActive && isSystemAwake
+    }
+
+    private func processNextBatch() {
+        guard isObservationActive, !isProcessing, !pendingEvents.isEmpty else {
+            return
+        }
+
+        let batchEvents = nextBatchEvents()
+        let batch = WindowRuntimeEventBatch(events: batchEvents)
         let generation = sessionGeneration
-        pendingEvents.removeAll()
+        pendingEvents.subtract(batchEvents)
+        inFlightEvents = batch.events
         isProcessing = true
         scheduleDiscovery { [weak self] in
             guard let self else {
@@ -102,13 +128,13 @@ final class WindowRuntimeEventHandler {
         for events: WindowRuntimeEventBatch,
         generation: UInt64
     ) {
-        guard isSessionActive, generation == sessionGeneration else {
-            isProcessing = false
-            processNextBatch()
+        guard isObservationActive, generation == sessionGeneration else {
+            discardDiscovery()
             return
         }
 
         defer {
+            inFlightEvents.removeAll()
             isProcessing = false
             schedulePreviewRefreshIfIdle()
             processNextBatch()
@@ -122,7 +148,8 @@ final class WindowRuntimeEventHandler {
                     displayConfigurationChanged: events.containsDisplayChange,
                     focusPolicy: focusPolicy,
                     terminatedApplicationPIDs: events.terminatedApplicationPIDs,
-                    destroyedWindowIDs: events.destroyedWindowIDs
+                    destroyedWindowIDs: events.destroyedWindowIDs,
+                    userMovedWindowIDs: events.userMovedWindowIDs
                 ),
                 discovery: discovery
             ) else {
@@ -130,14 +157,27 @@ final class WindowRuntimeEventHandler {
                 return
             }
             refreshPreviews(for: events, result: result)
+            needsWakeRecovery = result.continuityRecovery.isPending
+            if !needsWakeRecovery {
+                hasRetriedWakeRecovery = false
+            } else if !result.continuityRecovery.failedWindowIDs.isEmpty {
+                retryWakeRecoveryIfNeeded(for: events)
+            }
+            scheduleInitialContinuityVerificationIfNeeded(for: events)
             refreshSwitcherContent()
             refreshStatusSurfaces()
             if case let .switched(windowID, space) = result.focusedWindowSync {
                 log.info("Switched to space \(space) for \(windowID)")
             }
         } catch {
-            log.error("Window update failed: \(String(describing: error))")
+            handleDiscoveryFailure(error, for: events)
         }
+    }
+
+    private func discardDiscovery() {
+        inFlightEvents.removeAll()
+        isProcessing = false
+        processNextBatch()
     }
 
     private func focusPolicy(
@@ -200,5 +240,59 @@ final class WindowRuntimeEventHandler {
         )
         pendingPreviewWindowIDs.removeAll()
         pendingPreviewSpaceIDs.removeAll()
+    }
+}
+
+private extension WindowRuntimeEventHandler {
+    func scheduleObservationRecovery() {
+        let kind: WindowRuntimeEventKind = needsWakeRecovery ? .systemWoke : .sessionResumed
+        handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: kind, windowID: nil)
+        ]))
+    }
+
+    func nextBatchEvents() -> Set<WindowRuntimeEvent> {
+        let wakeEvents = pendingEvents.filter { $0.kind == .systemWoke }
+        return wakeEvents.isEmpty ? pendingEvents : wakeEvents
+    }
+
+    func preserveLifecycleEvidence() {
+        pendingEvents = pendingEvents
+            .union(inFlightEvents)
+            .filter(\.kind.mustSurviveObservationSuspension)
+    }
+
+    func appendWakeRecovery() {
+        pendingEvents.insert(WindowRuntimeEvent(kind: .systemWoke, windowID: nil))
+    }
+
+    func retryWakeRecoveryIfNeeded(for events: WindowRuntimeEventBatch) {
+        guard needsWakeRecovery,
+              events.events.contains(where: { $0.kind == .systemWoke }),
+              !hasRetriedWakeRecovery
+        else {
+            return
+        }
+        hasRetriedWakeRecovery = true
+        appendWakeRecovery()
+    }
+
+    func scheduleInitialContinuityVerificationIfNeeded(
+        for events: WindowRuntimeEventBatch
+    ) {
+        guard needsWakeRecovery,
+              events.events.contains(where: { $0.kind == .displayChanged })
+        else {
+            return
+        }
+        appendWakeRecovery()
+    }
+
+    func handleDiscoveryFailure(
+        _ error: Error,
+        for events: WindowRuntimeEventBatch
+    ) {
+        retryWakeRecoveryIfNeeded(for: events)
+        log.error("Window update failed: \(String(describing: error))")
     }
 }

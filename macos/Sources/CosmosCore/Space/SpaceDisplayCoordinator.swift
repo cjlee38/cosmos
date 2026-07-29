@@ -93,6 +93,36 @@ final class SpaceDisplayCoordinator {
         }
     }
 
+    func continuityRecoveryTargetFrames(state: SpaceState) -> [WindowID: WindowFrame] {
+        let topology = windowCache.displayTopology
+        let eligibleWindowIDs = runtimeSynchronizer.continuityEligibleWindowIDs
+        return runtimeSynchronizer.continuityAnchorsByWindowID.reduce(into: [:]) {
+            frames,
+            element in
+            let (id, anchor) = element
+            guard eligibleWindowIDs.contains(id) else {
+                return
+            }
+            let targetSlot = state.monitorSlot(
+                for: anchor.space,
+                availableMonitorSlots: topology.availableMonitorSlots
+            )
+            guard let targetDisplay = monitorSlotResolver.display(
+                for: targetSlot,
+                among: topology.monitorSlots
+            ),
+                let translatedFrame = monitorSlotResolver.translatedFrame(
+                    anchor.frame,
+                    from: anchor.sourceDisplay,
+                    to: targetDisplay
+                )
+            else {
+                return
+            }
+            frames[id] = translatedFrame
+        }
+    }
+
     private func targetFramesForDisplayChange(
         from previousTopology: DisplayTopologySnapshot,
         previousFrames: [WindowID: WindowFrame],

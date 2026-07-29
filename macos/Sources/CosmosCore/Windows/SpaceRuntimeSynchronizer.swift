@@ -22,6 +22,38 @@ final class SpaceRuntimeSynchronizer {
         self.hidePointProvider = hidePointProvider
     }
 
+    func beginContinuityProtection(state: SpaceState) {
+        continuityProtector.capture(
+            windows: windowCache.windows,
+            topology: windowCache.displayTopology,
+            state: state
+        )
+    }
+
+    func continuityDiagnostics() -> WindowContinuityDiagnostics {
+        continuityProtector.diagnostics
+    }
+
+    var continuityProtectedWindowIDs: Set<WindowID> {
+        continuityProtector.protectedWindowIDs
+    }
+
+    var continuityEligibleWindowIDs: Set<WindowID> {
+        continuityProtector.eligibleWindowIDs
+    }
+
+    var continuityAnchorsByWindowID: [WindowID: WindowContinuityAnchor] {
+        continuityProtector.anchorsByWindowID
+    }
+
+    func completeContinuityRecovery(windowIDs: Set<WindowID>) {
+        continuityProtector.completeRecovery(windowIDs: windowIDs)
+    }
+
+    func cancelContinuityRecovery(windowIDs: Set<WindowID>) {
+        continuityProtector.cancel(windowIDs: windowIDs)
+    }
+
     func synchronize(
         state: inout SpaceState,
         reconcileVisibleWindowMonitorMembership: Bool = true,
@@ -105,6 +137,7 @@ final class SpaceRuntimeSynchronizer {
             removedWindowIDs: removedWindowIDs,
             displayTopology: displayTopology,
             reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+            excludedWindowIDs: protection.protectedWindowIDs,
             state: &state
         )
         for id in removedWindowIDs {
@@ -119,6 +152,7 @@ final class SpaceRuntimeSynchronizer {
         removedWindowIDs: Set<WindowID>,
         displayTopology: DisplayTopologySnapshot,
         reconcileVisibleWindowMonitorMembership: Bool,
+        excludedWindowIDs: Set<WindowID>,
         state: inout SpaceState
     ) -> SpaceSyncSummary {
         let liveWindowIDs = Set(windows.map(\.id))
@@ -149,6 +183,7 @@ final class SpaceRuntimeSynchronizer {
             reconcileVisibleWindowMemberships(
                 windows,
                 displayTopology: displayTopology,
+                excludedWindowIDs: excludedWindowIDs,
                 state: &state
             )
         }
@@ -171,9 +206,13 @@ final class SpaceRuntimeSynchronizer {
     private func reconcileVisibleWindowMemberships(
         _ windows: [WindowSnapshot],
         displayTopology: DisplayTopologySnapshot,
+        excludedWindowIDs: Set<WindowID>,
         state: inout SpaceState
     ) {
-        for window in windows where !window.isMinimized && !state.isHidden(window.id) {
+        for window in windows
+            where !window.isMinimized
+            && !state.isHidden(window.id)
+            && !excludedWindowIDs.contains(window.id) {
             guard let space = state.membership(for: window.id),
                   let frame = window.frame,
                   !hidePointProvider.isHidePosition(

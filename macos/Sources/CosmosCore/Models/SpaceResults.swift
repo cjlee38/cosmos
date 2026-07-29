@@ -139,13 +139,67 @@ public struct SpaceSyncSummary {
 public struct ExternalWindowEventResult {
     public let sync: SpaceSyncSummary
     public let focusedWindowSync: FocusedWindowSpaceSyncResult?
+    public let continuityRecovery: WindowContinuityRecoveryStatus
 
     public init(
         sync: SpaceSyncSummary,
-        focusedWindowSync: FocusedWindowSpaceSyncResult?
+        focusedWindowSync: FocusedWindowSpaceSyncResult?,
+        continuityRecovery: WindowContinuityRecoveryStatus = .complete
     ) {
         self.sync = sync
         self.focusedWindowSync = focusedWindowSync
+        self.continuityRecovery = continuityRecovery
+    }
+}
+
+public struct WindowContinuityRecoveryStatus {
+    public let pendingWindowIDs: Set<WindowID>
+    public let failedWindowIDs: Set<WindowID>
+    public let attempts: [ContinuityRecoveryAttempt]
+
+    public init(
+        pendingWindowIDs: Set<WindowID>,
+        failedWindowIDs: Set<WindowID>,
+        attempts: [ContinuityRecoveryAttempt] = []
+    ) {
+        self.pendingWindowIDs = pendingWindowIDs
+        self.failedWindowIDs = failedWindowIDs
+        self.attempts = attempts
+    }
+
+    public static let complete = WindowContinuityRecoveryStatus(
+        pendingWindowIDs: [],
+        failedWindowIDs: [],
+        attempts: []
+    )
+
+    public var isPending: Bool {
+        !pendingWindowIDs.isEmpty
+    }
+}
+
+public struct ContinuityRecoveryAttempt {
+    public let windowID: WindowID
+    public let space: SpaceID?
+    public let operation: String
+    public let targetFrame: WindowFrame?
+    public let resultingFrame: WindowFrame?
+    public let outcome: String
+
+    public init(
+        windowID: WindowID,
+        space: SpaceID?,
+        operation: String,
+        targetFrame: WindowFrame?,
+        resultingFrame: WindowFrame?,
+        outcome: String
+    ) {
+        self.windowID = windowID
+        self.space = space
+        self.operation = operation
+        self.targetFrame = targetFrame
+        self.resultingFrame = resultingFrame
+        self.outcome = outcome
     }
 }
 
@@ -160,17 +214,20 @@ public struct ExternalWindowChange {
     public let focusPolicy: ExternalWindowFocusPolicy
     public let terminatedApplicationPIDs: Set<pid_t>
     public let destroyedWindowIDs: Set<WindowID>
+    public let userMovedWindowIDs: Set<WindowID>
 
     public init(
         displayConfigurationChanged: Bool = false,
         focusPolicy: ExternalWindowFocusPolicy = .never,
         terminatedApplicationPIDs: Set<pid_t> = [],
-        destroyedWindowIDs: Set<WindowID> = []
+        destroyedWindowIDs: Set<WindowID> = [],
+        userMovedWindowIDs: Set<WindowID> = []
     ) {
         self.displayConfigurationChanged = displayConfigurationChanged
         self.focusPolicy = focusPolicy
         self.terminatedApplicationPIDs = terminatedApplicationPIDs
         self.destroyedWindowIDs = destroyedWindowIDs
+        self.userMovedWindowIDs = userMovedWindowIDs
     }
 }
 

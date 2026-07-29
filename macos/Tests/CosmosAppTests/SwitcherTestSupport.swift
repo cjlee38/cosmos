@@ -6,6 +6,7 @@ import Foundation
 import XCTest
 
 enum SwitcherTestWindowSystemError: Error {
+    case discovery
     case frameWrite(WindowID)
     case windowNotFound(WindowID)
 }
@@ -14,6 +15,7 @@ final class SwitcherTestWindowSystem: WindowSystem {
     var windows: [WindowSnapshot]
     var focusedWindowIDValue: WindowID?
     var frameWriteFailures: Set<WindowID> = []
+    var discoveryFailuresRemaining = 0
     var discoveryApplyResults: [Bool] = []
     var unresolvedWindowIDs: Set<WindowID> = []
     private(set) var refreshCount = 0
@@ -63,6 +65,10 @@ final class SwitcherTestWindowSystem: WindowSystem {
     ) throws -> WindowDiscoverySnapshot {
         discoveryRequests.append(windowIDs)
         discoveryModes.append(mode)
+        if discoveryFailuresRemaining > 0 {
+            discoveryFailuresRemaining -= 1
+            throw SwitcherTestWindowSystemError.discovery
+        }
         let windows = try refresh()
         return WindowDiscoverySnapshot(
             scope: windowIDs.map(WindowDiscoverySnapshot.Scope.windows) ?? .full,

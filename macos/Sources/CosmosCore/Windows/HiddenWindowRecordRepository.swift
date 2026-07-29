@@ -11,6 +11,12 @@ final class HiddenWindowRecordRepository {
         try store?.load()?.hiddenWindows ?? []
     }
 
+    func record(windowID: WindowID, pid: pid_t) throws -> HiddenWindowRecord? {
+        try loadRecords().first {
+            $0.windowID == windowID && $0.pid == pid
+        }
+    }
+
     func upsertRecord(_ record: HiddenWindowRecord) {
         store?.upsertRecord(record)
     }

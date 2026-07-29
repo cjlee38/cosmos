@@ -28,6 +28,7 @@ final class SpaceExternalWindowChangeCoordinator {
         _ change: ExternalWindowChange,
         state: inout SpaceState
     ) throws -> ExternalWindowEventResult {
+        runtimeSynchronizer.cancelContinuityRecovery(windowIDs: change.userMovedWindowIDs)
         let lifecycle = lifecycleConfirmation(for: change)
         let sync: SpaceSyncSummary
         let targetFrames: [WindowID: WindowFrame]
@@ -45,7 +46,12 @@ final class SpaceExternalWindowChangeCoordinator {
             )
             targetFrames = [:]
         }
-        return try finish(change, sync: sync, targetFrames: targetFrames, state: &state)
+        return try recoverAndFinish(
+            change,
+            sync: sync,
+            targetFrames: targetFrames,
+            state: &state
+        )
     }
 
     func apply(
@@ -53,6 +59,7 @@ final class SpaceExternalWindowChangeCoordinator {
         discovery: WindowDiscoverySnapshot,
         state: inout SpaceState
     ) throws -> ExternalWindowEventResult? {
+        runtimeSynchronizer.cancelContinuityRecovery(windowIDs: change.userMovedWindowIDs)
         let lifecycle = lifecycleConfirmation(for: change)
         let sync: SpaceSyncSummary
         let targetFrames: [WindowID: WindowFrame]
@@ -78,7 +85,45 @@ final class SpaceExternalWindowChangeCoordinator {
             sync = appliedSync
             targetFrames = [:]
         }
-        return try finish(change, sync: sync, targetFrames: targetFrames, state: &state)
+        return try recoverAndFinish(
+            change,
+            sync: sync,
+            targetFrames: targetFrames,
+            state: &state
+        )
+    }
+
+    private func recoverAndFinish(
+        _ change: ExternalWindowChange,
+        sync: SpaceSyncSummary,
+        targetFrames: [WindowID: WindowFrame],
+        state: inout SpaceState
+    ) throws -> ExternalWindowEventResult {
+        let eligibleWindowIDs = runtimeSynchronizer.continuityEligibleWindowIDs
+        let recovery = visibilityCoordinator.applyContinuityRecovery(
+            windowIDs: eligibleWindowIDs,
+            targetFrames: displayCoordinator.continuityRecoveryTargetFrames(state: state),
+            state: &state
+        )
+        let result = try finish(
+            change,
+            sync: sync,
+            targetFrames: targetFrames,
+            excludedWindowIDs: runtimeSynchronizer.continuityProtectedWindowIDs,
+            state: &state
+        )
+        runtimeSynchronizer.completeContinuityRecovery(
+            windowIDs: recovery.succeededWindowIDs
+        )
+        return ExternalWindowEventResult(
+            sync: result.sync,
+            focusedWindowSync: result.focusedWindowSync,
+            continuityRecovery: WindowContinuityRecoveryStatus(
+                pendingWindowIDs: runtimeSynchronizer.continuityProtectedWindowIDs,
+                failedWindowIDs: recovery.failedWindowIDs,
+                attempts: recovery.attempts
+            )
+        )
     }
 
     private func lifecycleConfirmation(
@@ -94,13 +139,16 @@ final class SpaceExternalWindowChangeCoordinator {
         _ change: ExternalWindowChange,
         sync: SpaceSyncSummary,
         targetFrames initialTargetFrames: [WindowID: WindowFrame],
+        excludedWindowIDs: Set<WindowID>,
         state: inout SpaceState
     ) throws -> ExternalWindowEventResult {
         var targetFrames = initialTargetFrames
         let shouldFollowFocusedWindow = change.focusPolicy.shouldFollow(
             focusedWindowID: windowCache.focusedWindowID,
             state: state
-        )
+        ) && windowCache.focusedWindowID.map {
+            !excludedWindowIDs.contains($0)
+        } ?? true
         if shouldFollowFocusedWindow,
            let id = windowCache.focusedWindowID,
            let targetFrame = targetFrames[id],
@@ -110,6 +158,7 @@ final class SpaceExternalWindowChangeCoordinator {
         let focusedWindowSync = try synchronizeFocusedWindow(
             shouldFollow: shouldFollowFocusedWindow,
             targetFrames: targetFrames,
+            excludedWindowIDs: excludedWindowIDs,
             state: &state
         )
         if shouldFollowFocusedWindow, let id = windowCache.focusedWindowID {
@@ -121,10 +170,15 @@ final class SpaceExternalWindowChangeCoordinator {
     private func synchronizeFocusedWindow(
         shouldFollow: Bool,
         targetFrames: [WindowID: WindowFrame],
+        excludedWindowIDs: Set<WindowID>,
         state: inout SpaceState
     ) throws -> FocusedWindowSpaceSyncResult? {
         guard shouldFollow else {
-            try visibilityCoordinator.applyVisibleSpaces(state: &state, targetFrames: targetFrames)
+            try visibilityCoordinator.applyVisibleSpaces(
+                state: &state,
+                excludedWindowIDs: excludedWindowIDs,
+                targetFrames: targetFrames
+            )
             return nil
         }
         let result = try navigationCoordinator.syncSpaceToFocusedWindow(
@@ -136,7 +190,11 @@ final class SpaceExternalWindowChangeCoordinator {
         case .switched:
             break
         case .alreadyActive, .noFocusedWindow, .unmanagedWindow:
-            try visibilityCoordinator.applyVisibleSpaces(state: &state, targetFrames: targetFrames)
+            try visibilityCoordinator.applyVisibleSpaces(
+                state: &state,
+                excludedWindowIDs: excludedWindowIDs,
+                targetFrames: targetFrames
+            )
         }
         return result
     }

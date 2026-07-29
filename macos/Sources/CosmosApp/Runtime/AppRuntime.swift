@@ -269,6 +269,9 @@ private extension AppRuntime {
             onSessionActivityChanged: { [weak self] isActive in
                 self?.windowRuntimeEventHandler.sessionActivityChanged(isActive: isActive)
             },
+            onSystemSleepChanged: { [weak self] isAwake in
+                self?.windowRuntimeEventHandler.systemSleepChanged(isAwake: isAwake)
+            },
             onEvents: { [weak self] events in
                 self?.windowRuntimeEventHandler.handle(events)
             }

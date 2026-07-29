@@ -37,6 +37,11 @@ final class HiddenWindowOperator {
         let currentFrame = try currentOrStoredFrame(for: id, state: state)
         let frame = preferredFrame ?? currentFrame
         let wasAlreadyHidden = state.isHidden(id)
+        let previousHiddenFrame = state.hiddenFrame(for: id)
+        let previousRecord = try recordRepository.record(
+            windowID: id,
+            pid: window.app.pid
+        )
         let hiddenSize = try prepareFrameForHiding(
             id,
             preparation: HidePreparation(
@@ -72,7 +77,8 @@ final class HiddenWindowOperator {
                     pid: window.app.pid,
                     currentFrame: currentFrame,
                     hiddenSize: hiddenSize,
-                    wasAlreadyHidden: wasAlreadyHidden,
+                    previousHiddenFrame: previousHiddenFrame,
+                    previousRecord: previousRecord,
                     applyError: error
                 ),
                 state: &state
@@ -239,7 +245,14 @@ final class HiddenWindowOperator {
         rollback: HideRollback,
         state: inout SpaceState
     ) throws {
-        if !rollback.wasAlreadyHidden {
+        if let previousHiddenFrame = rollback.previousHiddenFrame {
+            state.replaceHiddenFrame(previousHiddenFrame, for: id)
+            if let previousRecord = rollback.previousRecord {
+                recordRepository.upsertRecord(previousRecord)
+            } else {
+                recordRepository.removeRecord(windowID: id, pid: rollback.pid)
+            }
+        } else {
             recordRepository.removeRecord(windowID: id, pid: rollback.pid)
             state.clearHiddenFrame(for: id)
         }
@@ -299,6 +312,7 @@ private struct HideRollback {
     let pid: Int32
     let currentFrame: WindowFrame
     let hiddenSize: CGSize
-    let wasAlreadyHidden: Bool
+    let previousHiddenFrame: WindowFrame?
+    let previousRecord: HiddenWindowRecord?
     let applyError: Error
 }

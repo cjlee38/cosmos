@@ -1,8 +1,23 @@
 import Foundation
 
 final class WindowContinuityProtector {
-    private var identitiesByWindowID: [WindowID: WindowIdentity] = [:]
+    private var entriesByWindowID: [WindowID: WindowContinuityEntry] = [:]
     private var pendingCapturedIdentities: Set<WindowIdentity> = []
+    private(set) var diagnostics = WindowContinuityDiagnostics.empty
+
+    var protectedWindowIDs: Set<WindowID> {
+        Set(entriesByWindowID.keys)
+    }
+
+    var eligibleWindowIDs: Set<WindowID> {
+        Set(entriesByWindowID.values.compactMap { $0.isEligible ? $0.identity.windowID : nil })
+    }
+
+    var anchorsByWindowID: [WindowID: WindowContinuityAnchor] {
+        Dictionary(uniqueKeysWithValues: entriesByWindowID.values.compactMap { entry in
+            entry.anchor.map { (entry.identity.windowID, $0) }
+        })
+    }
 
     func captureIfDisplayContinuityWasLost(
         previousTopology: DisplayTopologySnapshot,
@@ -19,16 +34,66 @@ final class WindowContinuityProtector {
             return
         }
 
+        capture(
+            windows: windows,
+            topology: previousTopology,
+            state: state,
+            deferEligibilityUntilNextDiscovery: true
+        )
+    }
+
+    func capture(
+        windows: [WindowSnapshot],
+        topology: DisplayTopologySnapshot,
+        state: SpaceState,
+        deferEligibilityUntilNextDiscovery: Bool = false
+    ) {
+        var captured: [WindowIdentity] = []
         for window in windows {
-            guard state.membership(for: window.id) != nil,
-                  identitiesByWindowID[window.id] == nil
+            guard let space = state.membership(for: window.id),
+                  entriesByWindowID[window.id] == nil
             else {
                 continue
             }
             let identity = window.identity
-            identitiesByWindowID[window.id] = identity
-            pendingCapturedIdentities.insert(identity)
+            let sourceSlot = state.monitorSlot(
+                for: space,
+                availableMonitorSlots: topology.availableMonitorSlots
+            )
+            let sourceDisplay = topology.monitorSlots.first {
+                $0.slot == sourceSlot
+            }?.display
+            let frame = state.hiddenFrame(for: window.id) ?? window.frame
+            let anchor = frame.flatMap { frame in
+                sourceDisplay.map {
+                    WindowContinuityAnchor(
+                        space: space,
+                        frame: frame,
+                        sourceDisplay: $0
+                    )
+                }
+            }
+            entriesByWindowID[window.id] = WindowContinuityEntry(
+                identity: identity,
+                anchor: anchor,
+                isEligible: false
+            )
+            if deferEligibilityUntilNextDiscovery {
+                pendingCapturedIdentities.insert(identity)
+            }
+            captured.append(identity)
         }
+        diagnostics = WindowContinuityDiagnostics(
+            captured: captured.diagnostics,
+            protectedBeforeResolution: [],
+            confirmedRemovedWindowIDs: [],
+            suppressedDiscoveredWindowIDs: [],
+            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
+            anchors: entriesByWindowID.values.anchorDiagnostics,
+            eligibleWindowIDs: eligibleWindowIDs.sorted(),
+            recoveredWindowIDs: [],
+            completed: false
+        )
     }
 
     func resolve(
@@ -36,29 +101,77 @@ final class WindowContinuityProtector {
         lifecycle: WindowLifecycleConfirmation
     ) -> WindowContinuityProtectionResolution {
         let newlyCaptured = takePendingCapturedIdentities()
-
+        let protectedBeforeResolution = entriesByWindowID.values.identities.sortedByWindowIdentity
         let discoveredByWindowID = discoveredIdentitiesByWindowID(discovery)
         let classification = classify(
             discoveredByWindowID: discoveredByWindowID,
             lifecycle: lifecycle
         )
         applyConfirmedRemovals(classification.confirmedRemoved)
-        let replacementIdentities = protectReplacements(
-            classification.replaced,
-            discoveredByWindowID: discoveredByWindowID
+        updateEligibility(
+            discovery: discovery,
+            discoveredByWindowID: discoveredByWindowID,
+            newlyCaptured: newlyCaptured
         )
 
-        finishIfAllRemainingIdentitiesArePresent(
-            discoveryScope: discovery.scope,
-            discoveredByWindowID: discoveredByWindowID,
-            newlyCaptured: newlyCaptured.union(replacementIdentities)
-        )
-        return WindowContinuityProtectionResolution(
+        let resolution = WindowContinuityProtectionResolution(
             confirmedRemovedWindowIDs: Set(classification.confirmedRemoved.map(\.windowID)),
             suppressedDiscoveredWindowIDs: Set(
                 (classification.terminated + classification.destroyed).map(\.windowID)
             ),
-            protectedWindowIDs: Set(identitiesByWindowID.keys)
+            protectedWindowIDs: protectedWindowIDs,
+            eligibleWindowIDs: eligibleWindowIDs
+        )
+        diagnostics = WindowContinuityDiagnostics(
+            captured: newlyCaptured.diagnostics,
+            protectedBeforeResolution: protectedBeforeResolution.diagnostics,
+            confirmedRemovedWindowIDs: resolution.confirmedRemovedWindowIDs.sorted(),
+            suppressedDiscoveredWindowIDs: resolution.suppressedDiscoveredWindowIDs.sorted(),
+            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
+            anchors: entriesByWindowID.values.anchorDiagnostics,
+            eligibleWindowIDs: resolution.eligibleWindowIDs.sorted(),
+            recoveredWindowIDs: [],
+            completed: false
+        )
+        return resolution
+    }
+
+    func completeRecovery(windowIDs: Set<WindowID>) {
+        let recovered = windowIDs.intersection(protectedWindowIDs)
+        for id in recovered {
+            entriesByWindowID.removeValue(forKey: id)
+        }
+        diagnostics = WindowContinuityDiagnostics(
+            captured: [],
+            protectedBeforeResolution: diagnostics.protectedAfterResolution,
+            confirmedRemovedWindowIDs: [],
+            suppressedDiscoveredWindowIDs: [],
+            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
+            anchors: entriesByWindowID.values.anchorDiagnostics,
+            eligibleWindowIDs: eligibleWindowIDs.sorted(),
+            recoveredWindowIDs: recovered.sorted(),
+            completed: !recovered.isEmpty && entriesByWindowID.isEmpty
+        )
+    }
+
+    func cancel(windowIDs: Set<WindowID>) {
+        let cancelled = windowIDs.intersection(protectedWindowIDs)
+        for id in windowIDs {
+            entriesByWindowID.removeValue(forKey: id)
+        }
+        guard !cancelled.isEmpty else {
+            return
+        }
+        diagnostics = WindowContinuityDiagnostics(
+            captured: [],
+            protectedBeforeResolution: diagnostics.protectedAfterResolution,
+            confirmedRemovedWindowIDs: [],
+            suppressedDiscoveredWindowIDs: [],
+            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
+            anchors: entriesByWindowID.values.anchorDiagnostics,
+            eligibleWindowIDs: eligibleWindowIDs.sorted(),
+            recoveredWindowIDs: [],
+            completed: entriesByWindowID.isEmpty
         )
     }
 
@@ -81,7 +194,7 @@ final class WindowContinuityProtector {
         lifecycle: WindowLifecycleConfirmation
     ) -> WindowContinuityClassification {
         var classification = WindowContinuityClassification()
-        for identity in identitiesByWindowID.values.sortedByWindowIdentity {
+        for identity in entriesByWindowID.values.identities.sortedByWindowIdentity {
             let discoveredIdentity = discoveredByWindowID[identity.windowID]
             if let discoveredIdentity, discoveredIdentity != identity {
                 classification.replaced.append(identity)
@@ -96,37 +209,30 @@ final class WindowContinuityProtector {
 
     private func applyConfirmedRemovals(_ identities: [WindowIdentity]) {
         for identity in identities {
-            identitiesByWindowID.removeValue(forKey: identity.windowID)
+            entriesByWindowID.removeValue(forKey: identity.windowID)
         }
     }
 
-    private func protectReplacements(
-        _ replaced: [WindowIdentity],
-        discoveredByWindowID: [WindowID: WindowIdentity]
-    ) -> Set<WindowIdentity> {
-        Set(replaced.compactMap { identity in
-            guard let replacement = discoveredByWindowID[identity.windowID] else {
-                return nil
-            }
-            identitiesByWindowID[replacement.windowID] = replacement
-            return replacement
-        })
-    }
-
-    private func finishIfAllRemainingIdentitiesArePresent(
-        discoveryScope: WindowDiscoverySnapshot.Scope,
+    private func updateEligibility(
+        discovery: WindowDiscoverySnapshot,
         discoveredByWindowID: [WindowID: WindowIdentity],
         newlyCaptured: Set<WindowIdentity>
     ) {
-        guard case .full = discoveryScope else {
-            return
+        let inspectedWindowIDs: Set<WindowID> = switch discovery.scope {
+        case .full:
+            protectedWindowIDs
+        case let .windows(ids):
+            ids.intersection(protectedWindowIDs)
         }
-        guard identitiesByWindowID.values.allSatisfy({
-            discoveredByWindowID[$0.windowID] == $0 && !newlyCaptured.contains($0)
-        }) else {
-            return
+
+        for id in inspectedWindowIDs {
+            guard var entry = entriesByWindowID[id] else {
+                continue
+            }
+            entry.isEligible = discoveredByWindowID[id] == entry.identity
+                && !newlyCaptured.contains(entry.identity)
+            entriesByWindowID[id] = entry
         }
-        identitiesByWindowID.removeAll()
     }
 }
 
@@ -144,6 +250,19 @@ struct WindowContinuityProtectionResolution {
     let confirmedRemovedWindowIDs: Set<WindowID>
     let suppressedDiscoveredWindowIDs: Set<WindowID>
     let protectedWindowIDs: Set<WindowID>
+    let eligibleWindowIDs: Set<WindowID>
+}
+
+struct WindowContinuityAnchor {
+    let space: SpaceID
+    let frame: WindowFrame
+    let sourceDisplay: DisplaySnapshot
+}
+
+private struct WindowContinuityEntry {
+    let identity: WindowIdentity
+    let anchor: WindowContinuityAnchor?
+    var isEligible: Bool
 }
 
 private struct WindowIdentity: Equatable, Hashable {
@@ -167,6 +286,26 @@ private extension WindowSnapshot {
     }
 }
 
+private extension Sequence<WindowContinuityEntry> {
+    var identities: [WindowIdentity] {
+        map(\.identity)
+    }
+
+    var anchorDiagnostics: [WindowContinuityAnchorDiagnostics] {
+        compactMap { entry in
+            entry.anchor.map {
+                WindowContinuityAnchorDiagnostics(
+                    windowID: entry.identity.windowID,
+                    space: $0.space,
+                    frame: $0.frame,
+                    sourceDisplayID: $0.sourceDisplay.id,
+                    sourceDisplayFrame: $0.sourceDisplay.frame
+                )
+            }
+        }.sorted { $0.windowID < $1.windowID }
+    }
+}
+
 private extension Sequence<WindowIdentity> {
     var sortedByWindowIdentity: [WindowIdentity] {
         sorted {
@@ -176,4 +315,47 @@ private extension Sequence<WindowIdentity> {
             return $0.pid < $1.pid
         }
     }
+
+    var diagnostics: [WindowContinuityIdentityDiagnostics] {
+        sortedByWindowIdentity.map {
+            WindowContinuityIdentityDiagnostics(windowID: $0.windowID, pid: $0.pid)
+        }
+    }
+}
+
+public struct WindowContinuityIdentityDiagnostics {
+    public let windowID: WindowID
+    public let pid: pid_t
+}
+
+public struct WindowContinuityAnchorDiagnostics {
+    public let windowID: WindowID
+    public let space: SpaceID
+    public let frame: WindowFrame
+    public let sourceDisplayID: DisplayID
+    public let sourceDisplayFrame: CGRect
+}
+
+public struct WindowContinuityDiagnostics {
+    public let captured: [WindowContinuityIdentityDiagnostics]
+    public let protectedBeforeResolution: [WindowContinuityIdentityDiagnostics]
+    public let confirmedRemovedWindowIDs: [WindowID]
+    public let suppressedDiscoveredWindowIDs: [WindowID]
+    public let protectedAfterResolution: [WindowContinuityIdentityDiagnostics]
+    public let anchors: [WindowContinuityAnchorDiagnostics]
+    public let eligibleWindowIDs: [WindowID]
+    public let recoveredWindowIDs: [WindowID]
+    public let completed: Bool
+
+    static let empty = WindowContinuityDiagnostics(
+        captured: [],
+        protectedBeforeResolution: [],
+        confirmedRemovedWindowIDs: [],
+        suppressedDiscoveredWindowIDs: [],
+        protectedAfterResolution: [],
+        anchors: [],
+        eligibleWindowIDs: [],
+        recoveredWindowIDs: [],
+        completed: false
+    )
 }

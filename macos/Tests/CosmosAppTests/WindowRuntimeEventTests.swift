@@ -21,27 +21,41 @@ final class WindowRuntimeEventTests: XCTestCase {
         let event = WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
         var buffer = WindowRuntimeEventBuffer()
 
-        buffer.beginWindowDrag()
+        buffer.beginWindowDrag(windowID: 100)
         buffer.append(event)
 
         XCTAssertFalse(buffer.reserveDelivery())
         buffer.endWindowDrag()
         XCTAssertTrue(buffer.reserveDelivery())
-        XCTAssertEqual(buffer.takeDelivery(), [event])
+        let delivered = buffer.takeDelivery()
+        XCTAssertEqual(delivered, [
+            WindowRuntimeEvent(kind: .userLayoutChanged, windowID: 100)
+        ])
+        XCTAssertEqual(
+            delivered.map { WindowRuntimeEventBatch(events: $0) }?.userMovedWindowIDs,
+            [100]
+        )
     }
 
-    func testEventBufferKeepsReservedEventsWhenDragStartsBeforeDelivery() {
-        let event = WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
+    func testEventBufferDoesNotRelabelEarlierSystemLayoutWhenDragStartsBeforeDelivery() {
+        let systemLayout = WindowRuntimeEvent(kind: .layoutChanged, windowID: 100)
+        let userLayout = WindowRuntimeEvent(kind: .layoutChanged, windowID: 200)
         var buffer = WindowRuntimeEventBuffer()
 
-        buffer.append(event)
+        buffer.append(systemLayout)
         XCTAssertTrue(buffer.reserveDelivery())
-        buffer.beginWindowDrag()
+        buffer.beginWindowDrag(windowID: 200)
+        buffer.append(userLayout)
+        buffer.append(WindowRuntimeEvent(kind: .layoutChanged, windowID: 300))
 
         XCTAssertNil(buffer.takeDelivery())
         buffer.endWindowDrag()
         XCTAssertTrue(buffer.reserveDelivery())
-        XCTAssertEqual(buffer.takeDelivery(), [event])
+        XCTAssertEqual(buffer.takeDelivery(), [
+            systemLayout,
+            WindowRuntimeEvent(kind: .userLayoutChanged, windowID: 200),
+            WindowRuntimeEvent(kind: .layoutChanged, windowID: 300)
+        ])
     }
 
     func testEventBufferDiscardsPendingAndIncomingEventsWhileSessionIsInactive() {
@@ -128,6 +142,54 @@ final class WindowRuntimeEventTests: XCTestCase {
 
         XCTAssertTrue(batch.isSessionResumeRecovery)
         XCTAssertNil(batch.discoveryWindowIDs)
+    }
+
+    func testSystemWakeRequiresDisplayRecoveryDiscovery() {
+        let batch = WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .systemWoke, windowID: nil)
+        ])
+
+        XCTAssertTrue(batch.containsDisplayChange)
+        XCTAssertTrue(batch.containsSessionResume)
+        XCTAssertTrue(batch.isSessionResumeRecovery)
+        XCTAssertTrue(batch.needsFullThumbnailRefresh)
+        XCTAssertNil(batch.discoveryWindowIDs)
+    }
+
+    func testEventBufferRemainsSuspendedUntilSessionAndSleepRecover() {
+        let event = WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.suspend(.userSession)
+        buffer.suspend(.systemSleep)
+        buffer.resume(.systemSleep)
+        buffer.append(event)
+
+        XCTAssertFalse(buffer.reserveDelivery())
+
+        buffer.resume(.userSession)
+        buffer.append(event)
+
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [event])
+    }
+
+    func testEventBufferRetainsLifecycleAndDisplayEvidenceWhileSuspended() {
+        let focus = WindowRuntimeEvent(kind: .focusChanged, windowID: 100)
+        let destroyed = WindowRuntimeEvent(kind: .windowDestroyed, windowID: 200)
+        let terminated = WindowRuntimeEvent(kind: .applicationTerminated, windowID: nil, processID: 42)
+        let display = WindowRuntimeEvent(kind: .displayChanged, windowID: nil)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.append(focus)
+        buffer.append(destroyed)
+        buffer.suspend(.systemSleep)
+        buffer.append(terminated)
+        buffer.append(display)
+        buffer.resume(.systemSleep)
+
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [destroyed, terminated, display])
     }
 
     func testExistingWindowChangesDiscoverOnlyAffectedWindows() {

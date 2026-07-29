@@ -7,6 +7,7 @@ import Foundation
 final class WindowEventMonitor {
     private let onEvents: (WindowRuntimeEventBatch) -> Void
     private let onSessionActivityChanged: (Bool) -> Void
+    private let onSystemSleepChanged: (Bool) -> Void
     private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] element, notification in
         self?.handleAXNotification(element: element, notification: notification)
     }
@@ -19,9 +20,11 @@ final class WindowEventMonitor {
 
     init(
         onSessionActivityChanged: @escaping (Bool) -> Void = { _ in },
+        onSystemSleepChanged: @escaping (Bool) -> Void = { _ in },
         onEvents: @escaping (WindowRuntimeEventBatch) -> Void
     ) {
         self.onSessionActivityChanged = onSessionActivityChanged
+        self.onSystemSleepChanged = onSystemSleepChanged
         self.onEvents = onEvents
     }
 
@@ -57,7 +60,7 @@ final class WindowEventMonitor {
 
     func scheduleOwnWindowChanged(_ windowID: WindowID) {
         if isLeftMouseButtonDown {
-            startOwnWindowDragIfNeeded()
+            startOwnWindowDragIfNeeded(windowID: windowID)
         }
         schedule(.init(kind: .layoutChanged, windowID: windowID))
         schedule(.init(kind: .thumbnailChanged, windowID: windowID))
@@ -110,32 +113,20 @@ final class WindowEventMonitor {
             ))
         })
 
-        spaceObserverTokens.append(notificationCenter.addObserver(
-            forName: NSWorkspace.sessionDidResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.suspendForInactiveSession()
-        })
-
-        spaceObserverTokens.append(notificationCenter.addObserver(
-            forName: NSWorkspace.sessionDidBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.resumeAfterInactiveSession()
-        })
+        observeUserSessionLifecycle(notificationCenter)
+        observeSystemSleepLifecycle(notificationCenter)
     }
 
     private func suspendForInactiveSession() {
-        eventBuffer.suspend()
+        eventBuffer.suspend(.userSession)
         stopMouseUpMonitor()
         onSessionActivityChanged(false)
     }
 
     private func resumeAfterInactiveSession() {
-        eventBuffer.resume()
+        eventBuffer.resume(.userSession)
         onSessionActivityChanged(true)
+        scheduleDelivery()
     }
 
     private func observeDisplayChanges() {
@@ -175,10 +166,12 @@ final class WindowEventMonitor {
                 return
             }
         }
-        if isMouseDrivenLayoutNotification(notification), isLeftMouseButtonDown {
-            startExternalWindowDragIfNeeded()
-        }
         let windowID = AXClient.windowID(for: element)
+        if isMouseDrivenLayoutNotification(notification),
+           isLeftMouseButtonDown,
+           let windowID {
+            startExternalWindowDragIfNeeded(windowID: windowID)
+        }
         for kind in kinds {
             schedule(.init(kind: kind, windowID: windowID))
         }
@@ -193,7 +186,7 @@ final class WindowEventMonitor {
         CGEventSource.buttonState(.combinedSessionState, button: .left)
     }
 
-    private func startExternalWindowDragIfNeeded() {
+    private func startExternalWindowDragIfNeeded(windowID: WindowID) {
         guard !eventBuffer.isWindowDragActive else {
             return
         }
@@ -204,10 +197,10 @@ final class WindowEventMonitor {
         }
 
         globalMouseUpMonitor = monitor
-        eventBuffer.beginWindowDrag()
+        eventBuffer.beginWindowDrag(windowID: windowID)
     }
 
-    private func startOwnWindowDragIfNeeded() {
+    private func startOwnWindowDragIfNeeded(windowID: WindowID) {
         guard !eventBuffer.isWindowDragActive else {
             return
         }
@@ -219,7 +212,7 @@ final class WindowEventMonitor {
         }
 
         localMouseUpMonitor = monitor
-        eventBuffer.beginWindowDrag()
+        eventBuffer.beginWindowDrag(windowID: windowID)
     }
 
     private func finishWindowDrag() {
@@ -259,5 +252,55 @@ final class WindowEventMonitor {
             }
             onEvents(WindowRuntimeEventBatch(events: events))
         }
+    }
+}
+
+private extension WindowEventMonitor {
+    func observeUserSessionLifecycle(_ notificationCenter: NotificationCenter) {
+        spaceObserverTokens.append(notificationCenter.addObserver(
+            forName: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.suspendForInactiveSession()
+        })
+
+        spaceObserverTokens.append(notificationCenter.addObserver(
+            forName: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resumeAfterInactiveSession()
+        })
+    }
+
+    func observeSystemSleepLifecycle(_ notificationCenter: NotificationCenter) {
+        spaceObserverTokens.append(notificationCenter.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.suspendForSystemSleep()
+        })
+
+        spaceObserverTokens.append(notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resumeAfterSystemWake()
+        })
+    }
+
+    func suspendForSystemSleep() {
+        eventBuffer.suspend(.systemSleep)
+        stopMouseUpMonitor()
+        onSystemSleepChanged(false)
+    }
+
+    func resumeAfterSystemWake() {
+        eventBuffer.resume(.systemSleep)
+        onSystemSleepChanged(true)
+        scheduleDelivery()
     }
 }

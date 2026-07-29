@@ -9,14 +9,22 @@ enum WindowRuntimeEventKind: Hashable {
     case focusChanged
     case thumbnailChanged
     case layoutChanged
+    case userLayoutChanged
     case windowSetChanged
     case windowDestroyed
     case applicationTerminated
     case displayChanged
     case sessionResumed
+    case systemWoke
 
     var needsThumbnailCapture: Bool {
         self == .thumbnailChanged
+    }
+
+    var mustSurviveObservationSuspension: Bool {
+        self == .applicationTerminated
+            || self == .windowDestroyed
+            || self == .displayChanged
     }
 
     static func kinds(forAXNotification notification: String) -> Set<Self> {
@@ -83,7 +91,7 @@ struct WindowRuntimeEventBatch {
     }
 
     var containsDisplayChange: Bool {
-        events.contains { $0.kind == .displayChanged }
+        events.contains { $0.kind == .displayChanged || $0.kind == .systemWoke }
     }
 
     var containsWindowSetChange: Bool {
@@ -131,16 +139,26 @@ struct WindowRuntimeEventBatch {
             return false
         }
         return events.contains {
-            $0.kind == .layoutChanged && $0.windowID == focusedWindowID
+            ($0.kind == .layoutChanged || $0.kind == .userLayoutChanged)
+                && $0.windowID == focusedWindowID
         }
     }
 
+    var userMovedWindowIDs: Set<WindowID> {
+        Set(events.compactMap { event in
+            event.kind == .userLayoutChanged ? event.windowID : nil
+        })
+    }
+
     var containsSessionResume: Bool {
-        events.contains { $0.kind == .sessionResumed }
+        events.contains { $0.kind == .sessionResumed || $0.kind == .systemWoke }
     }
 
     var isSessionResumeRecovery: Bool {
-        containsSessionResume && !containsWindowSetChange && !containsDisplayChange
+        if events.contains(where: { $0.kind == .systemWoke }) {
+            return true
+        }
+        return containsSessionResume && !containsWindowSetChange && !containsDisplayChange
     }
 
     var discoveryWindowIDs: Set<WindowID>? {
@@ -152,35 +170,58 @@ struct WindowRuntimeEventBatch {
     }
 }
 
+enum WindowObservationSuspension: Hashable {
+    case userSession
+    case systemSleep
+}
+
 struct WindowRuntimeEventBuffer {
     private(set) var events: Set<WindowRuntimeEvent> = []
     private(set) var isWindowDragActive = false
+    private var draggedWindowID: WindowID?
     private var isDeliveryScheduled = false
-    private var isSuspended = false
+    private var suspensionReasons: Set<WindowObservationSuspension> = []
+
+    private var isSuspended: Bool {
+        !suspensionReasons.isEmpty
+    }
 
     mutating func append(_ event: WindowRuntimeEvent) {
-        guard !isSuspended else {
+        guard !isSuspended || event.kind.mustSurviveObservationSuspension else {
             return
         }
-        events.insert(event)
+        if isWindowDragActive,
+           event.kind == .layoutChanged,
+           event.windowID == draggedWindowID {
+            events.insert(WindowRuntimeEvent(
+                kind: .userLayoutChanged,
+                windowID: event.windowID,
+                processID: event.processID
+            ))
+        } else {
+            events.insert(event)
+        }
     }
 
-    mutating func suspend() {
-        isSuspended = true
+    mutating func suspend(_ reason: WindowObservationSuspension = .userSession) {
+        suspensionReasons.insert(reason)
         isWindowDragActive = false
-        events.removeAll()
+        draggedWindowID = nil
+        events = events.filter(\.kind.mustSurviveObservationSuspension)
     }
 
-    mutating func resume() {
-        isSuspended = false
+    mutating func resume(_ reason: WindowObservationSuspension = .userSession) {
+        suspensionReasons.remove(reason)
     }
 
-    mutating func beginWindowDrag() {
+    mutating func beginWindowDrag(windowID: WindowID? = nil) {
         isWindowDragActive = true
+        draggedWindowID = windowID
     }
 
     mutating func endWindowDrag() {
         isWindowDragActive = false
+        draggedWindowID = nil
     }
 
     mutating func reserveDelivery() -> Bool {
