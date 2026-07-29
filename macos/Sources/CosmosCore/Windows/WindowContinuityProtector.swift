@@ -3,20 +3,21 @@ import Foundation
 final class WindowContinuityProtector {
     private var entriesByWindowID: [WindowID: WindowContinuityEntry] = [:]
     private var pendingCapturedIdentities: Set<WindowIdentity> = []
-    private(set) var diagnostics = WindowContinuityDiagnostics.empty
 
     var protectedWindowIDs: Set<WindowID> {
         Set(entriesByWindowID.keys)
     }
 
-    var eligibleWindowIDs: Set<WindowID> {
-        Set(entriesByWindowID.values.compactMap { $0.isEligible ? $0.identity.windowID : nil })
-    }
-
-    var anchorsByWindowID: [WindowID: WindowContinuityAnchor] {
-        Dictionary(uniqueKeysWithValues: entriesByWindowID.values.compactMap { entry in
-            entry.anchor.map { (entry.identity.windowID, $0) }
-        })
+    var recoveryPlan: WindowContinuityRecoveryPlan {
+        let eligibleEntries = entriesByWindowID.values.filter(\.isEligible)
+        return WindowContinuityRecoveryPlan(
+            windowIDs: Set(eligibleEntries.map(\.identity.windowID)),
+            anchorsByWindowID: Dictionary(
+                uniqueKeysWithValues: eligibleEntries.compactMap { entry in
+                    entry.anchor.map { (entry.identity.windowID, $0) }
+                }
+            )
+        )
     }
 
     func captureIfDisplayContinuityWasLost(
@@ -38,7 +39,7 @@ final class WindowContinuityProtector {
             windows: windows,
             topology: previousTopology,
             state: state,
-            deferEligibilityUntilNextDiscovery: true
+            phase: .afterDiscovery
         )
     }
 
@@ -46,9 +47,8 @@ final class WindowContinuityProtector {
         windows: [WindowSnapshot],
         topology: DisplayTopologySnapshot,
         state: SpaceState,
-        deferEligibilityUntilNextDiscovery: Bool = false
+        phase: WindowContinuityCapturePhase
     ) {
-        var captured: [WindowIdentity] = []
         for window in windows {
             guard let space = state.membership(for: window.id),
                   entriesByWindowID[window.id] == nil
@@ -78,22 +78,10 @@ final class WindowContinuityProtector {
                 anchor: anchor,
                 isEligible: false
             )
-            if deferEligibilityUntilNextDiscovery {
+            if phase == .afterDiscovery {
                 pendingCapturedIdentities.insert(identity)
             }
-            captured.append(identity)
         }
-        diagnostics = WindowContinuityDiagnostics(
-            captured: captured.diagnostics,
-            protectedBeforeResolution: [],
-            confirmedRemovedWindowIDs: [],
-            suppressedDiscoveredWindowIDs: [],
-            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
-            anchors: entriesByWindowID.values.anchorDiagnostics,
-            eligibleWindowIDs: eligibleWindowIDs.sorted(),
-            recoveredWindowIDs: [],
-            completed: false
-        )
     }
 
     func resolve(
@@ -101,7 +89,6 @@ final class WindowContinuityProtector {
         lifecycle: WindowLifecycleConfirmation
     ) -> WindowContinuityProtectionResolution {
         let newlyCaptured = takePendingCapturedIdentities()
-        let protectedBeforeResolution = entriesByWindowID.values.identities.sortedByWindowIdentity
         let discoveredByWindowID = discoveredIdentitiesByWindowID(discovery)
         let classification = classify(
             discoveredByWindowID: discoveredByWindowID,
@@ -114,65 +101,25 @@ final class WindowContinuityProtector {
             newlyCaptured: newlyCaptured
         )
 
-        let resolution = WindowContinuityProtectionResolution(
+        return WindowContinuityProtectionResolution(
             confirmedRemovedWindowIDs: Set(classification.confirmedRemoved.map(\.windowID)),
             suppressedDiscoveredWindowIDs: Set(
                 (classification.terminated + classification.destroyed).map(\.windowID)
             ),
-            protectedWindowIDs: protectedWindowIDs,
-            eligibleWindowIDs: eligibleWindowIDs
+            protectedWindowIDs: protectedWindowIDs
         )
-        diagnostics = WindowContinuityDiagnostics(
-            captured: newlyCaptured.diagnostics,
-            protectedBeforeResolution: protectedBeforeResolution.diagnostics,
-            confirmedRemovedWindowIDs: resolution.confirmedRemovedWindowIDs.sorted(),
-            suppressedDiscoveredWindowIDs: resolution.suppressedDiscoveredWindowIDs.sorted(),
-            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
-            anchors: entriesByWindowID.values.anchorDiagnostics,
-            eligibleWindowIDs: resolution.eligibleWindowIDs.sorted(),
-            recoveredWindowIDs: [],
-            completed: false
-        )
-        return resolution
     }
 
     func completeRecovery(windowIDs: Set<WindowID>) {
-        let recovered = windowIDs.intersection(protectedWindowIDs)
-        for id in recovered {
+        for id in windowIDs.intersection(protectedWindowIDs) {
             entriesByWindowID.removeValue(forKey: id)
         }
-        diagnostics = WindowContinuityDiagnostics(
-            captured: [],
-            protectedBeforeResolution: diagnostics.protectedAfterResolution,
-            confirmedRemovedWindowIDs: [],
-            suppressedDiscoveredWindowIDs: [],
-            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
-            anchors: entriesByWindowID.values.anchorDiagnostics,
-            eligibleWindowIDs: eligibleWindowIDs.sorted(),
-            recoveredWindowIDs: recovered.sorted(),
-            completed: !recovered.isEmpty && entriesByWindowID.isEmpty
-        )
     }
 
     func cancel(windowIDs: Set<WindowID>) {
-        let cancelled = windowIDs.intersection(protectedWindowIDs)
         for id in windowIDs {
             entriesByWindowID.removeValue(forKey: id)
         }
-        guard !cancelled.isEmpty else {
-            return
-        }
-        diagnostics = WindowContinuityDiagnostics(
-            captured: [],
-            protectedBeforeResolution: diagnostics.protectedAfterResolution,
-            confirmedRemovedWindowIDs: [],
-            suppressedDiscoveredWindowIDs: [],
-            protectedAfterResolution: entriesByWindowID.values.identities.diagnostics,
-            anchors: entriesByWindowID.values.anchorDiagnostics,
-            eligibleWindowIDs: eligibleWindowIDs.sorted(),
-            recoveredWindowIDs: [],
-            completed: entriesByWindowID.isEmpty
-        )
     }
 
     private func takePendingCapturedIdentities() -> Set<WindowIdentity> {
@@ -250,13 +197,22 @@ struct WindowContinuityProtectionResolution {
     let confirmedRemovedWindowIDs: Set<WindowID>
     let suppressedDiscoveredWindowIDs: Set<WindowID>
     let protectedWindowIDs: Set<WindowID>
-    let eligibleWindowIDs: Set<WindowID>
 }
 
 struct WindowContinuityAnchor {
     let space: SpaceID
     let frame: WindowFrame
     let sourceDisplay: DisplaySnapshot
+}
+
+struct WindowContinuityRecoveryPlan {
+    let windowIDs: Set<WindowID>
+    let anchorsByWindowID: [WindowID: WindowContinuityAnchor]
+}
+
+enum WindowContinuityCapturePhase {
+    case beforeDiscovery
+    case afterDiscovery
 }
 
 private struct WindowContinuityEntry {
@@ -290,20 +246,6 @@ private extension Sequence<WindowContinuityEntry> {
     var identities: [WindowIdentity] {
         map(\.identity)
     }
-
-    var anchorDiagnostics: [WindowContinuityAnchorDiagnostics] {
-        compactMap { entry in
-            entry.anchor.map {
-                WindowContinuityAnchorDiagnostics(
-                    windowID: entry.identity.windowID,
-                    space: $0.space,
-                    frame: $0.frame,
-                    sourceDisplayID: $0.sourceDisplay.id,
-                    sourceDisplayFrame: $0.sourceDisplay.frame
-                )
-            }
-        }.sorted { $0.windowID < $1.windowID }
-    }
 }
 
 private extension Sequence<WindowIdentity> {
@@ -315,47 +257,4 @@ private extension Sequence<WindowIdentity> {
             return $0.pid < $1.pid
         }
     }
-
-    var diagnostics: [WindowContinuityIdentityDiagnostics] {
-        sortedByWindowIdentity.map {
-            WindowContinuityIdentityDiagnostics(windowID: $0.windowID, pid: $0.pid)
-        }
-    }
-}
-
-public struct WindowContinuityIdentityDiagnostics {
-    public let windowID: WindowID
-    public let pid: pid_t
-}
-
-public struct WindowContinuityAnchorDiagnostics {
-    public let windowID: WindowID
-    public let space: SpaceID
-    public let frame: WindowFrame
-    public let sourceDisplayID: DisplayID
-    public let sourceDisplayFrame: CGRect
-}
-
-public struct WindowContinuityDiagnostics {
-    public let captured: [WindowContinuityIdentityDiagnostics]
-    public let protectedBeforeResolution: [WindowContinuityIdentityDiagnostics]
-    public let confirmedRemovedWindowIDs: [WindowID]
-    public let suppressedDiscoveredWindowIDs: [WindowID]
-    public let protectedAfterResolution: [WindowContinuityIdentityDiagnostics]
-    public let anchors: [WindowContinuityAnchorDiagnostics]
-    public let eligibleWindowIDs: [WindowID]
-    public let recoveredWindowIDs: [WindowID]
-    public let completed: Bool
-
-    static let empty = WindowContinuityDiagnostics(
-        captured: [],
-        protectedBeforeResolution: [],
-        confirmedRemovedWindowIDs: [],
-        suppressedDiscoveredWindowIDs: [],
-        protectedAfterResolution: [],
-        anchors: [],
-        eligibleWindowIDs: [],
-        recoveredWindowIDs: [],
-        completed: false
-    )
 }

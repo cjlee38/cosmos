@@ -95,10 +95,6 @@ public extension SpaceController {
         runtimeSynchronizer.beginContinuityProtection(state: state)
     }
 
-    func windowContinuityDiagnostics() -> WindowContinuityDiagnostics {
-        runtimeSynchronizer.continuityDiagnostics()
-    }
-
     func currentWindows() -> [WindowSnapshot] {
         windowCache.windows
     }

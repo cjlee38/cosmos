@@ -119,8 +119,8 @@ final class WindowRuntimeEventTests: XCTestCase {
             WindowRuntimeEvent(kind: .sessionResumed, windowID: nil)
         ])
 
-        XCTAssertTrue(batch.containsSessionResume)
-        XCTAssertTrue(batch.isSessionResumeRecovery)
+        XCTAssertTrue(batch.containsRecoveryRequest)
+        XCTAssertTrue(batch.usesSessionRecoveryDiscovery)
         XCTAssertNil(batch.discoveryWindowIDs)
     }
 
@@ -130,7 +130,7 @@ final class WindowRuntimeEventTests: XCTestCase {
             WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
         ])
 
-        XCTAssertFalse(batch.isSessionResumeRecovery)
+        XCTAssertFalse(batch.usesSessionRecoveryDiscovery)
         XCTAssertNil(batch.discoveryWindowIDs)
     }
 
@@ -140,18 +140,18 @@ final class WindowRuntimeEventTests: XCTestCase {
             WindowRuntimeEvent(kind: .focusChanged, windowID: 100)
         ])
 
-        XCTAssertTrue(batch.isSessionResumeRecovery)
+        XCTAssertTrue(batch.usesSessionRecoveryDiscovery)
         XCTAssertNil(batch.discoveryWindowIDs)
     }
 
-    func testSystemWakeRequiresDisplayRecoveryDiscovery() {
+    func testContinuityRecoveryRequiresDisplayRecoveryDiscovery() {
         let batch = WindowRuntimeEventBatch(events: [
-            WindowRuntimeEvent(kind: .systemWoke, windowID: nil)
+            WindowRuntimeEvent(kind: .continuityRecovery, windowID: nil)
         ])
 
         XCTAssertTrue(batch.containsDisplayChange)
-        XCTAssertTrue(batch.containsSessionResume)
-        XCTAssertTrue(batch.isSessionResumeRecovery)
+        XCTAssertTrue(batch.containsRecoveryRequest)
+        XCTAssertTrue(batch.usesSessionRecoveryDiscovery)
         XCTAssertTrue(batch.needsFullThumbnailRefresh)
         XCTAssertNil(batch.discoveryWindowIDs)
     }

@@ -15,7 +15,7 @@ enum WindowRuntimeEventKind: Hashable {
     case applicationTerminated
     case displayChanged
     case sessionResumed
-    case systemWoke
+    case continuityRecovery
 
     var needsThumbnailCapture: Bool {
         self == .thumbnailChanged
@@ -91,7 +91,7 @@ struct WindowRuntimeEventBatch {
     }
 
     var containsDisplayChange: Bool {
-        events.contains { $0.kind == .displayChanged || $0.kind == .systemWoke }
+        events.contains { $0.kind == .displayChanged || $0.kind == .continuityRecovery }
     }
 
     var containsWindowSetChange: Bool {
@@ -150,19 +150,19 @@ struct WindowRuntimeEventBatch {
         })
     }
 
-    var containsSessionResume: Bool {
-        events.contains { $0.kind == .sessionResumed || $0.kind == .systemWoke }
+    var containsRecoveryRequest: Bool {
+        events.contains { $0.kind == .sessionResumed || $0.kind == .continuityRecovery }
     }
 
-    var isSessionResumeRecovery: Bool {
-        if events.contains(where: { $0.kind == .systemWoke }) {
+    var usesSessionRecoveryDiscovery: Bool {
+        if events.contains(where: { $0.kind == .continuityRecovery }) {
             return true
         }
-        return containsSessionResume && !containsWindowSetChange && !containsDisplayChange
+        return containsRecoveryRequest && !containsWindowSetChange && !containsDisplayChange
     }
 
     var discoveryWindowIDs: Set<WindowID>? {
-        containsDisplayChange || containsWindowSetChange || containsSessionResume ? nil : windowIDs
+        containsDisplayChange || containsWindowSetChange || containsRecoveryRequest ? nil : windowIDs
     }
 
     var needsFullThumbnailRefresh: Bool {

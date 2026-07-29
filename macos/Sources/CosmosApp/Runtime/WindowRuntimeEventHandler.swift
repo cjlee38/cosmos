@@ -22,8 +22,8 @@ final class WindowRuntimeEventHandler {
     private var isProcessing = false
     private var isSessionActive = true
     private var isSystemAwake = true
-    private var needsWakeRecovery = false
-    private var hasRetriedWakeRecovery = false
+    private(set) var hasPendingContinuityRecovery = false
+    private var hasRetriedContinuityRecovery = false
     private var sessionGeneration: UInt64 = 0
 
     init(
@@ -81,10 +81,10 @@ final class WindowRuntimeEventHandler {
 
         if !isAwake {
             controller.beginWindowContinuityProtection()
-            hasRetriedWakeRecovery = false
+            hasRetriedContinuityRecovery = false
         }
         isSystemAwake = isAwake
-        needsWakeRecovery = needsWakeRecovery || isAwake
+        hasPendingContinuityRecovery = hasPendingContinuityRecovery || isAwake
         sessionGeneration &+= 1
         preserveLifecycleEvidence()
         if isObservationActive {
@@ -114,7 +114,7 @@ final class WindowRuntimeEventHandler {
             let discovery = Result {
                 try self.controller.discoverWindows(
                     windowIDs: batch.discoveryWindowIDs,
-                    mode: batch.isSessionResumeRecovery ? .sessionRecovery : .normal
+                    mode: batch.usesSessionRecoveryDiscovery ? .sessionRecovery : .normal
                 )
             }
             scheduleApply { [weak self] in
@@ -157,11 +157,11 @@ final class WindowRuntimeEventHandler {
                 return
             }
             refreshPreviews(for: events, result: result)
-            needsWakeRecovery = result.continuityRecovery.isPending
-            if !needsWakeRecovery {
-                hasRetriedWakeRecovery = false
+            hasPendingContinuityRecovery = result.continuityRecovery.isPending
+            if !hasPendingContinuityRecovery {
+                hasRetriedContinuityRecovery = false
             } else if !result.continuityRecovery.failedWindowIDs.isEmpty {
-                retryWakeRecoveryIfNeeded(for: events)
+                retryContinuityRecoveryIfNeeded(for: events)
             }
             scheduleInitialContinuityVerificationIfNeeded(for: events)
             refreshSwitcherContent()
@@ -245,15 +245,17 @@ final class WindowRuntimeEventHandler {
 
 private extension WindowRuntimeEventHandler {
     func scheduleObservationRecovery() {
-        let kind: WindowRuntimeEventKind = needsWakeRecovery ? .systemWoke : .sessionResumed
+        let kind: WindowRuntimeEventKind = hasPendingContinuityRecovery
+            ? .continuityRecovery
+            : .sessionResumed
         handle(WindowRuntimeEventBatch(events: [
             WindowRuntimeEvent(kind: kind, windowID: nil)
         ]))
     }
 
     func nextBatchEvents() -> Set<WindowRuntimeEvent> {
-        let wakeEvents = pendingEvents.filter { $0.kind == .systemWoke }
-        return wakeEvents.isEmpty ? pendingEvents : wakeEvents
+        let recoveryEvents = pendingEvents.filter { $0.kind == .continuityRecovery }
+        return recoveryEvents.isEmpty ? pendingEvents : recoveryEvents
     }
 
     func preserveLifecycleEvidence() {
@@ -262,37 +264,37 @@ private extension WindowRuntimeEventHandler {
             .filter(\.kind.mustSurviveObservationSuspension)
     }
 
-    func appendWakeRecovery() {
-        pendingEvents.insert(WindowRuntimeEvent(kind: .systemWoke, windowID: nil))
+    func appendContinuityRecovery() {
+        pendingEvents.insert(WindowRuntimeEvent(kind: .continuityRecovery, windowID: nil))
     }
 
-    func retryWakeRecoveryIfNeeded(for events: WindowRuntimeEventBatch) {
-        guard needsWakeRecovery,
-              events.events.contains(where: { $0.kind == .systemWoke }),
-              !hasRetriedWakeRecovery
+    func retryContinuityRecoveryIfNeeded(for events: WindowRuntimeEventBatch) {
+        guard hasPendingContinuityRecovery,
+              events.events.contains(where: { $0.kind == .continuityRecovery }),
+              !hasRetriedContinuityRecovery
         else {
             return
         }
-        hasRetriedWakeRecovery = true
-        appendWakeRecovery()
+        hasRetriedContinuityRecovery = true
+        appendContinuityRecovery()
     }
 
     func scheduleInitialContinuityVerificationIfNeeded(
         for events: WindowRuntimeEventBatch
     ) {
-        guard needsWakeRecovery,
+        guard hasPendingContinuityRecovery,
               events.events.contains(where: { $0.kind == .displayChanged })
         else {
             return
         }
-        appendWakeRecovery()
+        appendContinuityRecovery()
     }
 
     func handleDiscoveryFailure(
         _ error: Error,
         for events: WindowRuntimeEventBatch
     ) {
-        retryWakeRecoveryIfNeeded(for: events)
+        retryContinuityRecoveryIfNeeded(for: events)
         log.error("Window update failed: \(String(describing: error))")
     }
 }

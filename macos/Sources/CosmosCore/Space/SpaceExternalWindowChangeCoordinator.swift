@@ -99,10 +99,13 @@ final class SpaceExternalWindowChangeCoordinator {
         targetFrames: [WindowID: WindowFrame],
         state: inout SpaceState
     ) throws -> ExternalWindowEventResult {
-        let eligibleWindowIDs = runtimeSynchronizer.continuityEligibleWindowIDs
+        let recoveryPlan = runtimeSynchronizer.continuityRecoveryPlan
         let recovery = visibilityCoordinator.applyContinuityRecovery(
-            windowIDs: eligibleWindowIDs,
-            targetFrames: displayCoordinator.continuityRecoveryTargetFrames(state: state),
+            windowIDs: recoveryPlan.windowIDs,
+            targetFrames: displayCoordinator.continuityRecoveryTargetFrames(
+                anchorsByWindowID: recoveryPlan.anchorsByWindowID,
+                state: state
+            ),
             state: &state
         )
         let result = try finish(
@@ -120,8 +123,7 @@ final class SpaceExternalWindowChangeCoordinator {
             focusedWindowSync: result.focusedWindowSync,
             continuityRecovery: WindowContinuityRecoveryStatus(
                 pendingWindowIDs: runtimeSynchronizer.continuityProtectedWindowIDs,
-                failedWindowIDs: recovery.failedWindowIDs,
-                attempts: recovery.attempts
+                failedWindowIDs: recovery.failedWindowIDs
             )
         )
     }

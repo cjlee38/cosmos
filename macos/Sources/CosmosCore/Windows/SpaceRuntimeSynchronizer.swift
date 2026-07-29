@@ -26,24 +26,17 @@ final class SpaceRuntimeSynchronizer {
         continuityProtector.capture(
             windows: windowCache.windows,
             topology: windowCache.displayTopology,
-            state: state
+            state: state,
+            phase: .beforeDiscovery
         )
-    }
-
-    func continuityDiagnostics() -> WindowContinuityDiagnostics {
-        continuityProtector.diagnostics
     }
 
     var continuityProtectedWindowIDs: Set<WindowID> {
         continuityProtector.protectedWindowIDs
     }
 
-    var continuityEligibleWindowIDs: Set<WindowID> {
-        continuityProtector.eligibleWindowIDs
-    }
-
-    var continuityAnchorsByWindowID: [WindowID: WindowContinuityAnchor] {
-        continuityProtector.anchorsByWindowID
+    var continuityRecoveryPlan: WindowContinuityRecoveryPlan {
+        continuityProtector.recoveryPlan
     }
 
     func completeContinuityRecovery(windowIDs: Set<WindowID>) {
@@ -66,19 +59,14 @@ final class SpaceRuntimeSynchronizer {
             guard windowSystem.apply(discovery) else {
                 continue
             }
-            if detectDisplayContinuityLoss {
-                continuityProtector.captureIfDisplayContinuityWasLost(
-                    previousTopology: windowCache.displayTopology,
-                    currentTopology: displayTopology,
-                    windows: windowCache.windows,
-                    state: state
-                )
-            }
-            return synchronizeAppliedDiscovery(
+            return synchronizeAcceptedDiscovery(
                 discovery,
                 displayTopology: displayTopology,
-                reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
-                lifecycle: lifecycle,
+                policy: SpaceSynchronizationPolicy(
+                    reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+                    detectDisplayContinuityLoss: detectDisplayContinuityLoss,
+                    lifecycle: lifecycle
+                ),
                 state: &state
             )
         }
@@ -95,7 +83,25 @@ final class SpaceRuntimeSynchronizer {
         guard windowSystem.apply(discovery) else {
             return nil
         }
-        if detectDisplayContinuityLoss {
+        return synchronizeAcceptedDiscovery(
+            discovery,
+            displayTopology: displayTopology,
+            policy: SpaceSynchronizationPolicy(
+                reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
+                detectDisplayContinuityLoss: detectDisplayContinuityLoss,
+                lifecycle: lifecycle
+            ),
+            state: &state
+        )
+    }
+
+    private func synchronizeAcceptedDiscovery(
+        _ discovery: WindowDiscoverySnapshot,
+        displayTopology: DisplayTopologySnapshot,
+        policy: SpaceSynchronizationPolicy,
+        state: inout SpaceState
+    ) -> SpaceSyncSummary {
+        if policy.detectDisplayContinuityLoss {
             continuityProtector.captureIfDisplayContinuityWasLost(
                 previousTopology: windowCache.displayTopology,
                 currentTopology: displayTopology,
@@ -106,8 +112,8 @@ final class SpaceRuntimeSynchronizer {
         return synchronizeAppliedDiscovery(
             discovery,
             displayTopology: displayTopology,
-            reconcileVisibleWindowMonitorMembership: reconcileVisibleWindowMonitorMembership,
-            lifecycle: lifecycle,
+            reconcileVisibleWindowMonitorMembership: policy.reconcileVisibleWindowMonitorMembership,
+            lifecycle: policy.lifecycle,
             state: &state
         )
     }
@@ -241,4 +247,10 @@ final class SpaceRuntimeSynchronizer {
             }
         }
     }
+}
+
+private struct SpaceSynchronizationPolicy {
+    let reconcileVisibleWindowMonitorMembership: Bool
+    let detectDisplayContinuityLoss: Bool
+    let lifecycle: WindowLifecycleConfirmation
 }

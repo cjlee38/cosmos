@@ -87,35 +87,15 @@ final class SpaceVisibilityCoordinator {
         )
         var succeeded: Set<WindowID> = []
         var failed: Set<WindowID> = []
-        var attempts: [ContinuityRecoveryAttempt] = []
 
         for id in windowIDs.sorted() {
-            let space = state.membership(for: id)
-            guard let space, windowCache.snapshot(for: id) != nil else {
+            guard let space = state.membership(for: id),
+                  windowCache.snapshot(for: id) != nil,
+                  let targetFrame = targetFrames[id]
+            else {
                 failed.insert(id)
-                attempts.append(ContinuityRecoveryAttempt(
-                    windowID: id,
-                    space: space,
-                    operation: "unavailable",
-                    targetFrame: targetFrames[id],
-                    resultingFrame: windowCache.snapshot(for: id)?.frame,
-                    outcome: "missing-membership-or-window"
-                ))
                 continue
             }
-            guard let targetFrame = targetFrames[id] else {
-                failed.insert(id)
-                attempts.append(ContinuityRecoveryAttempt(
-                    windowID: id,
-                    space: space,
-                    operation: visibleSpaces.contains(space) ? "restore" : "hide",
-                    targetFrame: nil,
-                    resultingFrame: windowCache.snapshot(for: id)?.frame,
-                    outcome: "target-unavailable"
-                ))
-                continue
-            }
-            let operation = visibleSpaces.contains(space) ? "restore" : "hide"
             do {
                 if visibleSpaces.contains(space) {
                     _ = try hiddenWindowOperator.restore(
@@ -132,30 +112,13 @@ final class SpaceVisibilityCoordinator {
                     )
                 }
                 succeeded.insert(id)
-                attempts.append(ContinuityRecoveryAttempt(
-                    windowID: id,
-                    space: space,
-                    operation: operation,
-                    targetFrame: targetFrame,
-                    resultingFrame: windowCache.snapshot(for: id)?.frame,
-                    outcome: "succeeded"
-                ))
             } catch {
                 failed.insert(id)
-                attempts.append(ContinuityRecoveryAttempt(
-                    windowID: id,
-                    space: space,
-                    operation: operation,
-                    targetFrame: targetFrame,
-                    resultingFrame: windowCache.snapshot(for: id)?.frame,
-                    outcome: "failed:\(String(describing: error))"
-                ))
             }
         }
         return WindowContinuityApplyResult(
             succeededWindowIDs: succeeded,
-            failedWindowIDs: failed,
-            attempts: attempts
+            failedWindowIDs: failed
         )
     }
 
@@ -210,5 +173,4 @@ final class SpaceVisibilityCoordinator {
 struct WindowContinuityApplyResult {
     let succeededWindowIDs: Set<WindowID>
     let failedWindowIDs: Set<WindowID>
-    let attempts: [ContinuityRecoveryAttempt]
 }

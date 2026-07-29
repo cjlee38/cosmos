@@ -153,7 +153,7 @@ extension WindowRuntimeEventConcurrencyTests {
         scheduledApply.removeFirst()()
 
         XCTAssertNil(controller.membership(for: 100))
-        XCTAssertTrue(controller.windowContinuityDiagnostics().protectedAfterResolution.isEmpty)
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
     }
 
     func testFailedWakeDiscoveryRetriesRecovery() throws {
@@ -214,8 +214,7 @@ extension WindowRuntimeEventConcurrencyTests {
         ]))
 
         XCTAssertEqual(windowSystem.discoveryModes, [.normal, .sessionRecovery])
-        XCTAssertTrue(controller.windowContinuityDiagnostics().completed)
-        XCTAssertTrue(controller.windowContinuityDiagnostics().protectedAfterResolution.isEmpty)
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
     }
 
     func testInterruptedWakeRecoveryStillAppliesDisplayTopologyAfterSessionReturns() throws {
