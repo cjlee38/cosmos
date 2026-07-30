@@ -264,6 +264,10 @@ final class WindowRuntimeEventHandlerTests: XCTestCase {
         XCTAssertTrue(scheduledRefreshes.isEmpty)
 
         scheduledDiscovery[1]()
+        XCTAssertEqual(scheduledDiscovery.count, 3)
+        XCTAssertTrue(scheduledRefreshes.isEmpty)
+
+        scheduledDiscovery[2]()
         XCTAssertEqual(scheduledRefreshes.count, 1)
         scheduledRefreshes[0].perform()
         wait(for: [captured], timeout: 1)

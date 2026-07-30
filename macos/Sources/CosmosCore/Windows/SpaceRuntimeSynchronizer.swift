@@ -127,7 +127,8 @@ final class SpaceRuntimeSynchronizer {
     ) -> SpaceSyncSummary {
         let protection = continuityProtector.resolve(
             with: discovery,
-            lifecycle: lifecycle
+            lifecycle: lifecycle,
+            topology: displayTopology
         )
         let windowSetDiff = windowCache.apply(
             discovery,

@@ -63,7 +63,8 @@ final class WindowContinuityProtector {
             let sourceDisplay = topology.monitorSlots.first {
                 $0.slot == sourceSlot
             }?.display
-            let frame = state.hiddenFrame(for: window.id) ?? window.frame
+            let hiddenFrame = state.hiddenFrame(for: window.id)
+            let frame = hiddenFrame ?? window.frame
             let anchor = frame.flatMap { frame in
                 sourceDisplay.map {
                     WindowContinuityAnchor(
@@ -76,6 +77,9 @@ final class WindowContinuityProtector {
             entriesByWindowID[window.id] = WindowContinuityEntry(
                 identity: identity,
                 anchor: anchor,
+                capturedObservedFrame: window.frame,
+                wasMinimized: window.isMinimized,
+                wasHiddenByCosmos: hiddenFrame != nil,
                 isEligible: false
             )
             if phase == .afterDiscovery {
@@ -86,7 +90,8 @@ final class WindowContinuityProtector {
 
     func resolve(
         with discovery: WindowDiscoverySnapshot,
-        lifecycle: WindowLifecycleConfirmation
+        lifecycle: WindowLifecycleConfirmation,
+        topology: DisplayTopologySnapshot
     ) -> WindowContinuityProtectionResolution {
         let newlyCaptured = takePendingCapturedIdentities()
         let discoveredByWindowID = discoveredIdentitiesByWindowID(discovery)
@@ -98,7 +103,8 @@ final class WindowContinuityProtector {
         updateEligibility(
             discovery: discovery,
             discoveredByWindowID: discoveredByWindowID,
-            newlyCaptured: newlyCaptured
+            newlyCaptured: newlyCaptured,
+            topology: topology
         )
 
         return WindowContinuityProtectionResolution(
@@ -163,7 +169,8 @@ final class WindowContinuityProtector {
     private func updateEligibility(
         discovery: WindowDiscoverySnapshot,
         discoveredByWindowID: [WindowID: WindowIdentity],
-        newlyCaptured: Set<WindowIdentity>
+        newlyCaptured: Set<WindowIdentity>,
+        topology: DisplayTopologySnapshot
     ) {
         let inspectedWindowIDs: Set<WindowID> = switch discovery.scope {
         case .full:
@@ -176,11 +183,93 @@ final class WindowContinuityProtector {
             guard var entry = entriesByWindowID[id] else {
                 continue
             }
-            entry.isEligible = discoveredByWindowID[id] == entry.identity
-                && !newlyCaptured.contains(entry.identity)
+            let discoveredWindow = discovery.windows.first { $0.id == id }
+            if discoveredByWindowID[id] != entry.identity {
+                entry.isEligible = false
+            } else if newlyCaptured.contains(entry.identity) {
+                entry.isEligible = false
+            } else {
+                entry.isEligible = isReady(
+                    entry: entry,
+                    discoveredWindow: discoveredWindow,
+                    topology: topology
+                )
+            }
             entriesByWindowID[id] = entry
         }
     }
+
+    private func isReady(
+        entry: WindowContinuityEntry,
+        discoveredWindow: WindowSnapshot?,
+        topology: DisplayTopologySnapshot
+    ) -> Bool {
+        guard let discoveredWindow else {
+            return false
+        }
+        guard let anchor = entry.anchor else {
+            return true
+        }
+        if entry.wasMinimized {
+            return true
+        }
+        if entry.wasHiddenByCosmos {
+            return true
+        }
+        if let currentSourceDisplay = topology.displays.first(where: {
+            $0.id == anchor.sourceDisplay.id
+        }) {
+            if hasEquivalentGeometry(currentSourceDisplay, anchor.sourceDisplay) {
+                return true
+            }
+            if let capturedFrame = entry.capturedObservedFrame,
+               let observedFrame = discoveredWindow.frame,
+               approximatelyEqual(capturedFrame, observedFrame),
+               currentSourceDisplay.frame.contains(CGRect(
+                   origin: capturedFrame.origin,
+                   size: capturedFrame.size
+               )) {
+                return true
+            }
+        }
+        if topology.displays.contains(where: {
+            hasEquivalentGeometry($0, anchor.sourceDisplay)
+        }) {
+            return true
+        }
+        guard let capturedFrame = entry.capturedObservedFrame,
+              let observedFrame = discoveredWindow.frame
+        else {
+            return false
+        }
+        return !approximatelyEqual(capturedFrame, observedFrame)
+    }
+}
+
+private func hasEquivalentGeometry(
+    _ lhs: DisplaySnapshot,
+    _ rhs: DisplaySnapshot
+) -> Bool {
+    approximatelyEqual(lhs.frame, rhs.frame)
+        && approximatelyEqual(lhs.visibleFrame, rhs.visibleFrame)
+}
+
+private func approximatelyEqual(_ lhs: WindowFrame, _ rhs: WindowFrame) -> Bool {
+    approximatelyEqual(lhs.origin.x, rhs.origin.x)
+        && approximatelyEqual(lhs.origin.y, rhs.origin.y)
+        && approximatelyEqual(lhs.size.width, rhs.size.width)
+        && approximatelyEqual(lhs.size.height, rhs.size.height)
+}
+
+private func approximatelyEqual(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+    approximatelyEqual(lhs.origin.x, rhs.origin.x)
+        && approximatelyEqual(lhs.origin.y, rhs.origin.y)
+        && approximatelyEqual(lhs.size.width, rhs.size.width)
+        && approximatelyEqual(lhs.size.height, rhs.size.height)
+}
+
+private func approximatelyEqual(_ lhs: CGFloat, _ rhs: CGFloat) -> Bool {
+    abs(lhs - rhs) <= 0.5
 }
 
 struct WindowLifecycleConfirmation {
@@ -218,6 +307,9 @@ enum WindowContinuityCapturePhase {
 private struct WindowContinuityEntry {
     let identity: WindowIdentity
     let anchor: WindowContinuityAnchor?
+    let capturedObservedFrame: WindowFrame?
+    let wasMinimized: Bool
+    let wasHiddenByCosmos: Bool
     var isEligible: Bool
 }
 

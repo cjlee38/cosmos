@@ -98,6 +98,45 @@ final class WindowRuntimeEventConcurrencyTests: XCTestCase {
         XCTAssertTrue(controller.isHiddenBySpace(200))
     }
 
+    func testWakeRecoveryDoesNotFollowTransientApplicationActivation() throws {
+        let currentWindow = makeSwitcherTestWindow(id: 100, title: "Current")
+        let inactiveWindow = makeSwitcherTestWindow(id: 200, title: "Inactive")
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            currentWindow,
+            inactiveWindow
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.focusedWindowIDValue = 100
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+
+        handler.systemSleepChanged(isAwake: false)
+        windowSystem.replaceWindows([])
+        handler.systemSleepChanged(isAwake: true)
+
+        windowSystem.replaceWindows([currentWindow, inactiveWindow])
+        windowSystem.focusedWindowIDValue = 200
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .applicationActivated, windowID: nil),
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        ]))
+
+        XCTAssertEqual(controller.currentSpace, "1")
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .applicationActivated, windowID: nil)
+        ]))
+
+        XCTAssertEqual(controller.currentSpace, "2")
+    }
+
     func testWakeWaitsForInactiveUserSessionBeforeRecovering() throws {
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [
             makeSwitcherTestWindow(id: 100, title: "Window")
@@ -125,6 +164,76 @@ final class WindowRuntimeEventConcurrencyTests: XCTestCase {
 }
 
 extension WindowRuntimeEventConcurrencyTests {
+    func testDisplayGenerationDiscardsDiscoveryStartedBeforeReconfiguration() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "Window")
+        ])
+        windowSystem.resetDiscoveryRequests()
+        var scheduledDiscovery: [() -> Void] = []
+        var scheduledApply: [() -> Void] = []
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { scheduledDiscovery.append($0) },
+            scheduleApply: { scheduledApply.append($0) }
+        )
+
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        ]))
+        handler.displayReconfigurationBegan()
+        handler.displayReconfigurationEnded()
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .displayChanged, windowID: nil)
+        ]))
+
+        scheduledDiscovery.removeFirst()()
+        scheduledApply.removeFirst()()
+
+        XCTAssertEqual(scheduledDiscovery.count, 1)
+        XCTAssertEqual(windowSystem.discoveryRequests.count, 1)
+
+        scheduledDiscovery.removeFirst()()
+        scheduledApply.removeFirst()()
+
+        XCTAssertEqual(windowSystem.discoveryRequests.count, 2)
+        XCTAssertNil(windowSystem.discoveryRequests[1])
+    }
+
+    func testDisplayGenerationCoalescesRepeatedBeginCallbacks() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "Window")
+        ])
+        windowSystem.resetDiscoveryModes()
+        var scheduledDiscovery: [() -> Void] = []
+        var scheduledApply: [() -> Void] = []
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { scheduledDiscovery.append($0) },
+            scheduleApply: { scheduledApply.append($0) }
+        )
+
+        handler.displayReconfigurationBegan()
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .displayChanged, windowID: nil)
+        ]))
+        handler.displayReconfigurationBegan()
+        handler.displayReconfigurationEnded()
+
+        scheduledDiscovery.removeFirst()()
+        scheduledApply.removeFirst()()
+        scheduledDiscovery.removeFirst()()
+        scheduledApply.removeFirst()()
+
+        XCTAssertEqual(windowSystem.discoveryModes, [.normal, .sessionRecovery])
+        XCTAssertTrue(scheduledDiscovery.isEmpty)
+    }
+
     func testDestroyedWindowEvidenceSurvivesSleepDuringDiscovery() throws {
         let window = makeSwitcherTestWindow(id: 100, title: "Window")
         let (controller, windowSystem) = try makeSwitcherTestController(windows: [window])
@@ -182,6 +291,32 @@ extension WindowRuntimeEventConcurrencyTests {
         ]))
 
         XCTAssertEqual(windowSystem.discoveryModes.last, .normal)
+    }
+
+    func testFailedDisplayDiscoverySchedulesVerification() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 100, title: "Window")
+        ])
+        windowSystem.resetDiscoveryModes()
+        windowSystem.discoveryFailuresRemaining = 1
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+
+        handler.displayReconfigurationBegan()
+        handler.displayReconfigurationEnded()
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .displayChanged, windowID: nil)
+        ]))
+
+        XCTAssertEqual(windowSystem.discoveryModes, [.normal, .sessionRecovery])
+        XCTAssertEqual(controller.membership(for: 100), "1")
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
     }
 
     func testDisjointDisplayChangeSchedulesOneVerificationDiscovery() throws {

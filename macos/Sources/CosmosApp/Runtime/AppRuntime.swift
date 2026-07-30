@@ -272,6 +272,12 @@ private extension AppRuntime {
             onSystemSleepChanged: { [weak self] isAwake in
                 self?.windowRuntimeEventHandler.systemSleepChanged(isAwake: isAwake)
             },
+            onDisplayReconfigurationBegan: { [weak self] in
+                self?.windowRuntimeEventHandler.displayReconfigurationBegan()
+            },
+            onDisplayReconfigurationEnded: { [weak self] in
+                self?.windowRuntimeEventHandler.displayReconfigurationEnded()
+            },
             onEvents: { [weak self] events in
                 self?.windowRuntimeEventHandler.handle(events)
             }

@@ -8,9 +8,24 @@ final class WindowEventMonitor {
     private let onEvents: (WindowRuntimeEventBatch) -> Void
     private let onSessionActivityChanged: (Bool) -> Void
     private let onSystemSleepChanged: (Bool) -> Void
+    private let onDisplayReconfigurationBegan: () -> Void
+    private let onDisplayReconfigurationEnded: () -> Void
     private lazy var axObserverRegistry = AXApplicationObserverRegistry { [weak self] element, notification in
         self?.handleAXNotification(element: element, notification: notification)
     }
+
+    private lazy var displayReconfigurationMonitor = DisplayReconfigurationMonitor(
+        onBegin: { [weak self] in
+            self?.onDisplayReconfigurationBegan()
+        },
+        onAfter: { [weak self] in
+            guard let self else {
+                return
+            }
+            onDisplayReconfigurationEnded()
+            schedule(.init(kind: .displayChanged, windowID: nil))
+        }
+    )
 
     private var spaceObserverTokens: [NSObjectProtocol] = []
     private var appObserverTokens: [NSObjectProtocol] = []
@@ -21,10 +36,14 @@ final class WindowEventMonitor {
     init(
         onSessionActivityChanged: @escaping (Bool) -> Void = { _ in },
         onSystemSleepChanged: @escaping (Bool) -> Void = { _ in },
+        onDisplayReconfigurationBegan: @escaping () -> Void = {},
+        onDisplayReconfigurationEnded: @escaping () -> Void = {},
         onEvents: @escaping (WindowRuntimeEventBatch) -> Void
     ) {
         self.onSessionActivityChanged = onSessionActivityChanged
         self.onSystemSleepChanged = onSystemSleepChanged
+        self.onDisplayReconfigurationBegan = onDisplayReconfigurationBegan
+        self.onDisplayReconfigurationEnded = onDisplayReconfigurationEnded
         self.onEvents = onEvents
     }
 
@@ -39,6 +58,7 @@ final class WindowEventMonitor {
 
         observeRunningApplications()
         observeSpaceLifecycle()
+        displayReconfigurationMonitor.start()
         observeDisplayChanges()
     }
 
@@ -55,6 +75,7 @@ final class WindowEventMonitor {
         appObserverTokens.removeAll()
 
         axObserverRegistry.stop()
+        displayReconfigurationMonitor.stop()
         stopMouseUpMonitor()
     }
 

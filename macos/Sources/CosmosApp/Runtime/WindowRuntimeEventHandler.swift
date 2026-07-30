@@ -22,9 +22,12 @@ final class WindowRuntimeEventHandler {
     private var isProcessing = false
     private var isSessionActive = true
     private var isSystemAwake = true
+    private var isWakeFocusProtectionActive = false
     private(set) var hasPendingContinuityRecovery = false
     private var hasRetriedContinuityRecovery = false
     private var sessionGeneration: UInt64 = 0
+    private var displayGeneration: UInt64 = 0
+    private var isDisplayReconfigurationOpen = false
 
     init(
         controller: SpaceController,
@@ -61,6 +64,23 @@ final class WindowRuntimeEventHandler {
         processNextBatch()
     }
 
+    func displayReconfigurationBegan() {
+        guard !isDisplayReconfigurationOpen else {
+            return
+        }
+
+        isDisplayReconfigurationOpen = true
+        displayGeneration &+= 1
+        controller.beginWindowContinuityProtection()
+        hasPendingContinuityRecovery = true
+        hasRetriedContinuityRecovery = false
+        preserveLifecycleEvidence()
+    }
+
+    func displayReconfigurationEnded() {
+        isDisplayReconfigurationOpen = false
+    }
+
     func sessionActivityChanged(isActive: Bool) {
         guard isSessionActive != isActive else {
             return
@@ -81,6 +101,7 @@ final class WindowRuntimeEventHandler {
 
         if !isAwake {
             controller.beginWindowContinuityProtection()
+            isWakeFocusProtectionActive = true
             hasRetriedContinuityRecovery = false
         }
         isSystemAwake = isAwake
@@ -103,7 +124,10 @@ final class WindowRuntimeEventHandler {
 
         let batchEvents = nextBatchEvents()
         let batch = WindowRuntimeEventBatch(events: batchEvents)
-        let generation = sessionGeneration
+        let generation = WindowRuntimeGeneration(
+            session: sessionGeneration,
+            display: displayGeneration
+        )
         pendingEvents.subtract(batchEvents)
         inFlightEvents = batch.events
         isProcessing = true
@@ -126,9 +150,12 @@ final class WindowRuntimeEventHandler {
     private func apply(
         _ discovery: Result<WindowDiscoverySnapshot, Error>,
         for events: WindowRuntimeEventBatch,
-        generation: UInt64
+        generation: WindowRuntimeGeneration
     ) {
-        guard isObservationActive, generation == sessionGeneration else {
+        guard isObservationActive,
+              generation.session == sessionGeneration,
+              generation.display == displayGeneration
+        else {
             discardDiscovery()
             return
         }
@@ -158,6 +185,9 @@ final class WindowRuntimeEventHandler {
             }
             refreshPreviews(for: events, result: result)
             hasPendingContinuityRecovery = result.continuityRecovery.isPending
+            if isWakeFocusProtectionActive, !discovery.windows.isEmpty {
+                isWakeFocusProtectionActive = false
+            }
             if !hasPendingContinuityRecovery {
                 hasRetriedContinuityRecovery = false
             } else if !result.continuityRecovery.failedWindowIDs.isEmpty {
@@ -184,6 +214,9 @@ final class WindowRuntimeEventHandler {
         for events: WindowRuntimeEventBatch,
         discovery: WindowDiscoverySnapshot
     ) -> ExternalWindowFocusPolicy {
+        if isWakeFocusProtectionActive {
+            return .never
+        }
         if events.containsApplicationActivation {
             return .always
         }
@@ -282,8 +315,7 @@ private extension WindowRuntimeEventHandler {
     func scheduleInitialContinuityVerificationIfNeeded(
         for events: WindowRuntimeEventBatch
     ) {
-        guard hasPendingContinuityRecovery,
-              events.events.contains(where: { $0.kind == .displayChanged })
+        guard events.events.contains(where: { $0.kind == .displayChanged })
         else {
             return
         }
@@ -294,7 +326,13 @@ private extension WindowRuntimeEventHandler {
         _ error: Error,
         for events: WindowRuntimeEventBatch
     ) {
+        scheduleInitialContinuityVerificationIfNeeded(for: events)
         retryContinuityRecoveryIfNeeded(for: events)
         log.error("Window update failed: \(String(describing: error))")
     }
+}
+
+private struct WindowRuntimeGeneration {
+    let session: UInt64
+    let display: UInt64
 }

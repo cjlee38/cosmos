@@ -101,6 +101,7 @@
 		D8E1F46A2B7C4A9180D5E3F2 /* SpaceSettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A2E9B4D1F6483A95B0C6E7 /* SpaceSettingsService.swift */; };
 		DCD3AFCB4077734C0FFFE6B7 /* SpaceActionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B34FA1681B2CABA63E153F /* SpaceActionController.swift */; };
 		E270DA89AF461A93A7D221BB /* SettingsModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37038C6E71932BA8C8D029BD /* SettingsModels.swift */; };
+		E90000000000000000000002 /* DisplayReconfigurationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90000000000000000000001 /* DisplayReconfigurationMonitor.swift */; };
 		E92D2447C5BAF8D1808B1E69 /* SwitcherOverlayScreenLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 893C57A28CC88D95E43CD308 /* SwitcherOverlayScreenLocator.swift */; };
 		EAC517820C888BB589E35CAE /* ConfigErrorMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 427330055DBD8916856243BF /* ConfigErrorMessageTests.swift */; };
 		EFCF42B4F9D11EFA893BC4C9 /* CosmosCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5B43D1C8FC0F4AD4173F2A0C /* CosmosCore */; };
@@ -213,6 +214,7 @@
 		E2EA481F06B2FE09F3944553 /* AppRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRuntime.swift; sourceTree = "<group>"; };
 		E3E7D9BDF57C766FD89FDCAA /* WindowEventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowEventMonitor.swift; sourceTree = "<group>"; };
 		E743C48B4AD98EC70F9D91DB /* AppProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppProfile.swift; sourceTree = "<group>"; };
+		E90000000000000000000001 /* DisplayReconfigurationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayReconfigurationMonitor.swift; sourceTree = "<group>"; };
 		F173A36FA5FEF966E4045361 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		F45070B9F813E6A9A1BA0D0E /* KeyboardShortcutResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutResolver.swift; sourceTree = "<group>"; };
 		F69A22CC6D1A445A26A5BDBF /* SpaceSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSettingsTests.swift; sourceTree = "<group>"; };
@@ -253,6 +255,7 @@
 				D136051710ECBADAA14E0522 /* AXApplicationObserverRegistry.swift */,
 				0A65ED208864F99A20C9A0BF /* ConfigRuntime.swift */,
 				51EFD77086498FA29C9CD2B7 /* CosmosApplication.swift */,
+				E90000000000000000000001 /* DisplayReconfigurationMonitor.swift */,
 				85DEB94005203CA045AFDC68 /* Log.swift */,
 				A50000000000000000000002 /* RuntimeApplicationIconController.swift */,
 				A30000000000000000000001 /* OnboardingCoordinator.swift */,
@@ -563,6 +566,7 @@
 				D0E2701C32425F66ADDFFA23 /* SettingsSidebarViewController.swift in Sources */,
 				BCF09CE4E530BE98F7898BDC /* SettingsWindowController.swift in Sources */,
 				4E609D9E3E801C76BA320A69 /* ShortcutRecorderButton.swift in Sources */,
+				E90000000000000000000002 /* DisplayReconfigurationMonitor.swift in Sources */,
 				61E8BB1A23DA8DD5914DE18B /* StatusMenuController.swift in Sources */,
 				160000000000000000000001 /* TerminationSignalMonitor.swift in Sources */,
 				2802C58497F496DA2BB708BC /* SwitcherCoordinator.swift in Sources */,
