@@ -28,6 +28,8 @@
 		160000000000000000000001 /* TerminationSignalMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 170000000000000000000001 /* TerminationSignalMonitor.swift */; };
 		160000000000000000000002 /* TerminationSignalMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 170000000000000000000002 /* TerminationSignalMonitorTests.swift */; };
 		0C1C6E3D55E91C177A67B9BF /* CosmosApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51EFD77086498FA29C9CD2B7 /* CosmosApplication.swift */; };
+		F1A001000000000000000001 /* ApplicationRuntimeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A001000000000000000002 /* ApplicationRuntimeHost.swift */; };
+		F1A001000000000000000003 /* SetupAgainConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A001000000000000000004 /* SetupAgainConfirmation.swift */; };
 		0DD6BEA2B2DDC73C12A4722B /* DebugStatusRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE078C07E8072EB07D79443C /* DebugStatusRenderer.swift */; };
 		11A0AF43C6E2E49C0E2F6B79 /* AccessibilityPermissionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24246563E59CD46975B43C7 /* AccessibilityPermissionController.swift */; };
 		12AF4B2AB3DD3FE742A6D75F /* SwitcherOverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52301E71E0E42F07906619AB /* SwitcherOverlayWindowController.swift */; };
@@ -161,6 +163,8 @@
 		4805CB8CB28BF9396FEEBAB3 /* SwitcherPreviewServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherPreviewServiceTests.swift; sourceTree = "<group>"; };
 		486304735CA9CF52837D3D0A /* GeneralSettingsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsServiceTests.swift; sourceTree = "<group>"; };
 		51EFD77086498FA29C9CD2B7 /* CosmosApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CosmosApplication.swift; sourceTree = "<group>"; };
+		F1A001000000000000000002 /* ApplicationRuntimeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationRuntimeHost.swift; sourceTree = "<group>"; };
+		F1A001000000000000000004 /* SetupAgainConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupAgainConfirmation.swift; sourceTree = "<group>"; };
 		52301E71E0E42F07906619AB /* SwitcherOverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOverlayWindowController.swift; sourceTree = "<group>"; };
 		583CADAAD9AFB41F03805EFE /* DebugStatusWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugStatusWindowController.swift; sourceTree = "<group>"; };
 		611448DEB72AFF4B0F79536B /* SwitcherOutsideClickMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherOutsideClickMonitor.swift; sourceTree = "<group>"; };
@@ -246,6 +250,7 @@
 				A9FB7A938AAFD7A05CC4F513 /* AppDelegate.swift */,
 				E743C48B4AD98EC70F9D91DB /* AppProfile.swift */,
 				E2EA481F06B2FE09F3944553 /* AppRuntime.swift */,
+				F1A001000000000000000002 /* ApplicationRuntimeHost.swift */,
 				D136051710ECBADAA14E0522 /* AXApplicationObserverRegistry.swift */,
 				0A65ED208864F99A20C9A0BF /* ConfigRuntime.swift */,
 				51EFD77086498FA29C9CD2B7 /* CosmosApplication.swift */,
@@ -385,6 +390,7 @@
 				F173A36FA5FEF966E4045361 /* AppSettingsStore.swift */,
 				A768E125FDF463F09E5E8C03 /* GeneralSettingsService.swift */,
 				D7ADAC95348EF0FBF0BEF484 /* GeneralSettingsViewController.swift */,
+				F1A001000000000000000004 /* SetupAgainConfirmation.swift */,
 				120000000000000000000003 /* GeneralSettingsViewFactory.swift */,
 				37038C6E71932BA8C8D029BD /* SettingsModels.swift */,
 				7A2D8F1E5C4B3A29081706F5 /* SettingsCoordinator.swift */,
@@ -535,6 +541,8 @@
 				A10000000000000000000002 /* KeyboardShortcutKeyCodec.swift in Sources */,
 				F05CFA47B9510E0F555FACA1 /* KeyboardShortcutResolver.swift in Sources */,
 				0C1C6E3D55E91C177A67B9BF /* CosmosApplication.swift in Sources */,
+				F1A001000000000000000001 /* ApplicationRuntimeHost.swift in Sources */,
+				F1A001000000000000000003 /* SetupAgainConfirmation.swift in Sources */,
 				3FBB8C9396F8E56C9F176DEC /* Log.swift in Sources */,
 				78E3D54448546695C1157733 /* ModifierFlagsMonitor.swift in Sources */,
 				A30000000000000000000002 /* OnboardingCoordinator.swift in Sources */,

@@ -20,4 +20,18 @@ final class OnboardingStateStore {
     func markCompleted() {
         defaults.set(Self.currentVersion, forKey: Key.completedVersion)
     }
+
+    func reset() -> Int {
+        let completedVersion = defaults.integer(forKey: Key.completedVersion)
+        defaults.removeObject(forKey: Key.completedVersion)
+        return completedVersion
+    }
+
+    func restoreCompletedVersion(_ completedVersion: Int) {
+        if completedVersion == 0 {
+            defaults.removeObject(forKey: Key.completedVersion)
+        } else {
+            defaults.set(completedVersion, forKey: Key.completedVersion)
+        }
+    }
 }

@@ -79,6 +79,24 @@ final class GeneralSettingsServiceTests: XCTestCase {
         store.markCompleted()
 
         XCTAssertFalse(store.requiresOnboarding)
+
+        _ = store.reset()
+
+        XCTAssertTrue(store.requiresOnboarding)
+    }
+
+    func testOnboardingResetCanRestoreANewerCompletedVersion() throws {
+        let suiteName = "OnboardingStateStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let newerVersion = OnboardingStateStore.currentVersion + 3
+        defaults.set(newerVersion, forKey: "onboarding.completedVersion")
+        let store = OnboardingStateStore(defaults: defaults)
+
+        let previousVersion = store.reset()
+        store.restoreCompletedVersion(previousVersion)
+
+        XCTAssertEqual(defaults.integer(forKey: "onboarding.completedVersion"), newerVersion)
     }
 
     func testOnboardingRunsAgainWhenStoredVersionIsOlder() throws {

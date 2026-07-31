@@ -1,17 +1,17 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let runtime: AppRuntime
+    private let runtimeHost: ApplicationRuntimeHost
 
-    init(runtime: AppRuntime) {
-        self.runtime = runtime
+    init(runtimeHost: ApplicationRuntimeHost) {
+        self.runtimeHost = runtimeHost
     }
 
     func applicationDidFinishLaunching(_: Notification) {
-        runtime.start()
+        runtimeHost.start()
     }
 
     func applicationWillTerminate(_: Notification) {
-        runtime.shutdown()
+        runtimeHost.shutdown()
     }
 }

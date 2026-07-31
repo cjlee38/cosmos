@@ -63,11 +63,4 @@ final class SettingsCoordinator {
     func refresh() {
         windowController.refresh()
     }
-
-    func dismissForWindowReplacement() -> Bool {
-        guard windowController.dismiss() else {
-            return false
-        }
-        return true
-    }
 }

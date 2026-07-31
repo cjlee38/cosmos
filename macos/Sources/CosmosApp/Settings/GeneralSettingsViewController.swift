@@ -375,6 +375,6 @@ private extension GeneralSettingsViewController {
     }
 
     @objc private func runSetupAgain() {
-        runSetupHandler()
+        presentSetupAgainConfirmation(for: view.window, onConfirm: runSetupHandler)
     }
 }

@@ -37,6 +37,7 @@ struct AppCompositionRoot {
             generalSettingsService: GeneralSettingsService(axClient: axClient),
             appSettingsStore: appSettingsStore,
             onboardingStateStore: onboardingStateStore,
+            applicationRelauncher: WorkspaceApplicationRelauncher(),
             keyboardShortcutManager: keyboardShortcutManager,
             previewService: previewService
         )

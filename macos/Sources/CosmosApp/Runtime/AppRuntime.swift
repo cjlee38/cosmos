@@ -1,6 +1,20 @@
 import AppKit
 import CosmosCore
 
+enum AppRuntimeStartup {
+    static func run(
+        requiresOnboarding: Bool,
+        showOnboarding: () -> Void,
+        startManagedRuntime: () -> Void
+    ) {
+        if requiresOnboarding {
+            showOnboarding()
+        } else {
+            startManagedRuntime()
+        }
+    }
+}
+
 final class AppRuntime {
     private let log = Log(category: "runtime")
 
@@ -10,6 +24,7 @@ final class AppRuntime {
     private let generalSettingsService: GeneralSettingsService
     private let appSettingsStore: AppSettingsStore
     private let onboardingStateStore: OnboardingStateStore
+    private let applicationRelauncher: any ApplicationRelaunching
     private let keyboardShortcutManager: KeyboardShortcutManager
     private let previewService: SwitcherPreviewService
     private var windowEventMonitor: WindowEventMonitor?
@@ -18,6 +33,15 @@ final class AppRuntime {
     private var didBootstrapWindowState = false
     private var didBeginManagedRuntime = false
     private var didShutdown = false
+
+    private lazy var setupRelaunchCoordinator = SetupRelaunchCoordinator(
+        stateStore: onboardingStateStore,
+        relauncher: applicationRelauncher,
+        terminate: { NSApp.terminate(nil) },
+        onFailure: { [weak self] error in
+            self?.presentSetupRelaunchFailure(error)
+        }
+    )
 
     private lazy var terminationSignalMonitor = TerminationSignalMonitor(
         recover: { [weak self] in
@@ -64,6 +88,7 @@ final class AppRuntime {
         generalSettingsService: GeneralSettingsService,
         appSettingsStore: AppSettingsStore,
         onboardingStateStore: OnboardingStateStore,
+        applicationRelauncher: any ApplicationRelaunching,
         keyboardShortcutManager: KeyboardShortcutManager,
         previewService: SwitcherPreviewService
     ) {
@@ -73,6 +98,7 @@ final class AppRuntime {
         self.generalSettingsService = generalSettingsService
         self.appSettingsStore = appSettingsStore
         self.onboardingStateStore = onboardingStateStore
+        self.applicationRelauncher = applicationRelauncher
         self.keyboardShortcutManager = keyboardShortcutManager
         self.previewService = previewService
     }
@@ -88,12 +114,11 @@ final class AppRuntime {
         } catch {
             log.error("Initial display discovery failed: \(String(describing: error))")
         }
-        _ = statusMenuController
-        guard !onboardingStateStore.requiresOnboarding else {
-            showOnboardingWindow()
-            return
-        }
-        startManagedRuntime()
+        AppRuntimeStartup.run(
+            requiresOnboarding: onboardingStateStore.requiresOnboarding,
+            showOnboarding: showOnboardingWindow,
+            startManagedRuntime: startManagedRuntime
+        )
     }
 
     func shutdown() {
@@ -109,10 +134,11 @@ final class AppRuntime {
     }
 
     private func startManagedRuntime() {
-        guard !didBootstrapWindowState else {
+        guard !didBeginManagedRuntime else {
             return
         }
         didBeginManagedRuntime = true
+        _ = statusMenuController
         startKeyboardShortcuts()
 
         let hasPermission = permissionController.checkAtLaunch()
@@ -158,6 +184,9 @@ final class AppRuntime {
     }
 
     private func refreshStatusSurfaces() {
+        guard didBeginManagedRuntime else {
+            return
+        }
         statusMenuController.refreshSurfaces()
     }
 
@@ -169,6 +198,9 @@ final class AppRuntime {
 
 private extension AppRuntime {
     func showSettingsWindow() {
+        guard !setupRelaunchCoordinator.relaunchInProgress else {
+            return
+        }
         guard !onboardingStateStore.requiresOnboarding else {
             showOnboardingWindow()
             return
@@ -191,11 +223,8 @@ private extension AppRuntime {
             controller: controller,
             configRuntime: configRuntime,
             actions: actionController,
-            runtimeMode: { [unowned self] in
-                didBeginManagedRuntime ? .active : .deferredUntilStartup
-            },
+            runtimeMode: { .deferredUntilStartup },
             refreshAfterChange: { [unowned self] in
-                refreshSpacePresentation()
                 onboardingCoordinator?.refresh()
             }
         )
@@ -207,7 +236,6 @@ private extension AppRuntime {
                 service: spaceSettingsService
             ),
             onComplete: { [unowned self] in
-                refreshStatusSurfaces()
                 startManagedRuntime()
                 showSettingsWindow()
             }
@@ -229,10 +257,15 @@ private extension AppRuntime {
     }
 
     func runSetupAgain() {
-        guard settingsCoordinator?.dismissForWindowReplacement() == true else {
-            return
-        }
-        showOnboardingWindow()
+        setupRelaunchCoordinator.relaunch()
+    }
+
+    func presentSetupRelaunchFailure(_ error: Error) {
+        log.error("Setup relaunch failed: \(String(describing: error))")
+        let alert = NSAlert(error: error)
+        alert.messageText = "Cosmos Could Not Restart"
+        alert.informativeText = "Cosmos is still running. Try Run Setup Again once more."
+        alert.runModal()
     }
 
     func refreshSpacePresentation() {

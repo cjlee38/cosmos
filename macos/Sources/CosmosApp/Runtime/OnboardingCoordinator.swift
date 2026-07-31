@@ -5,6 +5,7 @@ final class OnboardingCoordinator {
     private let stateStore: OnboardingStateStore
     private let windowController: OnboardingWindowController
     private let onComplete: () -> Void
+    private var didComplete = false
 
     init(
         stateStore: OnboardingStateStore,
@@ -46,6 +47,10 @@ final class OnboardingCoordinator {
     }
 
     private func complete() {
+        guard !didComplete else {
+            return
+        }
+        didComplete = true
         stateStore.markCompleted()
         windowController.dismissForWindowReplacement()
         onComplete()
