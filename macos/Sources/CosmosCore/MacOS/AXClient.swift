@@ -166,28 +166,7 @@ public final class AXClient {
     func focus(_ handle: WindowHandle) {
         AXUIElementSetAttributeValue(handle.axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(handle.axWindow, kAXRaiseAction as CFString)
-
-        guard let bundleURL = handle.runningApp.bundleURL else {
-            handle.runningApp.activate()
-            return
-        }
-
-        // Do not replace this with NSRunningApplication.activate().
-        // Settings intentionally changes Cosmos to a regular app while its window is open so it
-        // participates in Cmd+Tab and the own-window focus synchronization path. On macOS 14+,
-        // direct activation is only a request, activateIgnoringOtherApps is ignored, and Cosmos
-        // cannot yield activation when another app is currently frontmost. NSWorkspace supplies
-        // the cooperative activation context when opening an app. For the normal single-instance
-        // apps managed by Cosmos, Launch Services reuses the running app instead of launching one.
-        // AX main/raise above selects the exact window; this call brings its app forward.
-        //
-        // NSWorkspace targets a bundle URL rather than a PID. If Cosmos ever supports multiple
-        // instances of one app, or allows stale handles to reach this method after termination,
-        // revisit this path: Launch Services may choose another instance or relaunch the app.
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        configuration.addsToRecentItems = false
-        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration)
+        handle.runningApp.activate()
     }
 
     private func enumerateWindows(for app: NSRunningApplication) throws -> [WindowHandle] {

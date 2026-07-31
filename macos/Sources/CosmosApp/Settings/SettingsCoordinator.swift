@@ -67,7 +67,6 @@ final class SettingsCoordinator {
     }
 
     func show() {
-        NSApp.setActivationPolicy(.regular)
         windowController.show()
         ownWindowVisibilityChanged()
     }
@@ -85,7 +84,6 @@ final class SettingsCoordinator {
     }
 
     private func didCloseWindow() {
-        NSApp.setActivationPolicy(.accessory)
         ownWindowVisibilityChanged()
     }
 }
