@@ -95,6 +95,10 @@ private final class CLIWindowSystem: WindowSystem {
         focusedWindowIDValue
     }
 
+    func frontToBackWindowIDs() -> [WindowID] {
+        windows.map(\.id)
+    }
+
     func frame(for id: WindowID) -> WindowFrame? {
         windows.first { $0.id == id }?.frame
     }

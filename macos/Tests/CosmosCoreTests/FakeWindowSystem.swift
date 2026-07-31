@@ -17,6 +17,7 @@ final class FakeWindowSystem: WindowSystem {
 
     var windows: [WindowSnapshot]
     var focusedWindow: WindowID?
+    var frontToBackWindowIDsOverride: [WindowID]?
     var focusedIDs: [WindowID] = []
     var positions: [WindowID: CGPoint] = [:]
     var frames: [WindowID: WindowFrame] = [:]
@@ -62,6 +63,10 @@ final class FakeWindowSystem: WindowSystem {
 
     func focusedWindowID() -> WindowID? {
         focusedWindow
+    }
+
+    func frontToBackWindowIDs() -> [WindowID] {
+        frontToBackWindowIDsOverride ?? windows.map(\.id)
     }
 
     func apply(_: WindowDiscoverySnapshot) -> Bool {

@@ -266,3 +266,42 @@ final class SwitcherCoordinatorTests: XCTestCase {
         )
     }
 }
+
+final class SwitcherLiveWindowOrderTests: XCTestCase {
+    func testWindowSessionUsesLiveStackWhileFocusEventIsStillPending() throws {
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            makeSwitcherTestWindow(id: 20, title: "Previously Focused"),
+            makeSwitcherTestWindow(id: 10, title: "Currently Focused"),
+            makeSwitcherTestWindow(id: 30, title: "Older")
+        ])
+        windowSystem.frontToBackWindowIDsOverride = [10, 20, 30]
+        let overlay = SwitcherOverlaySpy()
+        let shown = expectation(description: "window overlay shown")
+        overlay.onWindowShown = shown.fulfill
+        let coordinator = SwitcherCoordinator(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            spaceSwitchCommand: SpaceSwitchCommand(controller: controller, warpCursor: { _ in .success }),
+            refreshStatus: {},
+            overlay: overlay,
+            makeOverlay: { overlay }
+        )
+
+        coordinator.stepWindow(direction: .forward, wraps: true)
+
+        wait(for: [shown], timeout: 1)
+        XCTAssertEqual(overlay.shownWindowIDs, [[10, 20, 30]])
+        XCTAssertEqual(overlay.shownWindowSelections, [20])
+
+        windowSystem.replaceWindows([
+            makeSwitcherTestWindow(id: 10, title: "Currently Focused"),
+            makeSwitcherTestWindow(id: 20, title: "Previously Focused"),
+            makeSwitcherTestWindow(id: 30, title: "Older")
+        ])
+        _ = try controller.handleWindowSetChanged()
+        coordinator.handleContentChanged()
+
+        XCTAssertEqual(overlay.reboundWindowIDs, [[10, 20, 30]])
+        XCTAssertEqual(overlay.reboundWindowSelections, [20])
+    }
+}

@@ -70,6 +70,7 @@ public protocol WindowSystem {
     func apply(_ discovery: WindowDiscoverySnapshot) -> Bool
     func contains(_ id: WindowID) -> Bool
     func focusedWindowID() -> WindowID?
+    func frontToBackWindowIDs() -> [WindowID]
     func frame(for id: WindowID) -> WindowFrame?
     func setPosition(_ point: CGPoint, for id: WindowID) throws
     func setFrame(_ frame: WindowFrame, for id: WindowID) throws

@@ -57,9 +57,9 @@ public final class WindowRegistry: WindowSystem {
             .sorted {
                 Self.sortByFrontToBackOrder($0, $1, frontToBackIndex: frontToBackIndex)
             }
-        let frontToBackWindowIDs = frontToBackIndex.keys.sorted {
-            frontToBackIndex[$0, default: .max] < frontToBackIndex[$1, default: .max]
-        }
+        let frontToBackWindowIDs = CGWindowStackOrder.frontToBackWindowIDs(
+            in: frontToBackIndex
+        )
         return WindowDiscoverySnapshot(
             scope: scope,
             windows: windows,
@@ -93,6 +93,10 @@ public final class WindowRegistry: WindowSystem {
 
     public func focusedWindowID() -> WindowID? {
         axClient.focusedWindowID()
+    }
+
+    public func frontToBackWindowIDs() -> [WindowID] {
+        CGWindowStackOrder.frontToBackWindowIDs()
     }
 
     public func frame(for id: WindowID) -> WindowFrame? {
@@ -193,5 +197,15 @@ private enum CGWindowStackOrder {
             indexByID[WindowID(number.uint32Value)] = index
         }
         return indexByID
+    }
+
+    static func frontToBackWindowIDs() -> [WindowID] {
+        frontToBackWindowIDs(in: frontToBackIndexByWindowID())
+    }
+
+    static func frontToBackWindowIDs(in indexByID: [WindowID: Int]) -> [WindowID] {
+        indexByID.keys.sorted {
+            indexByID[$0, default: .max] < indexByID[$1, default: .max]
+        }
     }
 }

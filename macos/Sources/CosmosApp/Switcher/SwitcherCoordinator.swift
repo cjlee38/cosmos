@@ -108,7 +108,7 @@ extension SwitcherCoordinator {
 private extension SwitcherCoordinator {
     private func startWindowSession(direction: SwitcherDirection) {
         let windows = controller.currentWindows()
-        let windowIDs = controller.windows(in: controller.currentSpace).map(\.id)
+        let windowIDs = controller.windowIDsForSwitcher(in: controller.currentSpace)
 
         guard let selection = SwitcherSession(
             items: windowIDs,
@@ -294,7 +294,7 @@ private extension SwitcherCoordinator {
         let windows = controller.currentWindows()
         switch session {
         case .windows:
-            let windowIDs = controller.windows(in: controller.currentSpace).map(\.id)
+            let windowIDs = controller.windowIDsForSwitcher(in: controller.currentSpace)
             let anchorFrame = overlayAnchorFrame(from: windows, preferredWindowID: windowIDs.first)
             guard session?.reconcileWindows(windowIDs, anchorFrame: anchorFrame) == true else {
                 endSession()

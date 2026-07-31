@@ -110,6 +110,14 @@ public extension SpaceController {
         }
     }
 
+    func windowIDsForSwitcher(in space: String) -> [WindowID] {
+        let cachedWindowIDs = windows(in: space).map(\.id)
+        let cachedWindowIDSet = Set(cachedWindowIDs)
+        let liveWindowIDs = windowSystem.frontToBackWindowIDs().filter(cachedWindowIDSet.contains)
+        let liveWindowIDSet = Set(liveWindowIDs)
+        return liveWindowIDs + cachedWindowIDs.filter { !liveWindowIDSet.contains($0) }
+    }
+
     func handleExternalWindowChange(_ change: ExternalWindowChange) throws -> ExternalWindowEventResult {
         let result = try externalWindowChangeCoordinator.handle(change, state: &state)
         persistSessionStateIfNeeded()

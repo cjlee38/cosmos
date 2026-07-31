@@ -14,6 +14,7 @@ enum SwitcherTestWindowSystemError: Error {
 final class SwitcherTestWindowSystem: WindowSystem {
     var windows: [WindowSnapshot]
     var focusedWindowIDValue: WindowID?
+    var frontToBackWindowIDsOverride: [WindowID]?
     var frameWriteFailures: Set<WindowID> = []
     var discoveryFailuresRemaining = 0
     var discoveryApplyResults: [Bool] = []
@@ -89,6 +90,10 @@ final class SwitcherTestWindowSystem: WindowSystem {
 
     func focusedWindowID() -> WindowID? {
         focusedWindowIDValue
+    }
+
+    func frontToBackWindowIDs() -> [WindowID] {
+        frontToBackWindowIDsOverride ?? windows.map(\.id)
     }
 
     func frame(for id: WindowID) -> WindowFrame? {
