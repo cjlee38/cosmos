@@ -5,6 +5,7 @@ public final class SpaceController {
     private let windowCache: WindowStateCache
     private let runtimeSynchronizer: SpaceRuntimeSynchronizer
     private let hiddenWindowOperator: HiddenWindowOperator
+    private let frameApplicationEvaluator: WindowFrameApplicationEvaluator
     private let visibilityCoordinator: SpaceVisibilityCoordinator
     private let startupHiddenWindowRecordApplier: StartupHiddenWindowRecordApplier
     private let navigationCoordinator: SpaceNavigationCoordinator
@@ -68,6 +69,7 @@ public final class SpaceController {
         windowCache = components.windowCache
         runtimeSynchronizer = components.runtimeSynchronizer
         hiddenWindowOperator = components.hiddenWindowOperator
+        frameApplicationEvaluator = components.frameApplicationEvaluator
         visibilityCoordinator = components.visibilityCoordinator
         startupHiddenWindowRecordApplier = components.startupHiddenWindowRecordApplier
         navigationCoordinator = components.navigationCoordinator
@@ -269,8 +271,12 @@ public extension SpaceController {
             ),
             size: frame.size
         )
-        try windowSystem.setPosition(centeredFrame.origin, for: id)
-        windowCache.updateFrame(centeredFrame, for: id)
+        let observation = try windowSystem.setPositionAndObserve(centeredFrame.origin, for: id)
+        let actualFrame = frameApplicationEvaluator.observedFrame(
+            observation,
+            targetFrame: centeredFrame
+        )
+        windowCache.updateFrame(actualFrame, for: id)
         return id
     }
 
@@ -356,9 +362,16 @@ private extension SpaceController {
         let sync = try syncWindows()
         let previousState = state
         state.applyConfig(config)
+        var rollbackTargetFrames: [WindowID: WindowFrame] = [:]
         do {
             let mustSucceedWindowIDs = Set(state.assignedWindowIDs)
             let targetFrames = displayCoordinator.targetFramesForConfiguredMonitors(state: state)
+            rollbackTargetFrames = targetFrames.keys.reduce(into: [:]) { frames, id in
+                guard !previousState.isHidden(id), let frame = windowCache.snapshot(for: id)?.frame else {
+                    return
+                }
+                frames[id] = frame
+            }
             try visibilityCoordinator.applyVisibleSpaces(
                 state: &state,
                 mustSucceedWindowIDs: mustSucceedWindowIDs,
@@ -369,6 +382,7 @@ private extension SpaceController {
                 after: applyError,
                 to: previousState,
                 focusedWindowID: windowCache.focusedWindowID,
+                targetFrames: rollbackTargetFrames,
                 state: &state
             )
             throw applyError

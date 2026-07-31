@@ -126,6 +126,41 @@ final class SpaceHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase {
         XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
     }
 
+    func testRestoreKeepsHiddenStateAndRecordWhenAXSuccessDoesNotMoveTheWindow() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7)
+        ])
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.appliedPosition = { _, _ in self.hidePoint }
+
+        XCTAssertThrowsError(try controller.switchSpace(to: "2"))
+
+        XCTAssertTrue(controller.isHiddenBySpace(100))
+        XCTAssertEqual(windowSystem.frames[100]?.origin, hidePoint)
+        XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
+    }
+
+    func testRestoreKeepsHiddenStateAndRecordWhenResultingFrameIsUnavailable() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7)
+        ])
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.unavailableFrameReads.insert(100)
+
+        XCTAssertThrowsError(try controller.switchSpace(to: "2"))
+
+        XCTAssertTrue(controller.isHiddenBySpace(100))
+        XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
+    }
+
     func testNormalHideDoesNotSynchronouslyFlushRecords() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7)
@@ -245,6 +280,28 @@ final class SpaceHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase {
         XCTAssertTrue(controller.isHiddenBySpace(200))
     }
 
+    func testEmergencyUnhideKeepsRecoveryStateWhenResultingFrameIsUnavailable() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7),
+            .window(id: 200, title: "Two", pid: 7)
+        ])
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.unavailableFrameReads.insert(200)
+
+        let result = try controller.restoreAllHiddenWindows()
+
+        XCTAssertEqual(
+            result,
+            RestoreAllHiddenWindowsResult(restored: [], unavailable: [], failed: [200])
+        )
+        XCTAssertTrue(controller.isHiddenBySpace(200))
+        XCTAssertEqual(sessionStateStore.records.map(\.windowID), [200])
+    }
+
     func testWindowSyncRemovesRecordForClosedHiddenWindow() throws {
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7),
@@ -279,6 +336,24 @@ final class SpaceHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase {
         try controller.restoreHiddenWindowsForShutdown()
 
         XCTAssertEqual(windowSystem.frames[100], originalFrame)
+        XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
+    }
+
+    func testShutdownReportsUnavailableResultAndKeepsHiddenWindowRecord() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7)
+        ])
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        _ = try controller.handleWindowSetChanged()
+        try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+        windowSystem.unavailableFrameReads.insert(100)
+
+        XCTAssertThrowsError(try controller.restoreHiddenWindowsForShutdown()) { error in
+            XCTAssertEqual((error as? ShutdownRestoreError)?.failedWindowIDs, [100])
+        }
+        XCTAssertTrue(controller.isHiddenBySpace(100))
         XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
     }
 
@@ -336,7 +411,7 @@ final class HiddenWindowAppliedPositionTests: SpaceHiddenWindowRecordTestCase {
         XCTAssertEqual(windowSystem.frames[100]?.origin, sessionStateStore.records[0].hiddenPosition)
     }
 
-    func testHideKeepsRequestedPositionWhenImmediateReadbackIsNotParked() throws {
+    func testHideRejectsSuccessfulAXWriteWhenObservedFrameIsNotParked() throws {
         let originalFrame = WindowFrame.frame(x: 100, y: 100)
         let windowSystem = FakeWindowSystem(windows: [
             .window(id: 100, title: "One", pid: 7, frame: originalFrame)
@@ -346,9 +421,35 @@ final class HiddenWindowAppliedPositionTests: SpaceHiddenWindowRecordTestCase {
         let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
 
         _ = try controller.handleWindowSetChanged()
-        try moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+        let move = {
+            try self.moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+        }
 
-        XCTAssertEqual(sessionStateStore.records.map(\.hiddenPosition), [hidePoint])
-        XCTAssertEqual(windowSystem.positions[100], hidePoint)
+        XCTAssertThrowsError(try move())
+        XCTAssertTrue(sessionStateStore.records.isEmpty)
+        XCTAssertFalse(controller.isHiddenBySpace(100))
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+    }
+
+    func testFailedHideKeepsRecoveryRecordWhenRollbackDoesNotRestoreVisibility() throws {
+        let originalFrame = WindowFrame.frame(x: 100, y: 100)
+        let strandedFrame = WindowFrame.frame(x: 2000, y: 2000)
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, frame: originalFrame)
+        ])
+        windowSystem.appliedPosition = { _, _ in strandedFrame.origin }
+        let sessionStateStore = InMemorySessionStateStore()
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        _ = try controller.handleWindowSetChanged()
+        let move = {
+            try self.moveWindow(100, to: "2", controller: controller, windowSystem: windowSystem)
+        }
+
+        XCTAssertThrowsError(try move())
+        XCTAssertTrue(controller.isHiddenBySpace(100))
+        XCTAssertEqual(windowSystem.frames[100], strandedFrame)
+        XCTAssertEqual(sessionStateStore.records.first?.hiddenPosition, strandedFrame.origin)
+        XCTAssertEqual(sessionStateStore.records.first?.originalFrame, originalFrame)
     }
 }

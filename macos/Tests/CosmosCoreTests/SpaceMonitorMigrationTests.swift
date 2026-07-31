@@ -92,6 +92,55 @@ final class SpaceMonitorMigrationTests: SpaceControllerTestCase {
         XCTAssertEqual(Set(controller.visibleSpaces), ["1", "2"])
     }
 
+    func testAdjustedResizeIsAcceptedWhenTheWindowReachedTheTargetMonitor() throws {
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Window", frame: .frame(x: 100, y: 100, width: 300, height: 200))
+        ])
+        let controller = makeController(
+            windowSystem,
+            displayProvider: differentSizedDisplayProvider()
+        )
+        windowSystem.appliedFrame = { _, requested in
+            WindowFrame(
+                origin: requested.origin,
+                size: CGSize(width: requested.size.width - 10, height: requested.size.height - 10)
+            )
+        }
+
+        _ = try controller.handleWindowSetChanged()
+        try controller.applyConfig(
+            controller.currentConfig.assigningSpace(XCTUnwrap(SpaceID(rawValue: "1")), toMonitorSlot: 2)
+        )
+
+        XCTAssertEqual(windowSystem.frames[100], .frame(x: 1050, y: 50, width: 140, height: 90))
+        XCTAssertEqual(controller.spaceFrame(for: 100), windowSystem.frames[100])
+        XCTAssertEqual(configuredMonitorSlot(for: "1", in: controller), 2)
+    }
+
+    func testMonitorUpdateDoesNotCommitWhenResultingFrameIsUnavailable() throws {
+        let originalFrame = WindowFrame.frame(x: 100, y: 100, width: 300, height: 200)
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "Window", frame: originalFrame)
+        ])
+        let store = InMemorySpaceConfigStore()
+        let controller = makeController(
+            windowSystem,
+            displayProvider: twoDisplayProvider(),
+            configStore: store
+        )
+
+        _ = try controller.handleWindowSetChanged()
+        windowSystem.unavailableFrameReads.insert(100)
+
+        XCTAssertThrowsError(try controller.applyConfig(
+            controller.currentConfig.assigningSpace(XCTUnwrap(SpaceID(rawValue: "1")), toMonitorSlot: 2)
+        ))
+
+        XCTAssertEqual(configuredMonitorSlot(for: "1", in: controller), 1)
+        XCTAssertEqual(controller.spaceFrame(for: 100), originalFrame)
+        XCTAssertEqual(windowSystem.frames[100], originalFrame)
+    }
+
     func testFailedHiddenWindowReassignmentRestoresThePreviousDurableFrame() throws {
         let initialConfig = CosmosConfig(
             spaces: spaceConfigs(["1", "2", "B"], displays: ["B": 2]),

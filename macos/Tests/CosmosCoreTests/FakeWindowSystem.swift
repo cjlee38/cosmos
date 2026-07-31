@@ -25,6 +25,7 @@ final class FakeWindowSystem: WindowSystem {
     var operations: [Operation] = []
     var frameWriteFailures: Set<WindowID> = []
     var appliedPosition: ((WindowID, CGPoint) -> CGPoint)?
+    var appliedFrame: ((WindowID, WindowFrame) -> WindowFrame)?
     var operationFailure: ((Operation) -> Error?)?
     var operationFailureAfterMutation: ((Operation) -> Error?)?
     var discoveryApplyResults: [Bool] = []
@@ -111,8 +112,9 @@ final class FakeWindowSystem: WindowSystem {
             throw FakeWindowSystemError.frameWrite(id)
         }
 
-        positions[id] = frame.origin
-        frames[id] = frame
+        let appliedFrame = appliedFrame?(id, frame) ?? frame
+        positions[id] = appliedFrame.origin
+        frames[id] = appliedFrame
         if let error = operationFailureAfterMutation?(operation) {
             throw error
         }

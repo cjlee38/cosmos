@@ -126,6 +126,7 @@ final class SpaceVisibilityCoordinator {
         after applyError: Error,
         to previousState: SpaceState,
         focusedWindowID: WindowID?,
+        targetFrames: [WindowID: WindowFrame] = [:],
         state: inout SpaceState
     ) throws {
         do {
@@ -133,7 +134,8 @@ final class SpaceVisibilityCoordinator {
             try applyVisibleSpaces(
                 state: &state,
                 focusWindowID: focusedWindowID,
-                mustSucceedWindowIDs: Set(previousState.assignedWindowIDs)
+                mustSucceedWindowIDs: Set(previousState.assignedWindowIDs),
+                targetFrames: targetFrames
             )
             state = previousState
             windowCache.updateFocusedWindowID(focusedWindowID)

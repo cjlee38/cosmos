@@ -135,6 +135,21 @@ struct WindowFrameTransactionError: Error, CustomStringConvertible {
     }
 }
 
+enum WindowFrameWriteObservation: Equatable {
+    case exact(actual: WindowFrame)
+    case different(actual: WindowFrame)
+    case unavailable
+
+    var actualFrame: WindowFrame? {
+        switch self {
+        case let .exact(actual), let .different(actual):
+            actual
+        case .unavailable:
+            nil
+        }
+    }
+}
+
 public extension WindowSystem {
     func discover(
         windowIDs: Set<WindowID>? = nil,
@@ -154,23 +169,23 @@ public extension WindowSystem {
     }
 
     @discardableResult
-    func setFrameOrMove(_ targetFrame: WindowFrame, for id: WindowID) throws -> WindowFrame {
+    internal func setFrameOrMove(
+        _ targetFrame: WindowFrame,
+        for id: WindowID
+    ) throws -> WindowFrameWriteObservation {
         let originalFrame = frame(for: id)
         if originalFrame?.size == targetFrame.size {
-            try setPosition(targetFrame.origin, for: id)
-            return targetFrame
+            return try setPositionAndObserve(targetFrame.origin, for: id)
         }
 
         do {
             try setFrame(targetFrame, for: id)
-            return targetFrame
+            return observe(targetFrame: targetFrame, for: id)
         } catch {
             // Some windows reject AXSize writes. Their monitor assignment can still succeed
             // by preserving the current size and moving only the origin.
             do {
-                try setPosition(targetFrame.origin, for: id)
-                return frame(for: id)
-                    ?? WindowFrame(origin: targetFrame.origin, size: originalFrame?.size ?? targetFrame.size)
+                return try setPositionAndObserve(targetFrame.origin, for: id)
             } catch let positionError {
                 try rollbackPartialFrameChange(
                     originalFrame: originalFrame,
@@ -180,6 +195,32 @@ public extension WindowSystem {
                 throw positionError
             }
         }
+    }
+
+    @discardableResult
+    internal func setPositionAndObserve(
+        _ targetPosition: CGPoint,
+        for id: WindowID
+    ) throws -> WindowFrameWriteObservation {
+        try setPosition(targetPosition, for: id)
+        guard let actualFrame = frame(for: id) else {
+            return .unavailable
+        }
+        return actualFrame.origin == targetPosition
+            ? .exact(actual: actualFrame)
+            : .different(actual: actualFrame)
+    }
+
+    private func observe(
+        targetFrame: WindowFrame,
+        for id: WindowID
+    ) -> WindowFrameWriteObservation {
+        guard let actualFrame = frame(for: id) else {
+            return .unavailable
+        }
+        return actualFrame == targetFrame
+            ? .exact(actual: actualFrame)
+            : .different(actual: actualFrame)
     }
 
     private func rollbackPartialFrameChange(

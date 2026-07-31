@@ -6,19 +6,22 @@ final class HiddenWindowOperator {
     private let restorableFrameResolver: RestorableFrameResolver
     private let windowCache: WindowStateCache
     private let recordRepository: HiddenWindowRecordRepository
+    private let frameApplicationEvaluator: WindowFrameApplicationEvaluator
 
     init(
         windowSystem: any WindowSystem,
         hidePointProvider: any HidePointProviding,
         restorableFrameResolver: RestorableFrameResolver,
         windowCache: WindowStateCache,
-        recordRepository: HiddenWindowRecordRepository
+        recordRepository: HiddenWindowRecordRepository,
+        frameApplicationEvaluator: WindowFrameApplicationEvaluator
     ) {
         self.windowSystem = windowSystem
         self.hidePointProvider = hidePointProvider
         self.restorableFrameResolver = restorableFrameResolver
         self.windowCache = windowCache
         self.recordRepository = recordRepository
+        self.frameApplicationEvaluator = frameApplicationEvaluator
     }
 
     func hide(
@@ -61,15 +64,15 @@ final class HiddenWindowOperator {
         )
         recordRepository.upsertRecord(record)
 
+        var didApplyPosition = false
         do {
-            try windowSystem.setPosition(point, for: id)
-            let appliedFrame = observedHiddenFrame(
-                for: id,
-                requestedPoint: point,
+            try applyHidePosition(
+                point,
                 hiddenSize: hiddenSize,
-                record: record
+                windowID: id,
+                record: record,
+                didApplyPosition: &didApplyPosition
             )
-            windowCache.updateFrame(appliedFrame, for: id)
         } catch {
             try rollbackFailedHide(
                 id,
@@ -79,7 +82,9 @@ final class HiddenWindowOperator {
                     hiddenSize: hiddenSize,
                     previousHiddenFrame: previousHiddenFrame,
                     previousRecord: previousRecord,
-                    applyError: error
+                    newRecord: record,
+                    applyError: error,
+                    didApplyPosition: didApplyPosition
                 ),
                 state: &state
             )
@@ -101,14 +106,22 @@ final class HiddenWindowOperator {
         guard let frame = state.hiddenFrame(for: id) else {
             if let preferredFrame {
                 let targetFrame = try restorableFrameResolver.frameForRestore(preferredFrame)
-                let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
+                let appliedFrame = try applyVisibleFrame(
+                    targetFrame,
+                    operation: "restore-visible",
+                    windowID: id
+                )
                 windowCache.updateFrame(appliedFrame, for: id)
             }
             return .alreadyVisible
         }
 
         let targetFrame = try restorableFrameResolver.frameForRestore(preferredFrame ?? frame)
-        let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
+        let appliedFrame = try applyVisibleFrame(
+            targetFrame,
+            operation: "restore-hidden",
+            windowID: id
+        )
         windowCache.updateFrame(appliedFrame, for: id)
         state.clearHiddenFrame(for: id)
         recordRepository.removeRecord(
@@ -156,8 +169,12 @@ final class HiddenWindowOperator {
             ),
             size: frame.size
         )
-        try windowSystem.setPosition(centeredFrame.origin, for: id)
-        windowCache.updateFrame(centeredFrame, for: id)
+        let appliedFrame = try applyVisiblePosition(
+            centeredFrame,
+            operation: "recover-parking-focus",
+            windowID: id
+        )
+        windowCache.updateFrame(appliedFrame, for: id)
         return true
     }
 
@@ -169,7 +186,11 @@ final class HiddenWindowOperator {
             }
             do {
                 let targetFrame = try restorableFrameResolver.frameForRestore(frame)
-                let appliedFrame = try windowSystem.setFrameOrMove(targetFrame, for: id)
+                let appliedFrame = try applyVisibleFrame(
+                    targetFrame,
+                    operation: "restore-shutdown",
+                    windowID: id
+                )
                 windowCache.updateFrame(appliedFrame, for: id)
             } catch {
                 failedWindowIDs.append(id)
@@ -216,7 +237,11 @@ final class HiddenWindowOperator {
            !preparation.wasAlreadyHidden,
            currentFrame.size != frame.size {
             let resizeFrame = WindowFrame(origin: currentFrame.origin, size: frame.size)
-            let appliedFrame = try windowSystem.setFrameOrMove(resizeFrame, for: id)
+            let observation = try windowSystem.setFrameOrMove(resizeFrame, for: id)
+            let appliedFrame = frameApplicationEvaluator.observedFrame(
+                observation,
+                targetFrame: resizeFrame
+            )
             hiddenSize = appliedFrame.size
             windowCache.updateFrame(appliedFrame, for: id)
         }
@@ -245,6 +270,32 @@ final class HiddenWindowOperator {
         rollback: HideRollback,
         state: inout SpaceState
     ) throws {
+        guard rollback.didApplyPosition || rollback.hiddenSize != rollback.currentFrame.size else {
+            restorePreviousHideState(id, rollback: rollback, state: &state)
+            return
+        }
+        do {
+            let restoredFrame = try applyVisibleFrame(
+                rollback.currentFrame,
+                operation: "hide-rollback",
+                windowID: id
+            )
+            windowCache.updateFrame(restoredFrame, for: id)
+        } catch let rollbackError {
+            preserveFailedHideRecovery(id, record: rollback.newRecord)
+            throw WindowFrameTransactionError(
+                applyError: rollback.applyError,
+                rollbackError: rollbackError
+            )
+        }
+        restorePreviousHideState(id, rollback: rollback, state: &state)
+    }
+
+    private func restorePreviousHideState(
+        _ id: WindowID,
+        rollback: HideRollback,
+        state: inout SpaceState
+    ) {
         if let previousHiddenFrame = rollback.previousHiddenFrame {
             state.replaceHiddenFrame(previousHiddenFrame, for: id)
             if let previousRecord = rollback.previousRecord {
@@ -256,39 +307,76 @@ final class HiddenWindowOperator {
             recordRepository.removeRecord(windowID: id, pid: rollback.pid)
             state.clearHiddenFrame(for: id)
         }
-        guard rollback.hiddenSize != rollback.currentFrame.size else {
+    }
+
+    private func preserveFailedHideRecovery(
+        _ id: WindowID,
+        record: HiddenWindowRecord
+    ) {
+        guard let actualFrame = windowSystem.frame(for: id) else {
+            recordRepository.upsertRecord(record)
             return
         }
-        do {
-            let restoredFrame = try windowSystem.setFrameOrMove(rollback.currentFrame, for: id)
-            windowCache.updateFrame(restoredFrame, for: id)
-        } catch let rollbackError {
-            throw WindowFrameTransactionError(
-                applyError: rollback.applyError,
-                rollbackError: rollbackError
-            )
-        }
+        windowCache.updateFrame(actualFrame, for: id)
+        updateHiddenRecordIfNeeded(record, appliedFrame: actualFrame)
     }
 }
 
 private extension HiddenWindowOperator {
-    func observedHiddenFrame(
-        for id: WindowID,
-        requestedPoint: CGPoint,
+    func applyHidePosition(
+        _ point: CGPoint,
         hiddenSize: CGSize,
-        record: HiddenWindowRecord
-    ) -> WindowFrame {
-        let requestedFrame = WindowFrame(origin: requestedPoint, size: hiddenSize)
-        guard let appliedFrame = windowSystem.frame(for: id),
-              hidePointProvider.isHidePosition(
-                  appliedFrame,
-                  displays: windowCache.displayTopology.displays
-              )
-        else {
-            return requestedFrame
-        }
-        guard appliedFrame.origin != requestedPoint else {
-            return appliedFrame
+        windowID: WindowID,
+        record: HiddenWindowRecord,
+        didApplyPosition: inout Bool
+    ) throws {
+        let targetFrame = WindowFrame(origin: point, size: hiddenSize)
+        let observation = try windowSystem.setPositionAndObserve(point, for: windowID)
+        didApplyPosition = true
+        let appliedFrame = try frameApplicationEvaluator.parkedFrame(
+            observation,
+            operation: "hide",
+            windowID: windowID,
+            targetFrame: targetFrame
+        )
+        updateHiddenRecordIfNeeded(record, appliedFrame: appliedFrame)
+        windowCache.updateFrame(appliedFrame, for: windowID)
+    }
+
+    func applyVisibleFrame(
+        _ targetFrame: WindowFrame,
+        operation: String,
+        windowID: WindowID
+    ) throws -> WindowFrame {
+        let observation = try windowSystem.setFrameOrMove(targetFrame, for: windowID)
+        return try frameApplicationEvaluator.visibleFrame(
+            observation,
+            operation: operation,
+            windowID: windowID,
+            targetFrame: targetFrame
+        )
+    }
+
+    func applyVisiblePosition(
+        _ targetFrame: WindowFrame,
+        operation: String,
+        windowID: WindowID
+    ) throws -> WindowFrame {
+        let observation = try windowSystem.setPositionAndObserve(targetFrame.origin, for: windowID)
+        return try frameApplicationEvaluator.visibleFrame(
+            observation,
+            operation: operation,
+            windowID: windowID,
+            targetFrame: targetFrame
+        )
+    }
+
+    func updateHiddenRecordIfNeeded(
+        _ record: HiddenWindowRecord,
+        appliedFrame: WindowFrame
+    ) {
+        guard appliedFrame.origin != record.hiddenPosition else {
+            return
         }
         recordRepository.upsertRecord(HiddenWindowRecord(
             windowID: record.windowID,
@@ -297,7 +385,6 @@ private extension HiddenWindowOperator {
             originalFrame: record.originalFrame,
             hiddenPosition: appliedFrame.origin
         ))
-        return appliedFrame
     }
 }
 
@@ -314,5 +401,7 @@ private struct HideRollback {
     let hiddenSize: CGSize
     let previousHiddenFrame: WindowFrame?
     let previousRecord: HiddenWindowRecord?
+    let newRecord: HiddenWindowRecord
     let applyError: Error
+    let didApplyPosition: Bool
 }

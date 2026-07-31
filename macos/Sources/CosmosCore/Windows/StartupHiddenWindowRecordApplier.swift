@@ -6,19 +6,22 @@ final class StartupHiddenWindowRecordApplier {
     private let recordRepository: HiddenWindowRecordRepository
     private let hidePointProvider: any HidePointProviding
     private let restorableFrameResolver: RestorableFrameResolver
+    private let frameApplicationEvaluator: WindowFrameApplicationEvaluator
 
     init(
         windowSystem: any WindowSystem,
         windowCache: WindowStateCache,
         recordRepository: HiddenWindowRecordRepository,
         hidePointProvider: any HidePointProviding,
-        restorableFrameResolver: RestorableFrameResolver
+        restorableFrameResolver: RestorableFrameResolver,
+        frameApplicationEvaluator: WindowFrameApplicationEvaluator
     ) {
         self.windowSystem = windowSystem
         self.windowCache = windowCache
         self.recordRepository = recordRepository
         self.hidePointProvider = hidePointProvider
         self.restorableFrameResolver = restorableFrameResolver
+        self.frameApplicationEvaluator = frameApplicationEvaluator
     }
 
     func loadRecords() throws -> [HiddenWindowRecord] {
@@ -55,10 +58,7 @@ final class StartupHiddenWindowRecordApplier {
             let space = state.containsSpace(targetSpace) ? targetSpace : state.currentSpace
             if action.shouldRestore {
                 do {
-                    try windowSystem.setFrameOrMove(
-                        restorableFrameResolver.frameForRestore(record.originalFrame),
-                        for: record.windowID
-                    )
+                    try restoreRecord(record)
                 } catch {
                     failed.append(record.windowID)
                     continue
@@ -80,6 +80,17 @@ final class StartupHiddenWindowRecordApplier {
             reassigned: reassigned,
             ignored: ignored,
             failed: failed
+        )
+    }
+
+    private func restoreRecord(_ record: HiddenWindowRecord) throws {
+        let targetFrame = try restorableFrameResolver.frameForRestore(record.originalFrame)
+        let observation = try windowSystem.setFrameOrMove(targetFrame, for: record.windowID)
+        _ = try frameApplicationEvaluator.visibleFrame(
+            observation,
+            operation: "restore-startup-record",
+            windowID: record.windowID,
+            targetFrame: targetFrame
         )
     }
 }

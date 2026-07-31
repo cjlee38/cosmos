@@ -214,4 +214,22 @@ final class SpaceStartupHiddenWindowRecordTests: SpaceHiddenWindowRecordTestCase
         XCTAssertEqual(sessionStateStore.records.map(\.windowID), [100])
         XCTAssertEqual(controller.membership(for: 200), "2")
     }
+
+    func testStartupKeepsRecordWhenResultingFrameIsUnavailable() throws {
+        let originalFrame = WindowFrame.frame(x: 120, y: 140)
+        let record = hiddenRecord(originalFrame: originalFrame, space: "2")
+        let windowSystem = FakeWindowSystem(windows: [
+            .window(id: 100, title: "One", pid: 7, frame: .frame(x: hidePoint.x, y: hidePoint.y))
+        ])
+        windowSystem.unavailableFrameReads.insert(100)
+        let sessionStateStore = InMemorySessionStateStore(records: [record])
+        let controller = makeController(windowSystem, sessionStateStore: sessionStateStore)
+
+        let result = try controller.applyHiddenWindowRecordsAtStartup()
+
+        XCTAssertEqual(result.failed, [100])
+        XCTAssertTrue(result.restored.isEmpty)
+        XCTAssertTrue(result.reassigned.isEmpty)
+        XCTAssertEqual(sessionStateStore.records, [record])
+    }
 }

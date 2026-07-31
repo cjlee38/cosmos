@@ -4,6 +4,7 @@ struct SpaceControllerComponents {
     let windowCache: WindowStateCache
     let runtimeSynchronizer: SpaceRuntimeSynchronizer
     let hiddenWindowOperator: HiddenWindowOperator
+    let frameApplicationEvaluator: WindowFrameApplicationEvaluator
     let visibilityCoordinator: SpaceVisibilityCoordinator
     let startupHiddenWindowRecordApplier: StartupHiddenWindowRecordApplier
     let navigationCoordinator: SpaceNavigationCoordinator
@@ -38,13 +39,15 @@ enum SpaceControllerComposition {
             windowCache: windows.cache,
             runtimeSynchronizer: windows.synchronizer,
             hiddenWindowOperator: windows.hiddenOperator,
+            frameApplicationEvaluator: windows.frameApplicationEvaluator,
             visibilityCoordinator: windows.visibilityCoordinator,
             startupHiddenWindowRecordApplier: StartupHiddenWindowRecordApplier(
                 windowSystem: windowSystem,
                 windowCache: windows.cache,
                 recordRepository: windows.recordRepository,
                 hidePointProvider: windows.hidePointProvider,
-                restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider)
+                restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider),
+                frameApplicationEvaluator: windows.frameApplicationEvaluator
             ),
             navigationCoordinator: SpaceNavigationCoordinator(
                 windowCache: windows.cache,
@@ -111,6 +114,10 @@ enum SpaceControllerComposition {
         let monitorSlotResolver = MonitorSlotResolver(displayProvider: displayProvider)
         let hidePointProvider =
             hidePointProvider ?? WindowParkingPointProvider(displayProvider: displayProvider)
+        let frameApplicationEvaluator = WindowFrameApplicationEvaluator(
+            windowCache: cache,
+            hidePointProvider: hidePointProvider
+        )
         let synchronizer = SpaceRuntimeSynchronizer(
             windowSystem: windowSystem,
             windowCache: cache,
@@ -123,13 +130,15 @@ enum SpaceControllerComposition {
             hidePointProvider: hidePointProvider,
             restorableFrameResolver: RestorableFrameResolver(displayProvider: displayProvider),
             windowCache: cache,
-            recordRepository: recordRepository
+            recordRepository: recordRepository,
+            frameApplicationEvaluator: frameApplicationEvaluator
         )
         return SpaceControllerWindowComponents(
             cache: cache,
             recordRepository: recordRepository,
             monitorSlotResolver: monitorSlotResolver,
             hidePointProvider: hidePointProvider,
+            frameApplicationEvaluator: frameApplicationEvaluator,
             synchronizer: synchronizer,
             hiddenOperator: hiddenOperator,
             visibilityCoordinator: SpaceVisibilityCoordinator(
@@ -146,6 +155,7 @@ private struct SpaceControllerWindowComponents {
     let recordRepository: HiddenWindowRecordRepository
     let monitorSlotResolver: MonitorSlotResolver
     let hidePointProvider: any HidePointProviding
+    let frameApplicationEvaluator: WindowFrameApplicationEvaluator
     let synchronizer: SpaceRuntimeSynchronizer
     let hiddenOperator: HiddenWindowOperator
     let visibilityCoordinator: SpaceVisibilityCoordinator
