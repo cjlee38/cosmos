@@ -31,7 +31,6 @@ final class WindowEventMonitor {
     private var appObserverTokens: [NSObjectProtocol] = []
     private var eventBuffer = WindowRuntimeEventBuffer()
     private var globalMouseUpMonitor: Any?
-    private var localMouseUpMonitor: Any?
 
     init(
         onSessionActivityChanged: @escaping (Bool) -> Void = { _ in },
@@ -77,14 +76,6 @@ final class WindowEventMonitor {
         axObserverRegistry.stop()
         displayReconfigurationMonitor.stop()
         stopMouseUpMonitor()
-    }
-
-    func scheduleOwnWindowChanged(_ windowID: WindowID) {
-        if isLeftMouseButtonDown {
-            startOwnWindowDragIfNeeded(windowID: windowID)
-        }
-        schedule(.init(kind: .layoutChanged, windowID: windowID))
-        schedule(.init(kind: .thumbnailChanged, windowID: windowID))
     }
 
     private func observeRunningApplications() {
@@ -161,10 +152,6 @@ final class WindowEventMonitor {
     }
 
     private func scheduleFocusSyncIfObservable(_ app: NSRunningApplication) {
-        if app.processIdentifier == getpid(), app.activationPolicy == .regular {
-            schedule(.init(kind: .applicationActivated, windowID: nil))
-            return
-        }
         if axObserverRegistry.canObserve(app) {
             schedule(.init(kind: .applicationActivated, windowID: nil))
         }
@@ -221,21 +208,6 @@ final class WindowEventMonitor {
         eventBuffer.beginWindowDrag(windowID: windowID)
     }
 
-    private func startOwnWindowDragIfNeeded(windowID: WindowID) {
-        guard !eventBuffer.isWindowDragActive else {
-            return
-        }
-        guard let monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp, handler: { [weak self] event in
-            self?.finishWindowDrag()
-            return event
-        }) else {
-            return
-        }
-
-        localMouseUpMonitor = monitor
-        eventBuffer.beginWindowDrag(windowID: windowID)
-    }
-
     private func finishWindowDrag() {
         eventBuffer.endWindowDrag()
         stopMouseUpMonitor()
@@ -246,10 +218,6 @@ final class WindowEventMonitor {
         if let globalMouseUpMonitor {
             NSEvent.removeMonitor(globalMouseUpMonitor)
             self.globalMouseUpMonitor = nil
-        }
-        if let localMouseUpMonitor {
-            NSEvent.removeMonitor(localMouseUpMonitor)
-            self.localMouseUpMonitor = nil
         }
     }
 

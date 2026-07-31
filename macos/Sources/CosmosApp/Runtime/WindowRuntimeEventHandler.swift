@@ -49,12 +49,6 @@ final class WindowRuntimeEventHandler {
         self.scheduleApply = scheduleApply
     }
 
-    func handleOwnWindowVisibilityChanged() {
-        handle(WindowRuntimeEventBatch(events: [
-            WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
-        ]))
-    }
-
     func handle(_ events: WindowRuntimeEventBatch) {
         guard isObservationActive else {
             return

@@ -109,6 +109,7 @@ private final class OnboardingWindowController: NSWindowController, NSWindowDele
 
     func dismissForWindowReplacement() {
         window?.orderOut(nil)
+        NSApp.setActivationPolicy(.accessory)
     }
 
     func windowDidBecomeKey(_: Notification) {

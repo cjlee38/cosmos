@@ -60,9 +60,6 @@
 		637F851D0D69992CE7DEA059 /* AppProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E743C48B4AD98EC70F9D91DB /* AppProfile.swift */; };
 		64C1040CFE51AE6FD9861933 /* KeyboardShortcutManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDACEBD8721870102202C889 /* KeyboardShortcutManagerTests.swift */; };
 		6641E4BE05BF77EAECA37995 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 1E75E271F69A9BA5BE2F4522 /* AppIcon.icon */; };
-		A50000000000000000000001 /* RuntimeApplicationIconController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000002 /* RuntimeApplicationIconController.swift */; };
-		A50000000000000000000003 /* CosmosRuntimeIconLight.png in Resources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000004 /* CosmosRuntimeIconLight.png */; };
-		A50000000000000000000005 /* CosmosRuntimeIconDark.png in Resources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000006 /* CosmosRuntimeIconDark.png */; };
 		78E3D54448546695C1157733 /* ModifierFlagsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390C28C5D1B0C7757A62FFED /* ModifierFlagsMonitor.swift */; };
 		7B0243E63D099212BB53838F /* KeyboardBindingMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D380443AEF1B4BCA55AD49 /* KeyboardBindingMapperTests.swift */; };
 		7B499687C67A954ADA0B8D84 /* CarbonKeyboardBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD26F3B9A7C423345FB165C /* CarbonKeyboardBackend.swift */; };
@@ -151,9 +148,6 @@
 		18F7C62CD7201633BF12BFB1 /* AppCompositionRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCompositionRoot.swift; sourceTree = "<group>"; };
 		1D33AA0FC3DEBDA4897EB11C /* SpaceThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceThumbnailCache.swift; sourceTree = "<group>"; };
 		1E75E271F69A9BA5BE2F4522 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
-		A50000000000000000000002 /* RuntimeApplicationIconController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeApplicationIconController.swift; sourceTree = "<group>"; };
-		A50000000000000000000004 /* CosmosRuntimeIconLight.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CosmosRuntimeIconLight.png; sourceTree = "<group>"; };
-		A50000000000000000000006 /* CosmosRuntimeIconDark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = CosmosRuntimeIconDark.png; sourceTree = "<group>"; };
 		29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherTestSupport.swift; sourceTree = "<group>"; };
 		2C236432C8D68A8DA2CE898A /* CosmosAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CosmosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		31796FE52334A52C16A26B5F /* WindowRuntimeEventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEventHandler.swift; sourceTree = "<group>"; };
@@ -257,7 +251,6 @@
 				51EFD77086498FA29C9CD2B7 /* CosmosApplication.swift */,
 				E90000000000000000000001 /* DisplayReconfigurationMonitor.swift */,
 				85DEB94005203CA045AFDC68 /* Log.swift */,
-				A50000000000000000000002 /* RuntimeApplicationIconController.swift */,
 				A30000000000000000000001 /* OnboardingCoordinator.swift */,
 				A30000000000000000000005 /* OnboardingPermissionViewController.swift */,
 				A30000000000000000000003 /* OnboardingStateStore.swift */,
@@ -307,7 +300,6 @@
 			isa = PBXGroup;
 			children = (
 				1E75E271F69A9BA5BE2F4522 /* AppIcon.icon */,
-				A50000000000000000000007 /* Resources */,
 				A60000000000000000000001 /* Version.xcconfig */,
 				78954AB3A0D6128B74568AAC /* main.swift */,
 				6306FCA24E002D8F4824E82C /* CosmosApp */,
@@ -315,15 +307,6 @@
 				AE3C16C762BCB4EF1B98164D /* Packages */,
 				39C797E23DC051BDC4241229 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		A50000000000000000000007 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				A50000000000000000000006 /* CosmosRuntimeIconDark.png */,
-				A50000000000000000000004 /* CosmosRuntimeIconLight.png */,
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		5979B6FC9C884270D568548F /* CosmosAppTests */ = {
@@ -515,8 +498,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				6641E4BE05BF77EAECA37995 /* AppIcon.icon in Resources */,
-				A50000000000000000000005 /* CosmosRuntimeIconDark.png in Resources */,
-				A50000000000000000000003 /* CosmosRuntimeIconLight.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -555,7 +536,6 @@
 				F05CFA47B9510E0F555FACA1 /* KeyboardShortcutResolver.swift in Sources */,
 				0C1C6E3D55E91C177A67B9BF /* CosmosApplication.swift in Sources */,
 				3FBB8C9396F8E56C9F176DEC /* Log.swift in Sources */,
-				A50000000000000000000001 /* RuntimeApplicationIconController.swift in Sources */,
 				78E3D54448546695C1157733 /* ModifierFlagsMonitor.swift in Sources */,
 				A30000000000000000000002 /* OnboardingCoordinator.swift in Sources */,
 				A30000000000000000000006 /* OnboardingPermissionViewController.swift in Sources */,

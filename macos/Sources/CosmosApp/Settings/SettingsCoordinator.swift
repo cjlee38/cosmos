@@ -1,9 +1,7 @@
-import AppKit
 import CosmosCore
 
 final class SettingsCoordinator {
     private let windowController: SettingsWindowController
-    private let ownWindowVisibilityChanged: () -> Void
 
     init(
         controller: SpaceController,
@@ -13,13 +11,9 @@ final class SettingsCoordinator {
         actions: any KeyboardShortcutActionHandling,
         appearanceChanged: @escaping () -> Void,
         spaceConfigChanged: @escaping () -> Void,
-        ownWindowVisibilityChanged: @escaping () -> Void,
-        ownWindowChanged: @escaping (WindowID) -> Void,
         reloadConfig: @escaping () -> Void,
         runSetup: @escaping () -> Void
     ) {
-        self.ownWindowVisibilityChanged = ownWindowVisibilityChanged
-
         let spaceSettingsService = SpaceSettingsService(
             controller: controller,
             configRuntime: configRuntime,
@@ -60,15 +54,10 @@ final class SettingsCoordinator {
             spaceViewController: spaceViewController,
             shortcutRecordingController: shortcutRecordingController
         )
-        windowController.onClose = { [weak self] in
-            self?.didCloseWindow()
-        }
-        windowController.onWindowChanged = ownWindowChanged
     }
 
     func show() {
         windowController.show()
-        ownWindowVisibilityChanged()
     }
 
     func refresh() {
@@ -79,11 +68,6 @@ final class SettingsCoordinator {
         guard windowController.dismiss() else {
             return false
         }
-        ownWindowVisibilityChanged()
         return true
-    }
-
-    private func didCloseWindow() {
-        ownWindowVisibilityChanged()
     }
 }

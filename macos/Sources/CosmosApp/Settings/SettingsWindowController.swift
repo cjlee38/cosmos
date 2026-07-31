@@ -4,9 +4,6 @@ import CosmosCore
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     static let accessibilityIdentifier = "cosmos.settings"
 
-    var onClose: (() -> Void)?
-    var onWindowChanged: ((WindowID) -> Void)?
-
     private let generalViewController: GeneralSettingsViewController
     private let switcherViewController: SwitcherSettingsViewController
     private let windowViewController: WindowSettingsViewController
@@ -88,36 +85,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         refresh()
     }
 
-    func windowDidMove(_: Notification) {
-        notifyWindowChanged()
-    }
-
-    func windowDidEndLiveResize(_: Notification) {
-        notifyWindowChanged()
-    }
-
-    func windowDidMiniaturize(_: Notification) {
-        notifyWindowChanged()
-    }
-
-    func windowDidDeminiaturize(_: Notification) {
-        notifyWindowChanged()
-    }
-
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard shortcutRecordingController.cancel() else {
             return false
         }
         sender.orderOut(nil)
-        onClose?()
         return false
-    }
-
-    private func notifyWindowChanged() {
-        guard let window, window.windowNumber > 0 else {
-            return
-        }
-        onWindowChanged?(WindowID(window.windowNumber))
     }
 
     private static func makeSplitViewController(

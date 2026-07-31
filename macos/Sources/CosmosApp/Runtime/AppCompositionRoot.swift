@@ -3,9 +3,7 @@ import CosmosCore
 struct AppCompositionRoot {
     func build() -> AppRuntime {
         let profile = AppProfile.current
-        let axClient = AXClient(
-            includedOwnWindowIdentifiers: [SettingsWindowController.accessibilityIdentifier]
-        )
+        let axClient = AXClient()
         let registry = WindowRegistry(axClient: axClient)
         let configStore = FileCosmosConfigStore(url: profile.configURL)
         let sessionStateStore = FileSessionStateStore(url: profile.sessionStateURL)

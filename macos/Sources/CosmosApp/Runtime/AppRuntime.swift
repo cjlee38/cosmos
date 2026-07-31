@@ -223,8 +223,6 @@ private extension AppRuntime {
             actions: actionController,
             appearanceChanged: { [unowned self] in refreshStatusSurfaces() },
             spaceConfigChanged: { [unowned self] in refreshSpacePresentation() },
-            ownWindowVisibilityChanged: { [unowned self] in handleSettingsVisibilityChanged() },
-            ownWindowChanged: { [unowned self] windowID in handleSettingsWindowChanged(windowID) },
             reloadConfig: { [unowned self] in reloadConfig() },
             runSetup: { [unowned self] in runSetupAgain() }
         )
@@ -245,17 +243,6 @@ private extension AppRuntime {
 }
 
 private extension AppRuntime {
-    func handleSettingsVisibilityChanged() {
-        guard windowEventMonitor != nil else {
-            return
-        }
-        windowRuntimeEventHandler.handleOwnWindowVisibilityChanged()
-    }
-
-    func handleSettingsWindowChanged(_ windowID: WindowID) {
-        windowEventMonitor?.scheduleOwnWindowChanged(windowID)
-    }
-
     func refreshSwitcherContent() {
         actionController.refreshSwitcherContent()
     }

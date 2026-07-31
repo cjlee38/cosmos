@@ -45,11 +45,7 @@ public final class AXClient {
         case unresolved
     }
 
-    private let includedOwnWindowIdentifiers: Set<String>
-
-    public init(includedOwnWindowIdentifiers: Set<String> = []) {
-        self.includedOwnWindowIdentifiers = includedOwnWindowIdentifiers
-    }
+    public init() {}
 
     public static func windowID(for element: AXUIElement) -> WindowID? {
         element.containingWindowID()
@@ -63,19 +59,17 @@ public final class AXClient {
 
     func enumerateWindows() throws -> [WindowHandle] {
         var result: [WindowHandle] = []
-        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
-            let handles = try enumerateWindows(for: app)
-            if app.processIdentifier == getpid() {
-                result.append(contentsOf: handles.filter(isIncludedOwnWindow))
-            } else {
-                result.append(contentsOf: handles)
-            }
+        for app in NSWorkspace.shared.runningApplications
+            where app.activationPolicy == .regular && app.processIdentifier != getpid() {
+            try result.append(contentsOf: enumerateWindows(for: app))
         }
         return result
     }
 
     func focusedWindowID() -> WindowID? {
-        guard let app = NSWorkspace.shared.frontmostApplication else {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.processIdentifier != getpid()
+        else {
             return nil
         }
 
@@ -85,9 +79,6 @@ public final class AXClient {
         }
         // swiftlint:disable:next force_cast
         let focusedWindow = focused as! AXUIElement
-        if app.processIdentifier == getpid(), !isIncludedOwnWindow(focusedWindow) {
-            return nil
-        }
         return focusedWindow.containingWindowID()
     }
 
@@ -235,17 +226,6 @@ public final class AXClient {
             name as CFString,
             &settable
         ) == .success && settable.boolValue
-    }
-
-    private func isIncludedOwnWindow(_ handle: WindowHandle) -> Bool {
-        isIncludedOwnWindow(handle.axWindow)
-    }
-
-    private func isIncludedOwnWindow(_ window: AXUIElement) -> Bool {
-        guard let identifier = stringAttribute(kAXIdentifierAttribute, from: window) else {
-            return false
-        }
-        return includedOwnWindowIdentifiers.contains(identifier)
     }
 
     private func copyAttribute(_ name: String, from element: AXUIElement) -> AnyObject? {

@@ -8,10 +8,7 @@ enum CosmosApplication {
             return
         }
 
-        let appDelegate = AppDelegate(
-            runtime: AppCompositionRoot().build(),
-            applicationIconController: RuntimeApplicationIconController(application: app)
-        )
+        let appDelegate = AppDelegate(runtime: AppCompositionRoot().build())
         app.delegate = appDelegate
         app.mainMenu = makeMainMenu(for: app)
         app.setActivationPolicy(.accessory)

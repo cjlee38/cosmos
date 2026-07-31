@@ -3,10 +3,6 @@ public extension SpaceController {
         try handleExternalWindowChange(ExternalWindowChange())
     }
 
-    func handleOwnWindowVisibilityChanged() throws -> ExternalWindowEventResult {
-        try handleExternalWindowChange(ExternalWindowChange())
-    }
-
     func handleFocusedWindowChanged() throws -> ExternalWindowEventResult {
         try handleExternalWindowChange(ExternalWindowChange(focusPolicy: .always))
     }
