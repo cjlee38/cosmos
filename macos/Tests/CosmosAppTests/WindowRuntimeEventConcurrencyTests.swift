@@ -61,6 +61,156 @@ final class WindowRuntimeEventConcurrencyTests: XCTestCase {
         XCTAssertTrue(controller.isHiddenBySpace(200))
         XCTAssertEqual(windowSystem.discoveryModes.last, .normal)
     }
+}
+
+extension WindowRuntimeEventConcurrencyTests {
+    func testSessionResumeRehidesWindowMovedOnscreenWhileLocked() throws {
+        let visibleWindow = makeSwitcherTestWindow(id: 100, title: "Visible")
+        let hiddenWindow = makeSwitcherTestWindow(id: 200, title: "Hidden")
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            visibleWindow,
+            hiddenWindow
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+
+        handler.sessionActivityChanged(isActive: false)
+        windowSystem.replaceWindows([visibleWindow, hiddenWindow])
+        XCTAssertEqual(windowSystem.frame(for: 200), hiddenWindow.frame)
+
+        handler.sessionActivityChanged(isActive: true)
+
+        XCTAssertEqual(controller.membership(for: 200), "2")
+        XCTAssertTrue(controller.isHiddenBySpace(200))
+        XCTAssertNotEqual(windowSystem.frame(for: 200), hiddenWindow.frame)
+        XCTAssertEqual(windowSystem.discoveryModes.last, .sessionRecovery)
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
+    }
+
+    func testSessionRecoveryRetriesFailedVisibilityApply() throws {
+        let visibleWindow = makeSwitcherTestWindow(id: 100, title: "Visible")
+        let hiddenWindow = makeSwitcherTestWindow(id: 200, title: "Hidden")
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            visibleWindow,
+            hiddenWindow
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        var scheduledRetries: [() -> Void] = []
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() },
+            scheduleRecoveryRetry: { _, action in scheduledRetries.append(action) }
+        )
+        windowSystem.resetDiscoveryModes()
+
+        handler.sessionActivityChanged(isActive: false)
+        windowSystem.replaceWindows([visibleWindow, hiddenWindow])
+        windowSystem.frameWriteFailures.insert(200)
+        handler.sessionActivityChanged(isActive: true)
+
+        XCTAssertTrue(handler.hasPendingContinuityRecovery)
+        XCTAssertEqual(scheduledRetries.count, 1)
+        XCTAssertEqual(windowSystem.frame(for: 200), hiddenWindow.frame)
+
+        windowSystem.frameWriteFailures.remove(200)
+        scheduledRetries.removeFirst()()
+
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
+        XCTAssertNotEqual(windowSystem.frame(for: 200), hiddenWindow.frame)
+        XCTAssertEqual(windowSystem.discoveryModes, [.sessionRecovery, .sessionRecovery])
+    }
+
+    func testSessionRecoveryStopsAfterThreeFailedVisibilityRetries() throws {
+        let visibleWindow = makeSwitcherTestWindow(id: 100, title: "Visible")
+        let hiddenWindow = makeSwitcherTestWindow(id: 200, title: "Hidden")
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            visibleWindow,
+            hiddenWindow
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        var scheduledRetries: [() -> Void] = []
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() },
+            scheduleRecoveryRetry: { _, action in scheduledRetries.append(action) }
+        )
+        windowSystem.resetDiscoveryModes()
+
+        handler.sessionActivityChanged(isActive: false)
+        windowSystem.replaceWindows([visibleWindow, hiddenWindow])
+        windowSystem.frameWriteFailures.insert(200)
+        handler.sessionActivityChanged(isActive: true)
+
+        for _ in 0 ..< 3 {
+            XCTAssertEqual(scheduledRetries.count, 1)
+            scheduledRetries.removeFirst()()
+        }
+
+        XCTAssertTrue(scheduledRetries.isEmpty)
+        XCTAssertTrue(handler.hasPendingContinuityRecovery)
+        XCTAssertEqual(windowSystem.discoveryModes, Array(repeating: .sessionRecovery, count: 4))
+    }
+
+    func testSuccessfulInFlightRecoveryDiscardsQueuedRetry() throws {
+        let visibleWindow = makeSwitcherTestWindow(id: 100, title: "Visible")
+        let hiddenWindow = makeSwitcherTestWindow(id: 200, title: "Hidden")
+        let (controller, windowSystem) = try makeSwitcherTestController(windows: [
+            visibleWindow,
+            hiddenWindow
+        ])
+        try moveSwitcherTestWindow(200, to: "2", controller: controller, windowSystem: windowSystem)
+        var scheduledRetries: [() -> Void] = []
+        var scheduledDiscoveries: [() -> Void] = []
+        var shouldDeferDiscovery = false
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { action in
+                if shouldDeferDiscovery {
+                    scheduledDiscoveries.append(action)
+                } else {
+                    action()
+                }
+            },
+            scheduleApply: { $0() },
+            scheduleRecoveryRetry: { _, action in scheduledRetries.append(action) }
+        )
+        windowSystem.resetDiscoveryModes()
+
+        handler.sessionActivityChanged(isActive: false)
+        windowSystem.replaceWindows([visibleWindow, hiddenWindow])
+        windowSystem.frameWriteFailures.insert(200)
+        handler.sessionActivityChanged(isActive: true)
+
+        windowSystem.frameWriteFailures.remove(200)
+        shouldDeferDiscovery = true
+        handler.handle(WindowRuntimeEventBatch(events: [
+            WindowRuntimeEvent(kind: .thumbnailChanged, windowID: 100)
+        ]))
+        scheduledRetries.removeFirst()()
+        scheduledDiscoveries.removeFirst()()
+
+        XCTAssertFalse(handler.hasPendingContinuityRecovery)
+        XCTAssertTrue(scheduledDiscoveries.isEmpty)
+        XCTAssertEqual(windowSystem.discoveryModes, [.sessionRecovery, .normal])
+    }
 
     func testSystemWakePreservesMissingMembershipsUntilWindowsReappear() throws {
         let visibleWindow = makeSwitcherTestWindow(id: 100, title: "Visible")
@@ -159,6 +309,74 @@ final class WindowRuntimeEventConcurrencyTests: XCTestCase {
 
         handler.sessionActivityChanged(isActive: true)
 
+        XCTAssertEqual(windowSystem.discoveryModes, [.sessionRecovery])
+    }
+
+    func testSessionRecoveryPromotesToDisplayRecoveryWhenLockContinuesIntoSleep() throws {
+        let displayProvider = MutableSwitcherDisplayProvider()
+        let windowSystem = SwitcherTestWindowSystem(windows: [
+            makeSwitcherTestWindow(id: 100, title: "Window")
+        ])
+        let controller = SpaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider
+        )
+        try controller.bootstrapWindowState()
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+        windowSystem.resetDiscoveryModes()
+
+        handler.sessionActivityChanged(isActive: false)
+        handler.systemSleepChanged(isAwake: false)
+        displayProvider.snapshots = [DisplaySnapshot(
+            id: 2,
+            frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+            role: .main
+        )]
+        handler.systemSleepChanged(isAwake: true)
+        handler.sessionActivityChanged(isActive: true)
+
+        XCTAssertEqual(controller.displayTopology.displays.map(\.id), [2])
+        XCTAssertEqual(windowSystem.discoveryModes, [.sessionRecovery])
+    }
+
+    func testDisplayRecoveryDoesNotDowngradeWhenSessionResignsDuringSleep() throws {
+        let displayProvider = MutableSwitcherDisplayProvider()
+        let windowSystem = SwitcherTestWindowSystem(windows: [
+            makeSwitcherTestWindow(id: 100, title: "Window")
+        ])
+        let controller = SpaceController(
+            windowSystem: windowSystem,
+            displayProvider: displayProvider
+        )
+        try controller.bootstrapWindowState()
+        let handler = WindowRuntimeEventHandler(
+            controller: controller,
+            previewService: makeSwitcherTestPreviewService(controller: controller),
+            refreshSwitcherContent: {},
+            refreshStatusSurfaces: {},
+            scheduleDiscovery: { $0() },
+            scheduleApply: { $0() }
+        )
+        windowSystem.resetDiscoveryModes()
+
+        handler.systemSleepChanged(isAwake: false)
+        handler.sessionActivityChanged(isActive: false)
+        displayProvider.snapshots = [DisplaySnapshot(
+            id: 2,
+            frame: CGRect(x: 0, y: 0, width: 1000, height: 1000),
+            role: .main
+        )]
+        handler.systemSleepChanged(isAwake: true)
+        handler.sessionActivityChanged(isActive: true)
+
+        XCTAssertEqual(controller.displayTopology.displays.map(\.id), [2])
         XCTAssertEqual(windowSystem.discoveryModes, [.sessionRecovery])
     }
 }
@@ -271,17 +489,21 @@ extension WindowRuntimeEventConcurrencyTests {
         ])
         windowSystem.resetDiscoveryModes()
         windowSystem.discoveryFailuresRemaining = 1
+        var scheduledRetries: [() -> Void] = []
         let handler = WindowRuntimeEventHandler(
             controller: controller,
             previewService: makeSwitcherTestPreviewService(controller: controller),
             refreshSwitcherContent: {},
             refreshStatusSurfaces: {},
             scheduleDiscovery: { $0() },
-            scheduleApply: { $0() }
+            scheduleApply: { $0() },
+            scheduleRecoveryRetry: { _, action in scheduledRetries.append(action) }
         )
 
         handler.systemSleepChanged(isAwake: false)
         handler.systemSleepChanged(isAwake: true)
+        XCTAssertEqual(scheduledRetries.count, 1)
+        scheduledRetries.removeFirst()()
 
         XCTAssertEqual(windowSystem.discoveryModes, [.sessionRecovery, .sessionRecovery])
         XCTAssertEqual(controller.membership(for: 100), "1")

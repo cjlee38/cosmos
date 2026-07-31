@@ -27,6 +27,10 @@ enum WindowRuntimeEventKind: Hashable {
             || self == .displayChanged
     }
 
+    var isRecoveryRequest: Bool {
+        self == .sessionResumed || self == .continuityRecovery
+    }
+
     static func kinds(forAXNotification notification: String) -> Set<Self> {
         switch notification {
         case kAXFocusedWindowChangedNotification:
@@ -45,6 +49,20 @@ enum WindowRuntimeEventKind: Hashable {
             [.layoutChanged]
         default:
             []
+        }
+    }
+}
+
+enum WindowRuntimeRecoveryReason: Equatable {
+    case session
+    case display
+
+    var eventKind: WindowRuntimeEventKind {
+        switch self {
+        case .session:
+            .sessionResumed
+        case .display:
+            .continuityRecovery
         }
     }
 }

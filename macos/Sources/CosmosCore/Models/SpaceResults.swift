@@ -155,18 +155,22 @@ public struct ExternalWindowEventResult {
 public struct WindowContinuityRecoveryStatus {
     public let pendingWindowIDs: Set<WindowID>
     public let failedWindowIDs: Set<WindowID>
+    public let retryableWindowIDs: Set<WindowID>
 
     public init(
         pendingWindowIDs: Set<WindowID>,
-        failedWindowIDs: Set<WindowID>
+        failedWindowIDs: Set<WindowID>,
+        retryableWindowIDs: Set<WindowID> = []
     ) {
         self.pendingWindowIDs = pendingWindowIDs
         self.failedWindowIDs = failedWindowIDs
+        self.retryableWindowIDs = retryableWindowIDs
     }
 
     public static let complete = WindowContinuityRecoveryStatus(
         pendingWindowIDs: [],
-        failedWindowIDs: []
+        failedWindowIDs: [],
+        retryableWindowIDs: []
     )
 
     public var isPending: Bool {

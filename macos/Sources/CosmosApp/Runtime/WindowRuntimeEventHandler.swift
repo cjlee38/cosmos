@@ -5,6 +5,8 @@ private let windowDiscoveryQueue = DispatchQueue(
     label: "cosmos.window-discovery",
     qos: .userInitiated
 )
+private let maximumRecoveryRetryCount = 3
+private let recoveryRetryDelay: TimeInterval = 0.25
 
 final class WindowRuntimeEventHandler {
     private let log = Log(category: "window-events")
@@ -15,6 +17,7 @@ final class WindowRuntimeEventHandler {
     private let refreshStatusSurfaces: () -> Void
     private let scheduleDiscovery: (@escaping () -> Void) -> Void
     private let scheduleApply: (@escaping () -> Void) -> Void
+    private let scheduleRecoveryRetry: (TimeInterval, @escaping () -> Void) -> Void
     private var pendingEvents: Set<WindowRuntimeEvent> = []
     private var inFlightEvents: Set<WindowRuntimeEvent> = []
     private var pendingPreviewWindowIDs: Set<WindowID> = []
@@ -23,8 +26,10 @@ final class WindowRuntimeEventHandler {
     private var isSessionActive = true
     private var isSystemAwake = true
     private var isWakeFocusProtectionActive = false
-    private(set) var hasPendingContinuityRecovery = false
-    private var hasRetriedContinuityRecovery = false
+    private var pendingRecoveryReason: WindowRuntimeRecoveryReason?
+    private var recoveryRetryCount = 0
+    private var recoveryRetryGeneration: UInt64 = 0
+    private var isRecoveryRetryScheduled = false
     private var sessionGeneration: UInt64 = 0
     private var displayGeneration: UInt64 = 0
     private var isDisplayReconfigurationOpen = false
@@ -39,6 +44,9 @@ final class WindowRuntimeEventHandler {
         },
         scheduleApply: @escaping (@escaping () -> Void) -> Void = {
             DispatchQueue.main.async(execute: $0)
+        },
+        scheduleRecoveryRetry: @escaping (TimeInterval, @escaping () -> Void) -> Void = { delay, action in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
         }
     ) {
         self.controller = controller
@@ -47,6 +55,11 @@ final class WindowRuntimeEventHandler {
         self.refreshStatusSurfaces = refreshStatusSurfaces
         self.scheduleDiscovery = scheduleDiscovery
         self.scheduleApply = scheduleApply
+        self.scheduleRecoveryRetry = scheduleRecoveryRetry
+    }
+
+    var hasPendingContinuityRecovery: Bool {
+        pendingRecoveryReason != nil
     }
 
     func handle(_ events: WindowRuntimeEventBatch) {
@@ -66,8 +79,7 @@ final class WindowRuntimeEventHandler {
         isDisplayReconfigurationOpen = true
         displayGeneration &+= 1
         controller.beginWindowContinuityProtection()
-        hasPendingContinuityRecovery = true
-        hasRetriedContinuityRecovery = false
+        beginRecovery(.display)
         preserveLifecycleEvidence()
     }
 
@@ -80,6 +92,11 @@ final class WindowRuntimeEventHandler {
             return
         }
 
+        if !isActive {
+            controller.beginWindowContinuityProtection()
+            isWakeFocusProtectionActive = true
+            beginRecovery(.session)
+        }
         isSessionActive = isActive
         sessionGeneration &+= 1
         preserveLifecycleEvidence()
@@ -96,10 +113,9 @@ final class WindowRuntimeEventHandler {
         if !isAwake {
             controller.beginWindowContinuityProtection()
             isWakeFocusProtectionActive = true
-            hasRetriedContinuityRecovery = false
+            beginRecovery(.display)
         }
         isSystemAwake = isAwake
-        hasPendingContinuityRecovery = hasPendingContinuityRecovery || isAwake
         sessionGeneration &+= 1
         preserveLifecycleEvidence()
         if isObservationActive {
@@ -178,14 +194,12 @@ final class WindowRuntimeEventHandler {
                 return
             }
             refreshPreviews(for: events, result: result)
-            hasPendingContinuityRecovery = result.continuityRecovery.isPending
+            updateRecoveryState(for: events, result: result)
             if isWakeFocusProtectionActive, !discovery.windows.isEmpty {
                 isWakeFocusProtectionActive = false
             }
-            if !hasPendingContinuityRecovery {
-                hasRetriedContinuityRecovery = false
-            } else if !result.continuityRecovery.failedWindowIDs.isEmpty {
-                retryContinuityRecoveryIfNeeded(for: events)
+            if !result.continuityRecovery.retryableWindowIDs.isEmpty {
+                scheduleRecoveryRetryIfNeeded()
             }
             scheduleInitialContinuityVerificationIfNeeded(for: events)
             refreshSwitcherContent()
@@ -272,9 +286,7 @@ final class WindowRuntimeEventHandler {
 
 private extension WindowRuntimeEventHandler {
     func scheduleObservationRecovery() {
-        let kind: WindowRuntimeEventKind = hasPendingContinuityRecovery
-            ? .continuityRecovery
-            : .sessionResumed
+        let kind = pendingRecoveryReason?.eventKind ?? .sessionResumed
         handle(WindowRuntimeEventBatch(events: [
             WindowRuntimeEvent(kind: kind, windowID: nil)
         ]))
@@ -295,17 +307,6 @@ private extension WindowRuntimeEventHandler {
         pendingEvents.insert(WindowRuntimeEvent(kind: .continuityRecovery, windowID: nil))
     }
 
-    func retryContinuityRecoveryIfNeeded(for events: WindowRuntimeEventBatch) {
-        guard hasPendingContinuityRecovery,
-              events.events.contains(where: { $0.kind == .continuityRecovery }),
-              !hasRetriedContinuityRecovery
-        else {
-            return
-        }
-        hasRetriedContinuityRecovery = true
-        appendContinuityRecovery()
-    }
-
     func scheduleInitialContinuityVerificationIfNeeded(
         for events: WindowRuntimeEventBatch
     ) {
@@ -321,8 +322,66 @@ private extension WindowRuntimeEventHandler {
         for events: WindowRuntimeEventBatch
     ) {
         scheduleInitialContinuityVerificationIfNeeded(for: events)
-        retryContinuityRecoveryIfNeeded(for: events)
+        if events.containsRecoveryRequest {
+            scheduleRecoveryRetryIfNeeded()
+        }
         log.error("Window update failed: \(String(describing: error))")
+    }
+
+    func beginRecovery(_ reason: WindowRuntimeRecoveryReason) {
+        if pendingRecoveryReason != .display || reason == .display {
+            pendingRecoveryReason = reason
+        }
+        recoveryRetryCount = 0
+        recoveryRetryGeneration &+= 1
+        isRecoveryRetryScheduled = false
+    }
+
+    func updateRecoveryState(
+        for events: WindowRuntimeEventBatch,
+        result: ExternalWindowEventResult
+    ) {
+        guard result.continuityRecovery.isPending else {
+            pendingRecoveryReason = nil
+            recoveryRetryCount = 0
+            recoveryRetryGeneration &+= 1
+            isRecoveryRetryScheduled = false
+            removeQueuedRecoveryRequests()
+            return
+        }
+        if pendingRecoveryReason == nil {
+            pendingRecoveryReason = events.containsDisplayChange ? .display : .session
+        }
+    }
+
+    func scheduleRecoveryRetryIfNeeded() {
+        guard pendingRecoveryReason != nil,
+              isObservationActive,
+              !isRecoveryRetryScheduled,
+              recoveryRetryCount < maximumRecoveryRetryCount
+        else {
+            return
+        }
+        let delay = recoveryRetryDelay * TimeInterval(1 << recoveryRetryCount)
+        recoveryRetryCount += 1
+        isRecoveryRetryScheduled = true
+        let generation = recoveryRetryGeneration
+        scheduleRecoveryRetry(delay) { [weak self] in
+            guard let self,
+                  generation == recoveryRetryGeneration
+            else {
+                return
+            }
+            isRecoveryRetryScheduled = false
+            guard isObservationActive, pendingRecoveryReason != nil else {
+                return
+            }
+            scheduleObservationRecovery()
+        }
+    }
+
+    func removeQueuedRecoveryRequests() {
+        pendingEvents.subtract(pendingEvents.filter(\.kind.isRecoveryRequest))
     }
 }
 

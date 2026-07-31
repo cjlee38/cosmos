@@ -157,6 +157,9 @@ public final class AXClient {
     func focus(_ handle: WindowHandle) {
         AXUIElementSetAttributeValue(handle.axWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(handle.axWindow, kAXRaiseAction as CFString)
+
+        // Caution: This does not reliably transfer focus away from Cosmos while Cosmos uses
+        // the .regular activation policy. Keep managed runtime surfaces .accessory on this path.
         handle.runningApp.activate()
     }
 

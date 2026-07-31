@@ -87,6 +87,7 @@ final class SpaceVisibilityCoordinator {
         )
         var succeeded: Set<WindowID> = []
         var failed: Set<WindowID> = []
+        var retryable: Set<WindowID> = []
 
         for id in windowIDs.sorted() {
             guard let space = state.membership(for: id),
@@ -114,11 +115,13 @@ final class SpaceVisibilityCoordinator {
                 succeeded.insert(id)
             } catch {
                 failed.insert(id)
+                retryable.insert(id)
             }
         }
         return WindowContinuityApplyResult(
             succeededWindowIDs: succeeded,
-            failedWindowIDs: failed
+            failedWindowIDs: failed,
+            retryableWindowIDs: retryable
         )
     }
 
@@ -175,4 +178,5 @@ final class SpaceVisibilityCoordinator {
 struct WindowContinuityApplyResult {
     let succeededWindowIDs: Set<WindowID>
     let failedWindowIDs: Set<WindowID>
+    let retryableWindowIDs: Set<WindowID>
 }
