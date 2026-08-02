@@ -156,21 +156,25 @@ public struct WindowContinuityRecoveryStatus {
     public let pendingWindowIDs: Set<WindowID>
     public let failedWindowIDs: Set<WindowID>
     public let retryableWindowIDs: Set<WindowID>
+    public let failureReasonsByWindowID: [WindowID: String]
 
     public init(
         pendingWindowIDs: Set<WindowID>,
         failedWindowIDs: Set<WindowID>,
-        retryableWindowIDs: Set<WindowID> = []
+        retryableWindowIDs: Set<WindowID> = [],
+        failureReasonsByWindowID: [WindowID: String] = [:]
     ) {
         self.pendingWindowIDs = pendingWindowIDs
         self.failedWindowIDs = failedWindowIDs
         self.retryableWindowIDs = retryableWindowIDs
+        self.failureReasonsByWindowID = failureReasonsByWindowID
     }
 
     public static let complete = WindowContinuityRecoveryStatus(
         pendingWindowIDs: [],
         failedWindowIDs: [],
-        retryableWindowIDs: []
+        retryableWindowIDs: [],
+        failureReasonsByWindowID: [:]
     )
 
     public var isPending: Bool {

@@ -286,6 +286,9 @@ private extension AppRuntime {
         }
 
         let monitor = WindowEventMonitor(
+            onScreenLockChanged: { [weak self] isLocked in
+                self?.windowRuntimeEventHandler.screenLockChanged(isLocked: isLocked)
+            },
             onSessionActivityChanged: { [weak self] isActive in
                 self?.windowRuntimeEventHandler.sessionActivityChanged(isActive: isActive)
             },

@@ -54,15 +54,32 @@ enum WindowRuntimeEventKind: Hashable {
 }
 
 enum WindowRuntimeRecoveryReason: Equatable {
-    case session
+    case screenLock
+    case userSession
+    case systemSleep
     case display
+
+    var requiresDisplayRecovery: Bool {
+        self == .systemSleep || self == .display
+    }
 
     var eventKind: WindowRuntimeEventKind {
         switch self {
-        case .session:
+        case .screenLock, .userSession:
             .sessionResumed
-        case .display:
+        case .systemSleep, .display:
             .continuityRecovery
+        }
+    }
+}
+
+extension WindowRuntimeRecoveryReason: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .screenLock: "screen-lock"
+        case .userSession: "user-session"
+        case .systemSleep: "system-sleep"
+        case .display: "display"
         }
     }
 }
@@ -162,6 +179,27 @@ struct WindowRuntimeEventBatch {
         }
     }
 
+    func focusPolicy(
+        discovery: WindowDiscoverySnapshot,
+        previouslyFocusedWindowID: WindowID?,
+        suppressFocus: Bool
+    ) -> ExternalWindowFocusPolicy {
+        if suppressFocus {
+            return .never
+        }
+        if containsApplicationActivation {
+            return .always
+        }
+        if shouldFollowVisibleFocusedWindow(
+            focusedWindowID: discovery.focusedWindowID,
+            previouslyFocusedWindowID: previouslyFocusedWindowID,
+            liveWindowIDs: Set(discovery.windows.map(\.id))
+        ) {
+            return .visibleFocusedWindow
+        }
+        return .never
+    }
+
     var userMovedWindowIDs: Set<WindowID> {
         Set(events.compactMap { event in
             event.kind == .userLayoutChanged ? event.windowID : nil
@@ -189,8 +227,61 @@ struct WindowRuntimeEventBatch {
 }
 
 enum WindowObservationSuspension: Hashable {
+    case screenLock
     case userSession
     case systemSleep
+
+    var recoveryReason: WindowRuntimeRecoveryReason {
+        switch self {
+        case .screenLock: .screenLock
+        case .userSession: .userSession
+        case .systemSleep: .systemSleep
+        }
+    }
+}
+
+extension WindowObservationSuspension: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .screenLock: "screen-lock"
+        case .userSession: "user-session"
+        case .systemSleep: "system-sleep"
+        }
+    }
+}
+
+struct WindowObservationState {
+    private(set) var suspensionReasons: Set<WindowObservationSuspension> = []
+
+    var isActive: Bool {
+        suspensionReasons.isEmpty
+    }
+
+    mutating func set(
+        _ reason: WindowObservationSuspension,
+        isSuspended: Bool
+    ) -> WindowObservationTransition? {
+        let wasActive = isActive
+        let changed = if isSuspended {
+            suspensionReasons.insert(reason).inserted
+        } else {
+            suspensionReasons.remove(reason) != nil
+        }
+        guard changed else {
+            return nil
+        }
+        return WindowObservationTransition(
+            beganSuspension: wasActive && !isActive,
+            isActive: isActive,
+            activeReasons: suspensionReasons
+        )
+    }
+}
+
+struct WindowObservationTransition {
+    let beganSuspension: Bool
+    let isActive: Bool
+    let activeReasons: Set<WindowObservationSuspension>
 }
 
 struct WindowRuntimeEventBuffer {

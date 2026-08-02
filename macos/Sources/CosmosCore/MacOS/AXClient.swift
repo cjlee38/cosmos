@@ -38,6 +38,19 @@ enum AXClientError: Error, CustomStringConvertible {
     }
 }
 
+private struct AXApplicationEnumerationError: Error, CustomStringConvertible {
+    let pid: pid_t
+    let name: String
+    let bundleIdentifier: String?
+    let underlyingError: Error
+
+    var description: String {
+        let bundle = bundleIdentifier ?? "unknown"
+        return "Failed to enumerate AX windows for \(name) "
+            + "(pid: \(pid), bundle: \(bundle)): \(underlyingError)"
+    }
+}
+
 public final class AXClient {
     enum WindowValidity {
         case valid
@@ -165,7 +178,17 @@ public final class AXClient {
 
     private func enumerateWindows(for app: NSRunningApplication) throws -> [WindowHandle] {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
-        let rawWindows = try windowsAttribute(from: axApp)
+        let rawWindows: NSArray
+        do {
+            rawWindows = try windowsAttribute(from: axApp)
+        } catch {
+            throw AXApplicationEnumerationError(
+                pid: app.processIdentifier,
+                name: app.localizedName ?? "unknown",
+                bundleIdentifier: app.bundleIdentifier,
+                underlyingError: error
+            )
+        }
 
         let appInfo = RunningAppInfo(
             pid: app.processIdentifier,

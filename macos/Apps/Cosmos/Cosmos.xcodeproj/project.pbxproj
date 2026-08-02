@@ -24,6 +24,7 @@
 		130000000000000000000006 /* SpaceThumbnailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000006 /* SpaceThumbnailTests.swift */; };
 		130000000000000000000007 /* SwitcherInteractionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000007 /* SwitcherInteractionPolicyTests.swift */; };
 		130000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift */; };
+		F10000000000000000000002 /* WindowRuntimeScreenLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* WindowRuntimeScreenLockTests.swift */; };
 		130000000000000000000009 /* WindowRuntimeEventHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140000000000000000000009 /* WindowRuntimeEventHandlerTests.swift */; };
 		160000000000000000000001 /* TerminationSignalMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 170000000000000000000001 /* TerminationSignalMonitor.swift */; };
 		160000000000000000000002 /* TerminationSignalMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 170000000000000000000002 /* TerminationSignalMonitorTests.swift */; };
@@ -69,6 +70,8 @@
 		8B3E9A2F6D5C4B3A291807F6 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A2D8F1E5C4B3A29081706F5 /* SettingsCoordinator.swift */; };
 		909EE7F746FA13213655A7B5 /* DebugStatusWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583CADAAD9AFB41F03805EFE /* DebugStatusWindowController.swift */; };
 		92B8545DC0656A22DA01E6E0 /* WindowRuntimeEventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31796FE52334A52C16A26B5F /* WindowRuntimeEventHandler.swift */; };
+		E10000000000000000000002 /* WindowRecoveryDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* WindowRecoveryDiagnostics.swift */; };
+		E30000000000000000000002 /* WindowRecoveryDiagnosticModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000001 /* WindowRecoveryDiagnosticModels.swift */; };
 		9423832A9D75720ED5792FF2 /* SwitcherSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB6658ACEEE29E202956EFB /* SwitcherSettingsViewController.swift */; };
 		A4F27D8C9B1E4602A7315F90 /* WindowSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E38C9D0A2F4713B8426A01 /* WindowSettingsViewController.swift */; };
 		951CA33D24DDB240318CB7EA /* SwitcherCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1501C2846013654EA452412B /* SwitcherCoordinatorTests.swift */; };
@@ -133,6 +136,7 @@
 		140000000000000000000006 /* SpaceThumbnailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceThumbnailTests.swift; sourceTree = "<group>"; };
 		140000000000000000000007 /* SwitcherInteractionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherInteractionPolicyTests.swift; sourceTree = "<group>"; };
 		140000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEventConcurrencyTests.swift; sourceTree = "<group>"; };
+		F10000000000000000000001 /* WindowRuntimeScreenLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeScreenLockTests.swift; sourceTree = "<group>"; };
 		140000000000000000000009 /* WindowRuntimeEventHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEventHandlerTests.swift; sourceTree = "<group>"; };
 		170000000000000000000001 /* TerminationSignalMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminationSignalMonitor.swift; sourceTree = "<group>"; };
 		170000000000000000000002 /* TerminationSignalMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminationSignalMonitorTests.swift; sourceTree = "<group>"; };
@@ -153,6 +157,8 @@
 		29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherTestSupport.swift; sourceTree = "<group>"; };
 		2C236432C8D68A8DA2CE898A /* CosmosAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CosmosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		31796FE52334A52C16A26B5F /* WindowRuntimeEventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRuntimeEventHandler.swift; sourceTree = "<group>"; };
+		E10000000000000000000001 /* WindowRecoveryDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRecoveryDiagnostics.swift; sourceTree = "<group>"; };
+		E30000000000000000000001 /* WindowRecoveryDiagnosticModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRecoveryDiagnosticModels.swift; sourceTree = "<group>"; };
 		37038C6E71932BA8C8D029BD /* SettingsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsModels.swift; sourceTree = "<group>"; };
 		390C28C5D1B0C7757A62FFED /* ModifierFlagsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifierFlagsMonitor.swift; sourceTree = "<group>"; };
 		3A9715E6FAD84D639C012B47 /* SpaceThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceThumbnailRenderer.swift; sourceTree = "<group>"; };
@@ -264,6 +270,8 @@
 				E3E7D9BDF57C766FD89FDCAA /* WindowEventMonitor.swift */,
 				120000000000000000000001 /* WindowRuntimeEvent.swift */,
 				31796FE52334A52C16A26B5F /* WindowRuntimeEventHandler.swift */,
+				E10000000000000000000001 /* WindowRecoveryDiagnostics.swift */,
+				E30000000000000000000001 /* WindowRecoveryDiagnosticModels.swift */,
 				B3B34FA1681B2CABA63E153F /* SpaceActionController.swift */,
 				C80000000000000000000001 /* SpaceSwitchCommand.swift */,
 			);
@@ -341,6 +349,7 @@
 				29CB97F2B790875AE2813F87 /* SwitcherTestSupport.swift */,
 				B70000000000000000000001 /* WindowRuntimeFocusEventTests.swift */,
 				140000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift */,
+				F10000000000000000000001 /* WindowRuntimeScreenLockTests.swift */,
 				140000000000000000000009 /* WindowRuntimeEventHandlerTests.swift */,
 				0A92B6BA939074278B64728C /* WindowRuntimeEventTests.swift */,
 				B70000000000000000000003 /* WindowThumbnailCacheTests.swift */,
@@ -566,6 +575,8 @@
 				2F75CA4F3F97B883E9EF9EA3 /* SwitcherPreviewService.swift in Sources */,
 				D39F65D1BC374C99127A8D68 /* WindowEventMonitor.swift in Sources */,
 				92B8545DC0656A22DA01E6E0 /* WindowRuntimeEventHandler.swift in Sources */,
+				E10000000000000000000002 /* WindowRecoveryDiagnostics.swift in Sources */,
+				E30000000000000000000002 /* WindowRecoveryDiagnosticModels.swift in Sources */,
 				B6EC5A0D09D5A2F3AFE4FDDC /* WindowSwitcherViews.swift in Sources */,
 				AD3C9F770A3E7BB6FD128250 /* WindowThumbnailCache.swift in Sources */,
 				DCD3AFCB4077734C0FFFE6B7 /* SpaceActionController.swift in Sources */,
@@ -611,6 +622,7 @@
 				30EE3B3E8B71E27139685497 /* SwitcherTestSupport.swift in Sources */,
 				B70000000000000000000002 /* WindowRuntimeFocusEventTests.swift in Sources */,
 				130000000000000000000008 /* WindowRuntimeEventConcurrencyTests.swift in Sources */,
+				F10000000000000000000002 /* WindowRuntimeScreenLockTests.swift in Sources */,
 				130000000000000000000009 /* WindowRuntimeEventHandlerTests.swift in Sources */,
 				CD5CE66E2347BC5BAC2B129E /* WindowRuntimeEventTests.swift in Sources */,
 				B70000000000000000000004 /* WindowThumbnailCacheTests.swift in Sources */,

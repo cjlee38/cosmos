@@ -88,6 +88,7 @@ final class SpaceVisibilityCoordinator {
         var succeeded: Set<WindowID> = []
         var failed: Set<WindowID> = []
         var retryable: Set<WindowID> = []
+        var failureReasons: [WindowID: String] = [:]
 
         for id in windowIDs.sorted() {
             guard let space = state.membership(for: id),
@@ -95,6 +96,11 @@ final class SpaceVisibilityCoordinator {
                   let targetFrame = targetFrames[id]
             else {
                 failed.insert(id)
+                failureReasons[id] = recoveryPreconditionFailureReason(
+                    id: id,
+                    state: state,
+                    targetFrames: targetFrames
+                )
                 continue
             }
             do {
@@ -116,13 +122,32 @@ final class SpaceVisibilityCoordinator {
             } catch {
                 failed.insert(id)
                 retryable.insert(id)
+                failureReasons[id] = String(describing: error)
             }
         }
         return WindowContinuityApplyResult(
             succeededWindowIDs: succeeded,
             failedWindowIDs: failed,
-            retryableWindowIDs: retryable
+            retryableWindowIDs: retryable,
+            failureReasonsByWindowID: failureReasons
         )
+    }
+
+    private func recoveryPreconditionFailureReason(
+        id: WindowID,
+        state: SpaceState,
+        targetFrames: [WindowID: WindowFrame]
+    ) -> String {
+        if state.membership(for: id) == nil {
+            return "Space membership is unavailable."
+        }
+        if windowCache.snapshot(for: id) == nil {
+            return "Window snapshot is unavailable."
+        }
+        if targetFrames[id] == nil {
+            return "Continuity target frame is unavailable."
+        }
+        return "Continuity recovery precondition is unavailable."
     }
 
     func rollback(
@@ -179,4 +204,5 @@ struct WindowContinuityApplyResult {
     let succeededWindowIDs: Set<WindowID>
     let failedWindowIDs: Set<WindowID>
     let retryableWindowIDs: Set<WindowID>
+    let failureReasonsByWindowID: [WindowID: String]
 }

@@ -5,7 +5,11 @@ import CosmosCore
 import Foundation
 
 final class WindowEventMonitor {
+    private static let screenLockedNotification = Notification.Name("com.apple.screenIsLocked")
+    private static let screenUnlockedNotification = Notification.Name("com.apple.screenIsUnlocked")
+
     private let onEvents: (WindowRuntimeEventBatch) -> Void
+    private let onScreenLockChanged: (Bool) -> Void
     private let onSessionActivityChanged: (Bool) -> Void
     private let onSystemSleepChanged: (Bool) -> Void
     private let onDisplayReconfigurationBegan: () -> Void
@@ -29,16 +33,19 @@ final class WindowEventMonitor {
 
     private var spaceObserverTokens: [NSObjectProtocol] = []
     private var appObserverTokens: [NSObjectProtocol] = []
+    private var distributedObserverTokens: [NSObjectProtocol] = []
     private var eventBuffer = WindowRuntimeEventBuffer()
     private var globalMouseUpMonitor: Any?
 
     init(
+        onScreenLockChanged: @escaping (Bool) -> Void = { _ in },
         onSessionActivityChanged: @escaping (Bool) -> Void = { _ in },
         onSystemSleepChanged: @escaping (Bool) -> Void = { _ in },
         onDisplayReconfigurationBegan: @escaping () -> Void = {},
         onDisplayReconfigurationEnded: @escaping () -> Void = {},
         onEvents: @escaping (WindowRuntimeEventBatch) -> Void
     ) {
+        self.onScreenLockChanged = onScreenLockChanged
         self.onSessionActivityChanged = onSessionActivityChanged
         self.onSystemSleepChanged = onSystemSleepChanged
         self.onDisplayReconfigurationBegan = onDisplayReconfigurationBegan
@@ -57,6 +64,7 @@ final class WindowEventMonitor {
 
         observeRunningApplications()
         observeSpaceLifecycle()
+        observeScreenLockLifecycle()
         displayReconfigurationMonitor.start()
         observeDisplayChanges()
     }
@@ -72,6 +80,12 @@ final class WindowEventMonitor {
             NotificationCenter.default.removeObserver(token)
         }
         appObserverTokens.removeAll()
+
+        let distributedCenter = DistributedNotificationCenter.default()
+        for token in distributedObserverTokens {
+            distributedCenter.removeObserver(token)
+        }
+        distributedObserverTokens.removeAll()
 
         axObserverRegistry.stop()
         displayReconfigurationMonitor.stop()
@@ -138,6 +152,18 @@ final class WindowEventMonitor {
     private func resumeAfterInactiveSession() {
         eventBuffer.resume(.userSession)
         onSessionActivityChanged(true)
+        scheduleDelivery()
+    }
+
+    private func suspendForScreenLock() {
+        eventBuffer.suspend(.screenLock)
+        stopMouseUpMonitor()
+        onScreenLockChanged(true)
+    }
+
+    private func resumeAfterScreenUnlock() {
+        eventBuffer.resume(.screenLock)
+        onScreenLockChanged(false)
         scheduleDelivery()
     }
 
@@ -245,6 +271,24 @@ final class WindowEventMonitor {
 }
 
 private extension WindowEventMonitor {
+    func observeScreenLockLifecycle() {
+        let notificationCenter = DistributedNotificationCenter.default()
+        distributedObserverTokens.append(notificationCenter.addObserver(
+            forName: Self.screenLockedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.suspendForScreenLock()
+        })
+        distributedObserverTokens.append(notificationCenter.addObserver(
+            forName: Self.screenUnlockedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resumeAfterScreenUnlock()
+        })
+    }
+
     func observeUserSessionLifecycle(_ notificationCenter: NotificationCenter) {
         spaceObserverTokens.append(notificationCenter.addObserver(
             forName: NSWorkspace.sessionDidResignActiveNotification,

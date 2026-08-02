@@ -192,6 +192,38 @@ final class WindowRuntimeEventTests: XCTestCase {
         XCTAssertEqual(buffer.takeDelivery(), [destroyed, terminated, display])
     }
 
+    func testEventBufferWaitsForScreenLockAndSleepToBothResume() {
+        let event = WindowRuntimeEvent(kind: .windowSetChanged, windowID: nil)
+        var buffer = WindowRuntimeEventBuffer()
+
+        buffer.suspend(.screenLock)
+        buffer.suspend(.systemSleep)
+        buffer.resume(.screenLock)
+        buffer.append(event)
+
+        XCTAssertFalse(buffer.reserveDelivery())
+
+        buffer.resume(.systemSleep)
+        buffer.append(event)
+
+        XCTAssertTrue(buffer.reserveDelivery())
+        XCTAssertEqual(buffer.takeDelivery(), [event])
+    }
+
+    func testObservationStateBeginsProtectionOnlyForFirstSuspensionReason() {
+        var state = WindowObservationState()
+
+        let lock = state.set(.screenLock, isSuspended: true)
+        let sleep = state.set(.systemSleep, isSuspended: true)
+        let unlock = state.set(.screenLock, isSuspended: false)
+        let wake = state.set(.systemSleep, isSuspended: false)
+
+        XCTAssertEqual(lock?.beganSuspension, true)
+        XCTAssertEqual(sleep?.beganSuspension, false)
+        XCTAssertEqual(unlock?.isActive, false)
+        XCTAssertEqual(wake?.isActive, true)
+    }
+
     func testExistingWindowChangesDiscoverOnlyAffectedWindows() {
         let batch = WindowRuntimeEventBatch(events: [
             WindowRuntimeEvent(kind: .layoutChanged, windowID: 100),

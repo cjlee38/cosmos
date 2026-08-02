@@ -114,6 +114,7 @@ extension WindowContinuityProtectionTests {
 
         XCTAssertEqual(failedRecovery.continuityRecovery.failedWindowIDs, [100])
         XCTAssertEqual(failedRecovery.continuityRecovery.pendingWindowIDs, [100])
+        XCTAssertNotNil(failedRecovery.continuityRecovery.failureReasonsByWindowID[100])
         XCTAssertEqual(controller.membership(for: 100), "A")
 
         let systemLayout = try controller.handleWindowLayoutChanged()

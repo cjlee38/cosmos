@@ -174,6 +174,10 @@ final class WindowContinuityRecoveryTests: SpaceControllerTestCase {
 
         XCTAssertEqual(result.continuityRecovery.failedWindowIDs, [100])
         XCTAssertEqual(result.continuityRecovery.pendingWindowIDs, [100])
+        XCTAssertEqual(
+            result.continuityRecovery.failureReasonsByWindowID[100],
+            "Continuity target frame is unavailable."
+        )
         XCTAssertEqual(controller.membership(for: 100), "1")
     }
 

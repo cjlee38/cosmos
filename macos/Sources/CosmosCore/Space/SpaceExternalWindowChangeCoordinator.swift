@@ -124,7 +124,8 @@ final class SpaceExternalWindowChangeCoordinator {
             continuityRecovery: WindowContinuityRecoveryStatus(
                 pendingWindowIDs: runtimeSynchronizer.continuityProtectedWindowIDs,
                 failedWindowIDs: recovery.failedWindowIDs,
-                retryableWindowIDs: recovery.retryableWindowIDs
+                retryableWindowIDs: recovery.retryableWindowIDs,
+                failureReasonsByWindowID: recovery.failureReasonsByWindowID
             )
         )
     }
